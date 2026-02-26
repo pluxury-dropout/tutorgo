@@ -76,13 +76,15 @@ func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		h.getTutorByID(w, r)
+		h.GetTutorByID(w, r)
+	case http.MethodDelete:
+		h.DeleteTutor(w, r)
 	default:
 		http.Error(w, "Method now allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
+func (h *TutorHandler) GetTutorByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	tutor, err := db.GetTutorByID(h.conn, id)
@@ -96,4 +98,16 @@ func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(tutor)
+}
+
+func (h *TutorHandler) DeleteTutor(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	err := db.DeleteTutor(h.conn, id)
+	if err != nil {
+		http.Error(w, "Failed to delete tutor", http.StatusInternalServerError)
+		h.log.Error("Failed to delete tutor", slog.String("error", err.Error()))
+	}
+	h.log.Info("Tutor deleted", slog.String("id", id))
+	w.WriteHeader(http.StatusNoContent)
 }

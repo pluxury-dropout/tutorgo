@@ -46,3 +46,9 @@ func GetTutorByID(conn *pgx.Conn, id string) (models.Tutor, error) {
 	).Scan(&tutor.ID, &tutor.Email, &tutor.FirstName, &tutor.LastName, &tutor.Phone)
 	return tutor, err
 }
+
+func DeleteTutor(conn *pgx.Conn, id string) error {
+	_, err := conn.Exec(context.Background(),
+		`DELETE FROM tutors where id=$1`, id)
+	return err
+}
