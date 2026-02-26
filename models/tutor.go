@@ -15,3 +15,9 @@ type CreateTutorRequest struct {
 	LastName  string `json:"last_name"`
 	Phone     string `json:"phone"`
 }
+type UpdateTutorRequest struct {
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Phone     string `json:"phone"`
+}

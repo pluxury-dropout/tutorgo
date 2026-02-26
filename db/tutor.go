@@ -52,3 +52,13 @@ func DeleteTutor(conn *pgx.Conn, id string) error {
 		`DELETE FROM tutors where id=$1`, id)
 	return err
 }
+func UpdateTutor(conn *pgx.Conn, id string, req models.UpdateTutorRequest) (models.Tutor, error) {
+	var tutor models.Tutor
+	err := conn.QueryRow(context.Background(),
+		`UPDATE tutors SET email=$1, first_name=$2, last_name=$3, phone=$4
+		 WHERE id=$5
+		 RETURNING id, email, first_name, last_name, phone`,
+		req.Email, req.FirstName, req.LastName, req.Phone, id,
+	).Scan(&tutor.ID, &tutor.Email, &tutor.FirstName, &tutor.LastName, &tutor.Phone)
+	return tutor, err
+}

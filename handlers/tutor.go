@@ -76,15 +76,17 @@ func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		h.GetTutorByID(w, r)
+		h.getTutorByID(w, r)
 	case http.MethodDelete:
-		h.DeleteTutor(w, r)
+		h.deleteTutor(w, r)
+	case http.MethodPut:
+		h.updateTutor(w, r)
 	default:
 		http.Error(w, "Method now allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func (h *TutorHandler) GetTutorByID(w http.ResponseWriter, r *http.Request) {
+func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	tutor, err := db.GetTutorByID(h.conn, id)
@@ -100,7 +102,7 @@ func (h *TutorHandler) GetTutorByID(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tutor)
 }
 
-func (h *TutorHandler) DeleteTutor(w http.ResponseWriter, r *http.Request) {
+func (h *TutorHandler) deleteTutor(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	err := db.DeleteTutor(h.conn, id)
@@ -110,4 +112,27 @@ func (h *TutorHandler) DeleteTutor(w http.ResponseWriter, r *http.Request) {
 	}
 	h.log.Info("Tutor deleted", slog.String("id", id))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req models.UpdateTutorRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid data format", http.StatusBadRequest)
+		return
+	}
+
+	tutor, err := db.UpdateTutor(h.conn, id, req)
+	if err != nil {
+		http.Error(w, "Failed to update tutor", http.StatusInternalServerError)
+		h.log.Error("Failed to update tutor", slog.String("id", id), slog.String("error", err.Error()))
+		return
+	}
+
+	h.log.Info("Tutor updated", slog.String("id", id))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(tutor)
 }
