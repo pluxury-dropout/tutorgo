@@ -10,6 +10,7 @@ import (
 type Config struct {
 	DBUrl      string
 	ServerPort string
+	JWTSecret  string
 }
 
 func Load() Config {
@@ -21,5 +22,6 @@ func Load() Config {
 	return Config{
 		DBUrl:      os.Getenv("DB_URL"),
 		ServerPort: os.Getenv("SERVER_PORT"),
+		JWTSecret:  os.Getenv("JWT_Secret"),
 	}
 }

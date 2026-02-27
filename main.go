@@ -33,6 +33,10 @@ func main() {
 		w.Write([]byte(`{"status": "ok"}`))
 	})
 
+	authHandler := handlers.NewAuthHandler(conn, log, cfg.JWTSecret)
+
+	mux.HandleFunc("/auth/register", authHandler.Register)
+	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.HandleFunc("/tutors", tutorHandler.Handle)
 	mux.HandleFunc("/tutors/{id}", tutorHandler.HandleOne)
 
