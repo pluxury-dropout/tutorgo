@@ -8,6 +8,7 @@ import (
 	"tutorgo/config"
 	"tutorgo/handlers"
 	"tutorgo/logger"
+	"tutorgo/middleware"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -37,8 +38,8 @@ func main() {
 
 	mux.HandleFunc("/auth/register", authHandler.Register)
 	mux.HandleFunc("/auth/login", authHandler.Login)
-	mux.HandleFunc("/tutors", tutorHandler.Handle)
-	mux.HandleFunc("/tutors/{id}", tutorHandler.HandleOne)
+	mux.HandleFunc("/tutors", middleware.Auth(cfg.JWTSecret, tutorHandler.Handle))
+	mux.HandleFunc("/tutors/{id}", middleware.Auth(cfg.JWTSecret, tutorHandler.HandleOne))
 
 	log.Info("Server listening on", slog.String("port", cfg.ServerPort))
 	err = http.ListenAndServe(cfg.ServerPort, mux)
