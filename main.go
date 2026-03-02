@@ -36,6 +36,10 @@ func main() {
 
 	authHandler := handlers.NewAuthHandler(conn, log, cfg.JWTSecret)
 	studentHandler := handlers.NewStudentHadler(conn, log)
+	courseHandler := handlers.NewCourseHandler(conn, log)
+
+	mux.HandleFunc("/courses", middleware.Auth(cfg.JWTSecret, courseHandler.Handle))
+	mux.HandleFunc("/courses/{id}", middleware.Auth(cfg.JWTSecret, courseHandler.HandleOne))
 
 	mux.HandleFunc("/students", middleware.Auth(cfg.JWTSecret, studentHandler.Handle))
 	mux.HandleFunc("/students/{id}", middleware.Auth(cfg.JWTSecret, studentHandler.HandleOne))
