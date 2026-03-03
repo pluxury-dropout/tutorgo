@@ -5,23 +5,24 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
-	"tutorgo/db"
+
 	"tutorgo/models"
+	"tutorgo/repository"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
-	conn      *pgx.Conn
+	repo      repository.TutorRepository
 	log       *slog.Logger
 	jwtSecret string
 }
 
-func NewAuthHandler(conn *pgx.Conn, log *slog.Logger, jwtSecret string) *AuthHandler {
-	return &AuthHandler{conn: conn, log: log, jwtSecret: jwtSecret}
+func NewAuthHandler(repo repository.TutorRepository, log *slog.Logger, jwtSecret string) *AuthHandler {
+	return &AuthHandler{repo: repo, log: log, jwtSecret: jwtSecret}
 }
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -47,7 +48,15 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tutor, err := db.RegisterTutor(h.conn, req, string(passwordHash))
+	createReq := models.CreateTutorRequest{
+		Email:     req.Email,
+		Password:  req.Password,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Phone:     req.Phone,
+	}
+
+	tutor, err := h.repo.Create(createReq, string(passwordHash))
 	if err != nil {
 		http.Error(w, "Failed to register tutor", http.StatusInternalServerError)
 		h.log.Error("Failed to register tutor", slog.String("error", err.Error()))
@@ -73,7 +82,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, passwordHash, err := db.GetTutorByEmail(h.conn, req.Email)
+	id, passwordHash, err := h.repo.GetByEmail(req.Email)
 	if err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return

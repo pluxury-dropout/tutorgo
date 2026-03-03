@@ -4,19 +4,18 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"tutorgo/db"
-	"tutorgo/models"
 
-	"github.com/jackc/pgx/v5"
+	"tutorgo/models"
+	"tutorgo/repository"
 )
 
 type StudentHandler struct {
-	conn *pgx.Conn
+	repo repository.StudentRepository
 	log  *slog.Logger
 }
 
-func NewStudentHadler(conn *pgx.Conn, log *slog.Logger) *StudentHandler {
-	return &StudentHandler{conn: conn, log: log}
+func NewStudentHandler(repo repository.StudentRepository, log *slog.Logger) *StudentHandler {
+	return &StudentHandler{repo: repo, log: log}
 }
 
 func (h *StudentHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +47,7 @@ func (h *StudentHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StudentHandler) getStudents(w http.ResponseWriter, r *http.Request, tutorID string) {
-	students, err := db.GetStudents(h.conn, tutorID)
+	students, err := h.repo.GetAll(tutorID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve students", http.StatusInternalServerError)
 		h.log.Error("Failed to get students", slog.String("error", err.Error()))
@@ -67,7 +66,7 @@ func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, t
 		http.Error(w, "Invalid data format", http.StatusBadRequest)
 		return
 	}
-	student, err := db.CreateStudent(h.conn, req, tutorID)
+	student, err := h.repo.Create(req, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to create student", http.StatusInternalServerError)
 		h.log.Error("Failed to create student", slog.String("error", err.Error()))
@@ -81,7 +80,7 @@ func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, t
 
 func (h *StudentHandler) getStudentByID(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
-	student, err := db.GetStudentByID(h.conn, id, tutorID)
+	student, err := h.repo.GetByID(id, tutorID)
 	if err != nil {
 		http.Error(w, "Student not found", http.StatusNotFound)
 		h.log.Error("Failed to get student", slog.String("id", id), slog.String("error", err.Error()))
@@ -100,7 +99,7 @@ func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, t
 		http.Error(w, "Invalid data format", http.StatusBadRequest)
 		return
 	}
-	student, err := db.UpdateStudent(h.conn, id, tutorID, req)
+	student, err := h.repo.Update(id, tutorID, req)
 	if err != nil {
 		http.Error(w, "Failed to update student", http.StatusInternalServerError)
 		h.log.Error("Failed to update student", slog.String("id", id), slog.String("error", err.Error()))
@@ -114,7 +113,7 @@ func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, t
 
 func (h *StudentHandler) deleteStudent(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
-	err := db.DeleteStudent(h.conn, id, tutorID)
+	err := h.repo.Delete(id, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to delete student", http.StatusInternalServerError)
 		h.log.Error("Failed to delete student", slog.String("id", id), slog.String("error", err.Error()))

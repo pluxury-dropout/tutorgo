@@ -5,19 +5,17 @@ import (
 	"log/slog"
 	"net/http"
 
-	"tutorgo/db"
 	"tutorgo/models"
-
-	"github.com/jackc/pgx/v5"
+	"tutorgo/repository"
 )
 
 type CourseHandler struct {
-	conn *pgx.Conn
+	repo repository.CourseRepository
 	log  *slog.Logger
 }
 
-func NewCourseHandler(conn *pgx.Conn, log *slog.Logger) *CourseHandler {
-	return &CourseHandler{conn: conn, log: log}
+func NewCourseHandler(repo repository.CourseRepository, log *slog.Logger) *CourseHandler {
+	return &CourseHandler{repo: repo, log: log}
 }
 
 func (h *CourseHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +47,7 @@ func (h *CourseHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CourseHandler) getCourses(w http.ResponseWriter, r *http.Request, tutorID string) {
-	courses, err := db.GetCourses(h.conn, tutorID)
+	courses, err := h.repo.GetAll(tutorID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve courses", http.StatusInternalServerError)
 		h.log.Error("Failed to get courses", slog.String("error", err.Error()))
@@ -68,7 +66,7 @@ func (h *CourseHandler) createCourse(w http.ResponseWriter, r *http.Request, tut
 		http.Error(w, "Invalid data format", http.StatusBadRequest)
 		return
 	}
-	course, err := db.CreateCourse(h.conn, req, tutorID)
+	course, err := h.repo.Create(req, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to create course", http.StatusInternalServerError)
 		h.log.Error("Failed to create course", slog.String("error", err.Error()))
@@ -82,7 +80,7 @@ func (h *CourseHandler) createCourse(w http.ResponseWriter, r *http.Request, tut
 
 func (h *CourseHandler) getCourseByID(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
-	course, err := db.GetCourseByID(h.conn, id, tutorID)
+	course, err := h.repo.GetByID(id, tutorID)
 	if err != nil {
 		http.Error(w, "Course not found", http.StatusNotFound)
 		h.log.Error("Failed to get course", slog.String("id", id), slog.String("error", err.Error()))
@@ -101,7 +99,7 @@ func (h *CourseHandler) updateCourse(w http.ResponseWriter, r *http.Request, tut
 		http.Error(w, "Invalid data format", http.StatusBadRequest)
 		return
 	}
-	course, err := db.UpdateCourse(h.conn, id, tutorID, req)
+	course, err := h.repo.Update(id, tutorID, req)
 	if err != nil {
 		http.Error(w, "Failed to update course", http.StatusInternalServerError)
 		h.log.Error("Failed to update course", slog.String("id", id), slog.String("error", err.Error()))
@@ -115,7 +113,7 @@ func (h *CourseHandler) updateCourse(w http.ResponseWriter, r *http.Request, tut
 
 func (h *CourseHandler) deleteCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
-	err := db.DeleteCourse(h.conn, id, tutorID)
+	err := h.repo.Delete(id, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to delete course", http.StatusInternalServerError)
 		h.log.Error("Failed to delete course", slog.String("id", id), slog.String("error", err.Error()))

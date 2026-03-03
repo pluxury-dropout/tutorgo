@@ -9,6 +9,7 @@ import (
 	"tutorgo/handlers"
 	"tutorgo/logger"
 	"tutorgo/middleware"
+	"tutorgo/repository"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -25,8 +26,6 @@ func main() {
 
 	log.Info("Connected to database successfully")
 
-	tutorHandler := handlers.NewTutorHandler(conn, log)
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -34,10 +33,16 @@ func main() {
 		w.Write([]byte(`{"status": "ok"}`))
 	})
 
-	authHandler := handlers.NewAuthHandler(conn, log, cfg.JWTSecret)
-	studentHandler := handlers.NewStudentHadler(conn, log)
-	courseHandler := handlers.NewCourseHandler(conn, log)
-	paymentHandler := handlers.NewPaymentHandler(conn, log)
+	tutorRepo := repository.NewTutorRepository(conn)
+	paymentRepo := repository.NewPaymentRepository(conn)
+	courseRepo := repository.NewCourseRepository(conn)
+	studentRepo := repository.NewStudentRepository(conn)
+
+	courseHandler := handlers.NewCourseHandler(courseRepo, log)
+	studentHandler := handlers.NewStudentHandler(studentRepo, log)
+	tutorHandler := handlers.NewTutorHandler(tutorRepo, log)
+	authHandler := handlers.NewAuthHandler(tutorRepo, log, cfg.JWTSecret)
+	paymentHandler := handlers.NewPaymentHandler(paymentRepo, log)
 
 	mux.HandleFunc("/payments", middleware.Auth(cfg.JWTSecret, paymentHandler.Handle))
 	mux.HandleFunc("/payments/balance", middleware.Auth(cfg.JWTSecret, paymentHandler.GetBalance))
