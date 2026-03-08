@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
@@ -30,14 +29,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.RegisterRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
-		return
-	}
-
-	if req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
-		http.Error(w, "Email, password, first_name and last_name are required", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 
@@ -64,9 +56,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("Tutor registered", slog.String("id", tutor.ID), slog.String("email", tutor.Email))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(tutor)
+	respondJSON(w, http.StatusCreated, tutor)
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -76,9 +66,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.LoginRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 
@@ -107,7 +95,5 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("Tutor logged in", slog.String("id", id))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(models.LoginResponse{Token: tokenString})
+	respondJSON(w, http.StatusOK, models.LoginResponse{Token: tokenString})
 }

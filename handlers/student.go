@@ -7,7 +7,6 @@ import (
 
 	"tutorgo/models"
 	"tutorgo/repository"
-	"tutorgo/validator"
 )
 
 type StudentHandler struct {
@@ -62,16 +61,7 @@ func (h *StudentHandler) getStudents(w http.ResponseWriter, r *http.Request, tut
 
 func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, tutorID string) {
 	var req models.CreateStudentRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
-		return
-	}
-
-	if validationErros := validator.Validate(req); validationErros != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(validationErros)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 
@@ -82,9 +72,7 @@ func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 	h.log.Info("Student created", slog.String("id", student.ID))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(student)
+	respondJSON(w, http.StatusCreated, student)
 }
 
 func (h *StudentHandler) getStudentByID(w http.ResponseWriter, r *http.Request, tutorID string) {
@@ -103,16 +91,7 @@ func (h *StudentHandler) getStudentByID(w http.ResponseWriter, r *http.Request, 
 func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
 	var req models.UpdateStudentRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
-		return
-	}
-
-	if validaitonErrors := validator.Validate(req); validaitonErrors != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(validaitonErrors)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 
@@ -123,9 +102,7 @@ func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 	h.log.Info("Student updated", slog.String("id", id))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(student)
+	respondJSON(w, http.StatusOK, student)
 }
 
 func (h *StudentHandler) deleteStudent(w http.ResponseWriter, r *http.Request, tutorID string) {

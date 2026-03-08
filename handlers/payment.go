@@ -49,9 +49,7 @@ func (h *PaymentHandler) getPayments(w http.ResponseWriter, r *http.Request) {
 
 func (h *PaymentHandler) createPayment(w http.ResponseWriter, r *http.Request) {
 	var req models.CreatePaymentRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 	payment, err := h.repo.Create(req)
@@ -61,9 +59,7 @@ func (h *PaymentHandler) createPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("Payment created", slog.String("id", payment.ID), slog.Float64("amount", payment.Amount))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(payment)
+	respondJSON(w, http.StatusCreated, payment)
 }
 
 func (h *PaymentHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +74,5 @@ func (h *PaymentHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("Failed to get balance", slog.String("error", err.Error()))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]int{"lessons_remaining": balance})
+	respondJSON(w, http.StatusOK, map[string]int{"lessons_remaining": balance})
 }

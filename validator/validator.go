@@ -2,6 +2,7 @@ package validator
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -9,6 +10,16 @@ import (
 
 var validate = validator.New()
 
+// to get fields' names from json (not from go structs)
+func init() {
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
+}
 func Validate(s any) map[string]string {
 	err := validate.Struct(s)
 	if err == nil {
@@ -17,7 +28,7 @@ func Validate(s any) map[string]string {
 
 	errors := make(map[string]string)
 	for _, err := range err.(validator.ValidationErrors) {
-		field := strings.ToLower(err.Field())
+		field := err.Field()
 		errors[field] = formatError(err)
 	}
 	return errors

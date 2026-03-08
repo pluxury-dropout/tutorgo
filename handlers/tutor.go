@@ -60,9 +60,7 @@ func (h *TutorHandler) getTutors(w http.ResponseWriter, r *http.Request) {
 
 func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateTutorRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 	tutor, err := h.repo.Create(req, req.Password)
@@ -78,9 +76,7 @@ func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("Tutor created", slog.String("id", tutor.ID), slog.String("name", tutor.FirstName+" "+tutor.LastName), slog.String("email", tutor.Email))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(tutor)
+	respondJSON(w, http.StatusCreated, tutor)
 }
 
 func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
@@ -100,9 +96,7 @@ func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
 func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req models.UpdateTutorRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 	tutor, err := h.repo.Update(id, req)
@@ -112,9 +106,7 @@ func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("Tutor updated", slog.String("id", id))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(tutor)
+	respondJSON(w, http.StatusOK, tutor)
 }
 
 func (h *TutorHandler) deleteTutor(w http.ResponseWriter, r *http.Request) {

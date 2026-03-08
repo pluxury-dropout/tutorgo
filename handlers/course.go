@@ -61,9 +61,7 @@ func (h *CourseHandler) getCourses(w http.ResponseWriter, r *http.Request, tutor
 
 func (h *CourseHandler) createCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
 	var req models.CreateCourseRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 	course, err := h.repo.Create(req, tutorID)
@@ -73,9 +71,8 @@ func (h *CourseHandler) createCourse(w http.ResponseWriter, r *http.Request, tut
 		return
 	}
 	h.log.Info("Course created", slog.String("id", course.ID))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(course)
+	respondJSON(w, http.StatusCreated, course)
+
 }
 
 func (h *CourseHandler) getCourseByID(w http.ResponseWriter, r *http.Request, tutorID string) {
@@ -86,17 +83,14 @@ func (h *CourseHandler) getCourseByID(w http.ResponseWriter, r *http.Request, tu
 		h.log.Error("Failed to get course", slog.String("id", id), slog.String("error", err.Error()))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(course)
+	respondJSON(w, http.StatusOK, course)
+
 }
 
 func (h *CourseHandler) updateCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
 	var req models.UpdateCourseRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid data format", http.StatusBadRequest)
+	if !decodeAndValidate(w, r, &req) {
 		return
 	}
 	course, err := h.repo.Update(id, tutorID, req)
@@ -106,9 +100,7 @@ func (h *CourseHandler) updateCourse(w http.ResponseWriter, r *http.Request, tut
 		return
 	}
 	h.log.Info("Course updated", slog.String("id", id))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(course)
+	respondJSON(w, http.StatusOK, course)
 }
 
 func (h *CourseHandler) deleteCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
