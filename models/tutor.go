@@ -9,15 +9,16 @@ type Tutor struct {
 }
 
 type CreateTutorRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Phone     string `json:"phone"`
+	Email     string `json:"email"      validate:"required,email"`
+	Password  string `json:"password"   validate:"required,min=6"`
+	FirstName string `json:"first_name" validate:"required,min=2"`
+	LastName  string `json:"last_name"  validate:"required,min=2"`
+	Phone     string `json:"phone"      validate:"omitempty,min=10"`
 }
+
 type UpdateTutorRequest struct {
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Phone     string `json:"phone"`
+	Email     string `json:"email"      validate:"required,email"`
+	FirstName string `json:"first_name" validate:"required,min=2"`
+	LastName  string `json:"last_name"  validate:"required,min=2"`
+	Phone     string `json:"phone"      validate:"omitempty,min=10"`
 }

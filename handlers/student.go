@@ -7,6 +7,7 @@ import (
 
 	"tutorgo/models"
 	"tutorgo/repository"
+	"tutorgo/validator"
 )
 
 type StudentHandler struct {
@@ -66,6 +67,14 @@ func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, t
 		http.Error(w, "Invalid data format", http.StatusBadRequest)
 		return
 	}
+
+	if validationErros := validator.Validate(req); validationErros != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validationErros)
+		return
+	}
+
 	student, err := h.repo.Create(req, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to create student", http.StatusInternalServerError)
@@ -99,6 +108,14 @@ func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, t
 		http.Error(w, "Invalid data format", http.StatusBadRequest)
 		return
 	}
+
+	if validaitonErrors := validator.Validate(req); validaitonErrors != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validaitonErrors)
+		return
+	}
+
 	student, err := h.repo.Update(id, tutorID, req)
 	if err != nil {
 		http.Error(w, "Failed to update student", http.StatusInternalServerError)
