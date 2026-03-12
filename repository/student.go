@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type StudentRepository interface {
+type StudentService interface {
 	Create(req models.CreateStudentRequest, tutorID string) (models.Student, error)
 	GetAll(tutorID string) ([]models.Student, error)
 	GetByID(id string, tutorID string) (models.Student, error)
@@ -19,7 +19,7 @@ type studentRepository struct {
 	conn *pgx.Conn
 }
 
-func NewStudentRepository(conn *pgx.Conn) StudentRepository {
+func NewStudentRepository(conn *pgx.Conn) StudentService {
 	return &studentRepository{conn: conn}
 }
 

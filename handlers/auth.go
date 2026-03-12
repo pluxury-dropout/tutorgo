@@ -6,20 +6,20 @@ import (
 	"time"
 
 	"tutorgo/models"
-	"tutorgo/repository"
+	"tutorgo/service"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
-	repo      repository.TutorRepository
+	service   service.TutorService
 	log       *slog.Logger
 	jwtSecret string
 }
 
-func NewAuthHandler(repo repository.TutorRepository, log *slog.Logger, jwtSecret string) *AuthHandler {
-	return &AuthHandler{repo: repo, log: log, jwtSecret: jwtSecret}
+func NewAuthHandler(svc service.TutorService, log *slog.Logger, jwtSecret string) *AuthHandler {
+	return &AuthHandler{service: svc, log: log, jwtSecret: jwtSecret}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Phone:     req.Phone,
 	}
 
-	tutor, err := h.repo.Create(createReq, string(passwordHash))
+	tutor, err := h.service.Create(createReq, string(passwordHash))
 	if err != nil {
 		http.Error(w, "Failed to register tutor", http.StatusInternalServerError)
 		h.log.Error("Failed to register tutor", slog.String("error", err.Error()))
@@ -70,7 +70,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, passwordHash, err := h.repo.GetByEmail(req.Email)
+	id, passwordHash, err := h.service.GetByEmail(req.Email)
 	if err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return

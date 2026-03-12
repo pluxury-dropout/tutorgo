@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type CourseRepository interface {
+type CourseService interface {
 	Create(req models.CreateCourseRequest, tutorID string) (models.Course, error)
 	GetAll(tutorID string) ([]models.Course, error)
 	GetByID(id string, tutorID string) (models.Course, error)
@@ -19,7 +19,7 @@ type courseRepository struct {
 	conn *pgx.Conn
 }
 
-func NewCourseRepository(conn *pgx.Conn) CourseRepository {
+func NewCourseRepository(conn *pgx.Conn) CourseService {
 	return &courseRepository{conn: conn}
 }
 

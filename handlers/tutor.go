@@ -1,24 +1,23 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 
 	"tutorgo/models"
-	"tutorgo/repository"
+	"tutorgo/service"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type TutorHandler struct {
-	repo repository.TutorRepository
-	log  *slog.Logger
+	service service.TutorService
+	log     *slog.Logger
 }
 
-func NewTutorHandler(repo repository.TutorRepository, log *slog.Logger) *TutorHandler {
-	return &TutorHandler{repo: repo, log: log}
+func NewTutorHandler(repo service.TutorService, log *slog.Logger) *TutorHandler {
+	return &TutorHandler{service: repo, log: log}
 }
 
 func (h *TutorHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -46,16 +45,14 @@ func (h *TutorHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TutorHandler) getTutors(w http.ResponseWriter, r *http.Request) {
-	tutors, err := h.repo.GetAll()
+	tutors, err := h.service.GetAll()
 	if err != nil {
 		http.Error(w, "Failed to retrieve tutors", http.StatusInternalServerError)
 		h.log.Error("Failed to get tutors", slog.String("error", err.Error()))
 		return
 	}
 	h.log.Info("Tutors retrieved", slog.Int("count", len(tutors)))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(tutors)
+	respondJSON(w, http.StatusOK, tutors)
 }
 
 func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +60,7 @@ func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
 	if !decodeAndValidate(w, r, &req) {
 		return
 	}
-	tutor, err := h.repo.Create(req, req.Password)
+	tutor, err := h.service.Create(req, req.Password)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -81,16 +78,15 @@ func (h *TutorHandler) createTutor(w http.ResponseWriter, r *http.Request) {
 
 func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	tutor, err := h.repo.GetByID(id)
+	tutor, err := h.service.GetByID(id)
 	if err != nil {
 		http.Error(w, "Tutor not found", http.StatusNotFound)
 		h.log.Error("Failed to get tutor", slog.String("id", id), slog.String("error", err.Error()))
 		return
 	}
 	h.log.Info("Tutor retrieved", slog.String("id", id))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(tutor)
+	respondJSON(w, http.StatusOK, tutor)
+
 }
 
 func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +95,7 @@ func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
 	if !decodeAndValidate(w, r, &req) {
 		return
 	}
-	tutor, err := h.repo.Update(id, req)
+	tutor, err := h.service.Update(id, req)
 	if err != nil {
 		http.Error(w, "Failed to update tutor", http.StatusInternalServerError)
 		h.log.Error("Failed to update tutor", slog.String("id", id), slog.String("error", err.Error()))
@@ -111,7 +107,7 @@ func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
 
 func (h *TutorHandler) deleteTutor(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	err := h.repo.Delete(id)
+	err := h.service.Delete(id)
 	if err != nil {
 		http.Error(w, "Failed to delete tutor", http.StatusInternalServerError)
 		h.log.Error("Failed to delete tutor", slog.String("id", id), slog.String("error", err.Error()))

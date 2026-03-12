@@ -1,21 +1,20 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"tutorgo/models"
-	"tutorgo/repository"
+	"tutorgo/service"
 )
 
 type StudentHandler struct {
-	repo repository.StudentRepository
-	log  *slog.Logger
+	service service.StudentService
+	log     *slog.Logger
 }
 
-func NewStudentHandler(repo repository.StudentRepository, log *slog.Logger) *StudentHandler {
-	return &StudentHandler{repo: repo, log: log}
+func NewStudentHandler(svc service.StudentService, log *slog.Logger) *StudentHandler {
+	return &StudentHandler{service: svc, log: log}
 }
 
 func (h *StudentHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -47,16 +46,15 @@ func (h *StudentHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StudentHandler) getStudents(w http.ResponseWriter, r *http.Request, tutorID string) {
-	students, err := h.repo.GetAll(tutorID)
+	students, err := h.service.GetAll(tutorID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve students", http.StatusInternalServerError)
 		h.log.Error("Failed to get students", slog.String("error", err.Error()))
 		return
 	}
 	h.log.Info("Students retrieved", slog.Int("count", len(students)))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(students)
+	respondJSON(w, http.StatusOK, students)
+
 }
 
 func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, tutorID string) {
@@ -65,7 +63,7 @@ func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 
-	student, err := h.repo.Create(req, tutorID)
+	student, err := h.service.Create(req, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to create student", http.StatusInternalServerError)
 		h.log.Error("Failed to create student", slog.String("error", err.Error()))
@@ -77,15 +75,14 @@ func (h *StudentHandler) createStudent(w http.ResponseWriter, r *http.Request, t
 
 func (h *StudentHandler) getStudentByID(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
-	student, err := h.repo.GetByID(id, tutorID)
+	student, err := h.service.GetByID(id, tutorID)
 	if err != nil {
 		http.Error(w, "Student not found", http.StatusNotFound)
 		h.log.Error("Failed to get student", slog.String("id", id), slog.String("error", err.Error()))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(student)
+	respondJSON(w, http.StatusOK, student)
+
 }
 
 func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, tutorID string) {
@@ -95,7 +92,7 @@ func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 
-	student, err := h.repo.Update(id, tutorID, req)
+	student, err := h.service.Update(id, tutorID, req)
 	if err != nil {
 		http.Error(w, "Failed to update student", http.StatusInternalServerError)
 		h.log.Error("Failed to update student", slog.String("id", id), slog.String("error", err.Error()))
@@ -107,7 +104,7 @@ func (h *StudentHandler) updateStudent(w http.ResponseWriter, r *http.Request, t
 
 func (h *StudentHandler) deleteStudent(w http.ResponseWriter, r *http.Request, tutorID string) {
 	id := r.PathValue("id")
-	err := h.repo.Delete(id, tutorID)
+	err := h.service.Delete(id, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to delete student", http.StatusInternalServerError)
 		h.log.Error("Failed to delete student", slog.String("id", id), slog.String("error", err.Error()))

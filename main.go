@@ -10,6 +10,7 @@ import (
 	"tutorgo/logger"
 	"tutorgo/middleware"
 	"tutorgo/repository"
+	"tutorgo/service"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -38,11 +39,16 @@ func main() {
 	courseRepo := repository.NewCourseRepository(conn)
 	studentRepo := repository.NewStudentRepository(conn)
 
-	courseHandler := handlers.NewCourseHandler(courseRepo, log)
-	studentHandler := handlers.NewStudentHandler(studentRepo, log)
-	tutorHandler := handlers.NewTutorHandler(tutorRepo, log)
-	authHandler := handlers.NewAuthHandler(tutorRepo, log, cfg.JWTSecret)
-	paymentHandler := handlers.NewPaymentHandler(paymentRepo, log)
+	tutorService := service.NewTutorService(tutorRepo)
+	paymentService := service.NewPaymentService(paymentRepo)
+	courseService := service.NewCourseService(courseRepo)
+	studentService := service.NewStudentService(studentRepo)
+
+	tutorHandler := handlers.NewTutorHandler(tutorService, log)
+	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
+	courseHandler := handlers.NewCourseHandler(courseService, log)
+	studentHandler := handlers.NewStudentHandler(studentService, log)
+	authHandler := handlers.NewAuthHandler(tutorService, log, cfg.JWTSecret)
 
 	mux.HandleFunc("/payments", middleware.Auth(cfg.JWTSecret, paymentHandler.Handle))
 	mux.HandleFunc("/payments/balance", middleware.Auth(cfg.JWTSecret, paymentHandler.GetBalance))

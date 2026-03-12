@@ -10,12 +10,12 @@ import (
 )
 
 type PaymentHandler struct {
-	repo repository.PaymentRepository
-	log  *slog.Logger
+	service repository.PaymentRepository
+	log     *slog.Logger
 }
 
-func NewPaymentHandler(repo repository.PaymentRepository, log *slog.Logger) *PaymentHandler {
-	return &PaymentHandler{repo: repo, log: log}
+func NewPaymentHandler(svc repository.PaymentRepository, log *slog.Logger) *PaymentHandler {
+	return &PaymentHandler{service: svc, log: log}
 }
 
 func (h *PaymentHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +35,7 @@ func (h *PaymentHandler) getPayments(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "course_id is required", http.StatusBadRequest)
 		return
 	}
-	payments, err := h.repo.GetByCourse(courseID)
+	payments, err := h.service.GetByCourse(courseID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve payments", http.StatusInternalServerError)
 		h.log.Error("Failed to get payments", slog.String("error", err.Error()))
@@ -52,7 +52,7 @@ func (h *PaymentHandler) createPayment(w http.ResponseWriter, r *http.Request) {
 	if !decodeAndValidate(w, r, &req) {
 		return
 	}
-	payment, err := h.repo.Create(req)
+	payment, err := h.service.Create(req)
 	if err != nil {
 		http.Error(w, "Failed to create payment", http.StatusInternalServerError)
 		h.log.Error("Failed to create payment", slog.String("error", err.Error()))
@@ -68,7 +68,7 @@ func (h *PaymentHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "course_id is required", http.StatusBadRequest)
 		return
 	}
-	balance, err := h.repo.GetBalance(courseID)
+	balance, err := h.service.GetBalance(courseID)
 	if err != nil {
 		http.Error(w, "Failed to get balance", http.StatusInternalServerError)
 		h.log.Error("Failed to get balance", slog.String("error", err.Error()))
