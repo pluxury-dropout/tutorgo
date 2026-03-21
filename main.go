@@ -12,18 +12,18 @@ import (
 	"tutorgo/repository"
 	"tutorgo/service"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
 	log := logger.New()
 	cfg := config.Load()
 
-	conn, err := pgx.Connect(context.Background(), cfg.DBUrl)
+	pool, err := pgxpool.New(context.Background(), cfg.DBUrl)
 	if err != nil {
 		log.Error("Failed to connect to db", slog.String("error", err.Error()))
 	}
-	defer conn.Close(context.Background())
+	defer pool.Close()
 
 	log.Info("Connected to database successfully")
 
@@ -34,10 +34,10 @@ func main() {
 		w.Write([]byte(`{"status": "ok"}`))
 	})
 
-	tutorRepo := repository.NewTutorRepository(conn)
-	paymentRepo := repository.NewPaymentRepository(conn)
-	courseRepo := repository.NewCourseRepository(conn)
-	studentRepo := repository.NewStudentRepository(conn)
+	tutorRepo := repository.NewTutorRepository(pool)
+	paymentRepo := repository.NewPaymentRepository(pool)
+	courseRepo := repository.NewCourseRepository(pool)
+	studentRepo := repository.NewStudentRepository(pool)
 
 	tutorService := service.NewTutorService(tutorRepo)
 	paymentService := service.NewPaymentService(paymentRepo)

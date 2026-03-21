@@ -4,7 +4,7 @@ import (
 	"context"
 	"tutorgo/models"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type TutorRepository interface {
@@ -17,10 +17,10 @@ type TutorRepository interface {
 	Delete(id string) error
 }
 type tutorRepository struct {
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
-func NewTutorRepository(conn *pgx.Conn) TutorRepository {
+func NewTutorRepository(conn *pgxpool.Pool) TutorRepository {
 	return &tutorRepository{conn: conn}
 }
 func (r *tutorRepository) Create(req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {

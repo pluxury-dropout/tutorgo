@@ -4,7 +4,7 @@ import (
 	"context"
 	"tutorgo/models"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PaymentRepository interface {
@@ -14,10 +14,10 @@ type PaymentRepository interface {
 }
 
 type paymentRepository struct {
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
-func NewPaymentRepository(conn *pgx.Conn) PaymentRepository {
+func NewPaymentRepository(conn *pgxpool.Pool) PaymentRepository {
 	return &paymentRepository{conn: conn}
 }
 

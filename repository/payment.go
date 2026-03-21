@@ -4,7 +4,7 @@ import (
 	"context"
 	"tutorgo/models"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type CourseService interface {
@@ -16,10 +16,10 @@ type CourseService interface {
 }
 
 type courseRepository struct {
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
-func NewCourseRepository(conn *pgx.Conn) CourseService {
+func NewCourseRepository(conn *pgxpool.Pool) CourseService {
 	return &courseRepository{conn: conn}
 }
 
