@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type StudentService interface {
+type StudentRepository interface {
 	Create(req models.CreateStudentRequest, tutorID string) (models.Student, error)
 	GetAll(tutorID string) ([]models.Student, error)
 	GetByID(id string, tutorID string) (models.Student, error)
@@ -19,7 +19,7 @@ type studentRepository struct {
 	conn *pgxpool.Pool
 }
 
-func NewStudentRepository(conn *pgxpool.Pool) StudentService {
+func NewStudentRepository(conn *pgxpool.Pool) StudentRepository {
 	return &studentRepository{conn: conn}
 }
 
@@ -43,7 +43,7 @@ func (r *studentRepository) GetAll(tutorID string) ([]models.Student, error) {
 	}
 	defer rows.Close()
 
-	var students []models.Student
+	students := []models.Student{}
 	for rows.Next() {
 		var student models.Student
 		err := rows.Scan(&student.ID, &student.TutorID, &student.FirstName, &student.LastName, &student.Phone, &student.Email, &student.Notes, &student.Active)

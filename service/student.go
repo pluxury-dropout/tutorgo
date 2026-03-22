@@ -14,10 +14,10 @@ type StudentService interface {
 }
 
 type studentService struct {
-	repo repository.StudentService
+	repo repository.StudentRepository
 }
 
-func NewStudentService(repo repository.StudentService) StudentService {
+func NewStudentService(repo repository.StudentRepository) StudentService {
 	return &studentService{repo: repo}
 }
 
