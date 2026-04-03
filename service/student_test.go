@@ -47,6 +47,7 @@ func TestGetAllStudents_Success(t *testing.T) {
 
 	expected := []models.Student{
 		{ID: "1", FirstName: "Aiya", LastName: "Bekova", TutorID: "tutor-1"},
+		{ID: "2", FirstName: "Zhanibek", LastName: "Gabitov", TutorID: "tutor-1"},
 	}
 
 	repo.On("GetAll", "tutor-1").Return(expected, nil)
@@ -87,6 +88,22 @@ func TestCreateStudent_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, student)
+	repo.AssertExpectations(t)
+}
+
+func TestCreateStudent_Error(t *testing.T) {
+	repo := new(mockStudentRepo)
+	svc := service.NewStudentService(repo)
+
+	req := models.CreateStudentRequest{
+		FirstName: "Aiya",
+		LastName:  "Bekova",
+	}
+	repo.On("Create", req, "tutor-1").Return(models.Student{}, errors.New("failed to create new student"))
+	student, err := svc.Create(req, "tutor-1")
+
+	assert.Error(t, err)
+	assert.Empty(t, student)
 	repo.AssertExpectations(t)
 }
 

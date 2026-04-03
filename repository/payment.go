@@ -7,76 +7,56 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type CourseService interface {
-	Create(req models.CreateCourseRequest, tutorID string) (models.Course, error)
-	GetAll(tutorID string) ([]models.Course, error)
-	GetByID(id string, tutorID string) (models.Course, error)
-	Update(id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
-	Delete(id string, tutorID string) error
+type PaymentRepository interface {
+	Create(req models.CreatePaymentRequest) (models.Payment, error)
+	GetByCourse(courseID string) ([]models.Payment, error)
+	GetBalance(courseID string) (int, error)
 }
 
-type courseRepository struct {
+type paymentRepository struct {
 	conn *pgxpool.Pool
 }
 
-func NewCourseRepository(conn *pgxpool.Pool) CourseService {
-	return &courseRepository{conn: conn}
+func NewPaymentRepository(conn *pgxpool.Pool) PaymentRepository {
+	return &paymentRepository{conn: conn}
 }
 
-func (r *courseRepository) Create(req models.CreateCourseRequest, tutorID string) (models.Course, error) {
-	var course models.Course
+func (r *paymentRepository) Create(req models.CreatePaymentRequest) (models.Payment, error) {
+	var payment models.Payment
 	err := r.conn.QueryRow(context.Background(),
-		`INSERT INTO courses (student_id, tutor_id, subject, price_per_lesson, started_at, ended_at)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at`,
-		req.StudentID, tutorID, req.Subject, req.PricePerLesson, req.StartedAt, req.EndedAt,
-	).Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt)
-	return course, err
+		`INSERT INTO payments (course_id, amount, lessons_count, paid_at)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, course_id, amount, lessons_count, paid_at`,
+		req.CourseID, req.Amount, req.LessonsCount, req.PaidAt,
+	).Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt)
+	return payment, err
 }
 
-func (r *courseRepository) GetAll(tutorID string) ([]models.Course, error) {
+func (r *paymentRepository) GetByCourse(courseID string) ([]models.Payment, error) {
 	rows, err := r.conn.Query(context.Background(),
-		`SELECT id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at
-		 FROM courses WHERE tutor_id = $1`, tutorID)
+		`SELECT id, course_id, amount, lessons_count, paid_at
+		 FROM payments WHERE course_id = $1`, courseID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var courses []models.Course
+	var payments []models.Payment
 	for rows.Next() {
-		var course models.Course
-		err := rows.Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt)
+		var payment models.Payment
+		err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt)
 		if err != nil {
 			return nil, err
 		}
-		courses = append(courses, course)
+		payments = append(payments, payment)
 	}
-	return courses, nil
+	return payments, nil
 }
 
-func (r *courseRepository) GetByID(id string, tutorID string) (models.Course, error) {
-	var course models.Course
+func (r *paymentRepository) GetBalance(courseID string) (int, error) {
+	var balance int
 	err := r.conn.QueryRow(context.Background(),
-		`SELECT id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at
-		 FROM courses WHERE id = $1 AND tutor_id = $2`, id, tutorID,
-	).Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt)
-	return course, err
-}
-
-func (r *courseRepository) Update(id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
-	var course models.Course
-	err := r.conn.QueryRow(context.Background(),
-		`UPDATE courses SET subject=$1, price_per_lesson=$2, started_at=$3, ended_at=$4
-		 WHERE id=$5 AND tutor_id=$6
-		 RETURNING id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at`,
-		req.Subject, req.PricePerLesson, req.StartedAt, req.EndedAt, id, tutorID,
-	).Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt)
-	return course, err
-}
-
-func (r *courseRepository) Delete(id string, tutorID string) error {
-	_, err := r.conn.Exec(context.Background(),
-		`DELETE FROM courses WHERE id = $1 AND tutor_id = $2`, id, tutorID)
-	return err
+		`SELECT COALESCE(SUM(lessons_count), 0) FROM payments WHERE course_id = $1`, courseID,
+	).Scan(&balance)
+	return balance, err
 }

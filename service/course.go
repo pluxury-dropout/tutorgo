@@ -14,10 +14,10 @@ type CourseService interface {
 }
 
 type courseService struct {
-	repo repository.CourseService
+	repo repository.CourseRepository
 }
 
-func NewCourseService(repo repository.CourseService) CourseService {
+func NewCourseService(repo repository.CourseRepository) CourseService {
 	return &courseService{repo: repo}
 }
 
