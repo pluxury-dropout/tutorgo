@@ -48,17 +48,20 @@ func main() {
 	paymentRepo := repository.NewPaymentRepository(pool)
 	courseRepo := repository.NewCourseRepository(pool)
 	studentRepo := repository.NewStudentRepository(pool)
+	lessonRepo := repository.NewLessonRepository(pool)
 
 	tutorService := service.NewTutorService(tutorRepo)
 	paymentService := service.NewPaymentService(paymentRepo)
 	courseService := service.NewCourseService(courseRepo)
 	studentService := service.NewStudentService(studentRepo)
+	lessonService := service.NewLessonService(lessonRepo)
 
 	tutorHandler := handlers.NewTutorHandler(tutorService, log)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
 	courseHandler := handlers.NewCourseHandler(courseService, log)
 	studentHandler := handlers.NewStudentHandler(studentService, log)
 	authHandler := handlers.NewAuthHandler(tutorService, log, cfg.JWTSecret)
+	lessonHandler := handlers.NewLessonHandler(lessonService, log)
 
 	mux.HandleFunc("/payments", middleware.Auth(cfg.JWTSecret, paymentHandler.Handle))
 	mux.HandleFunc("/payments/balance", middleware.Auth(cfg.JWTSecret, paymentHandler.GetBalance))
@@ -73,6 +76,9 @@ func main() {
 	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.HandleFunc("/tutors", middleware.Auth(cfg.JWTSecret, tutorHandler.Handle))
 	mux.HandleFunc("/tutors/{id}", middleware.Auth(cfg.JWTSecret, tutorHandler.HandleOne))
+
+	mux.HandleFunc("/lessons", middleware.Auth(cfg.JWTSecret, lessonHandler.Handle))
+	mux.HandleFunc("/lessons/{id}", middleware.Auth(cfg.JWTSecret, lessonHandler.HandleOne))
 
 	srv := &http.Server{
 		Addr:    cfg.ServerPort,
