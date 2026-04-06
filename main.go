@@ -80,6 +80,18 @@ func main() {
 	mux.HandleFunc("/lessons", middleware.Auth(cfg.JWTSecret, lessonHandler.Handle))
 	mux.HandleFunc("/lessons/{id}", middleware.Auth(cfg.JWTSecret, lessonHandler.HandleOne))
 
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := pool.Ping(r.Context()); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error": "database unavailable"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "ok"}`))
+	})
+
 	srv := &http.Server{
 		Addr:    cfg.ServerPort,
 		Handler: mux,
