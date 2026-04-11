@@ -22,6 +22,6 @@ func Load() Config {
 	return Config{
 		DBUrl:      os.Getenv("DB_URL"),
 		ServerPort: os.Getenv("SERVER_PORT"),
-		JWTSecret:  os.Getenv("JWT_Secret"),
+		JWTSecret:  os.Getenv("JWT_SECRET"),
 	}
 }

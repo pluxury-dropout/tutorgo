@@ -30,46 +30,150 @@ func (m *mockPaymentRepo) GetBalance(courseID string) (int, error) {
 	return args.Int(0), args.Error(1)
 }
 
-func TestCreate_Success(t *testing.T) {
-	repo := new(mockPaymentRepo)
-	svc := service.NewPaymentService(repo)
-	req := models.CreatePaymentRequest{
-		CourseID:     "123",
+var (
+	tutorID  = "tutor-uuid-1"
+	courseID = "course-uuid-1"
+
+	paymentReq = models.CreatePaymentRequest{
+		CourseID:     courseID,
 		Amount:       5000,
 		LessonsCount: 12,
 		PaidAt:       time.Date(2001, time.September, 11, 0, 0, 0, 0, time.UTC),
 	}
 
-	expected := models.Payment{
-		ID:           "1",
-		CourseID:     "123",
+	expectedPayment = models.Payment{
+		ID:           "payment-uuid-1",
+		CourseID:     courseID,
 		Amount:       5000,
 		LessonsCount: 12,
 		PaidAt:       time.Date(2001, time.September, 11, 0, 0, 0, 0, time.UTC),
 	}
-	repo.On("Create", req).Return(expected, nil)
 
-	payment, err := svc.Create(req)
+	expectedCourse = models.Course{
+		ID:      courseID,
+		TutorID: tutorID,
+	}
+)
 
-	assert.NoError(t, err)
-	assert.Equal(t, expected, payment)
-	repo.AssertExpectations(t)
+func newPaymentSvc(payRepo *mockPaymentRepo, courseRepo *mockCourseRepo) service.PaymentService {
+	return service.NewPaymentService(payRepo, courseRepo)
 }
 
-func TestCreate_Error(t *testing.T) {
-	repo := new(mockPaymentRepo)
-	svc := service.NewPaymentService(repo)
+// Create
 
-	req := models.CreatePaymentRequest{
-		CourseID:     "123",
-		Amount:       5000,
-		LessonsCount: 12,
-		PaidAt:       time.Date(2001, time.September, 11, 0, 0, 0, 0, time.UTC),
-	}
-	repo.On("Create", req).Return(models.Payment{}, errors.New("failed to create payment"))
-	payment, err := svc.Create(req)
+func TestPaymentCreate_Success(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
+	payRepo.On("Create", paymentReq).Return(expectedPayment, nil)
+
+	payment, err := svc.Create(paymentReq, tutorID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedPayment, payment)
+	courseRepo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
+}
+
+func TestPaymentCreate_CourseNotFound(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	courseRepo.On("GetByID", courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+
+	payment, err := svc.Create(paymentReq, tutorID)
+
+	assert.Error(t, err)
+	assert.EqualError(t, err, "course not found or access denied")
+	assert.Empty(t, payment)
+	payRepo.AssertNotCalled(t, "Create")
+	courseRepo.AssertExpectations(t)
+}
+
+func TestPaymentCreate_RepoError(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
+	payRepo.On("Create", paymentReq).Return(models.Payment{}, errors.New("db error"))
+
+	payment, err := svc.Create(paymentReq, tutorID)
 
 	assert.Error(t, err)
 	assert.Empty(t, payment)
-	repo.AssertExpectations(t)
+	courseRepo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
+}
+
+// GetByCourse
+
+func TestPaymentGetByCourse_Success(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	expected := []models.Payment{expectedPayment}
+	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
+	payRepo.On("GetByCourse", courseID).Return(expected, nil)
+
+	payments, err := svc.GetByCourse(courseID, tutorID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, payments)
+	courseRepo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
+}
+
+func TestPaymentGetByCourse_CourseNotFound(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	courseRepo.On("GetByID", courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+
+	payments, err := svc.GetByCourse(courseID, tutorID)
+
+	assert.Error(t, err)
+	assert.EqualError(t, err, "course not found or access denied")
+	assert.Nil(t, payments)
+	payRepo.AssertNotCalled(t, "GetByCourse")
+	courseRepo.AssertExpectations(t)
+}
+
+// GetBalance
+
+func TestPaymentGetBalance_Success(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
+	payRepo.On("GetBalance", courseID).Return(10, nil)
+
+	balance, err := svc.GetBalance(courseID, tutorID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 10, balance)
+	courseRepo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
+}
+
+func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	courseRepo.On("GetByID", courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+
+	balance, err := svc.GetBalance(courseID, tutorID)
+
+	assert.Error(t, err)
+	assert.EqualError(t, err, "course not found or access denied")
+	assert.Zero(t, balance)
+	payRepo.AssertNotCalled(t, "GetBalance")
+	courseRepo.AssertExpectations(t)
 }

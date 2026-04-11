@@ -1,32 +1,43 @@
 package service
 
 import (
+	"errors"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
 
 type PaymentService interface {
-	Create(req models.CreatePaymentRequest) (models.Payment, error)
-	GetByCourse(courseID string) ([]models.Payment, error)
-	GetBalance(courseID string) (int, error)
+	Create(req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
+	GetByCourse(courseID string, tutorID string) ([]models.Payment, error)
+	GetBalance(courseID string, tutorID string) (int, error)
 }
 
 type paymentService struct {
-	repo repository.PaymentRepository
+	repo       repository.PaymentRepository
+	courseRepo repository.CourseRepository
 }
 
-func NewPaymentService(repo repository.PaymentRepository) PaymentService {
-	return &paymentService{repo: repo}
+func NewPaymentService(repo repository.PaymentRepository, courseRepo repository.CourseRepository) PaymentService {
+	return &paymentService{repo: repo, courseRepo: courseRepo}
 }
 
-func (s *paymentService) Create(req models.CreatePaymentRequest) (models.Payment, error) {
+func (s *paymentService) Create(req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
+	if _, err := s.courseRepo.GetByID(req.CourseID, tutorID); err != nil {
+		return models.Payment{}, errors.New("course not found or access denied")
+	}
 	return s.repo.Create(req)
 }
 
-func (s *paymentService) GetByCourse(courseID string) ([]models.Payment, error) {
+func (s *paymentService) GetByCourse(courseID string, tutorID string) ([]models.Payment, error) {
+	if _, err := s.courseRepo.GetByID(courseID, tutorID); err != nil {
+		return nil, errors.New("course not found or access denied")
+	}
 	return s.repo.GetByCourse(courseID)
 }
 
-func (s *paymentService) GetBalance(courseID string) (int, error) {
+func (s *paymentService) GetBalance(courseID string, tutorID string) (int, error) {
+	if _, err := s.courseRepo.GetByID(courseID, tutorID); err != nil {
+		return 0, errors.New("course not found or access denied")
+	}
 	return s.repo.GetBalance(courseID)
 }

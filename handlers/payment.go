@@ -1,58 +1,56 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"tutorgo/models"
-	"tutorgo/repository"
+	"tutorgo/service"
 )
 
 type PaymentHandler struct {
-	service repository.PaymentRepository
+	service service.PaymentService
 	log     *slog.Logger
 }
 
-func NewPaymentHandler(svc repository.PaymentRepository, log *slog.Logger) *PaymentHandler {
+func NewPaymentHandler(svc service.PaymentService, log *slog.Logger) *PaymentHandler {
 	return &PaymentHandler{service: svc, log: log}
 }
 
 func (h *PaymentHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	tutorID := r.Context().Value("tutorID").(string)
 	switch r.Method {
 	case http.MethodGet:
-		h.getPayments(w, r)
+		h.getPayments(w, r, tutorID)
 	case http.MethodPost:
-		h.createPayment(w, r)
+		h.createPayment(w, r, tutorID)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func (h *PaymentHandler) getPayments(w http.ResponseWriter, r *http.Request) {
+func (h *PaymentHandler) getPayments(w http.ResponseWriter, r *http.Request, tutorID string) {
 	courseID := r.URL.Query().Get("course_id")
 	if courseID == "" {
 		http.Error(w, "course_id is required", http.StatusBadRequest)
 		return
 	}
-	payments, err := h.service.GetByCourse(courseID)
+	payments, err := h.service.GetByCourse(courseID, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to retrieve payments", http.StatusInternalServerError)
 		h.log.Error("Failed to get payments", slog.String("error", err.Error()))
 		return
 	}
 	h.log.Info("Payments retrieved", slog.Int("count", len(payments)))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(payments)
+	respondJSON(w, http.StatusOK, payments)
 }
 
-func (h *PaymentHandler) createPayment(w http.ResponseWriter, r *http.Request) {
+func (h *PaymentHandler) createPayment(w http.ResponseWriter, r *http.Request, tutorID string) {
 	var req models.CreatePaymentRequest
 	if !decodeAndValidate(w, r, &req) {
 		return
 	}
-	payment, err := h.service.Create(req)
+	payment, err := h.service.Create(req, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to create payment", http.StatusInternalServerError)
 		h.log.Error("Failed to create payment", slog.String("error", err.Error()))
@@ -63,12 +61,13 @@ func (h *PaymentHandler) createPayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PaymentHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
+	tutorID := r.Context().Value("tutorID").(string)
 	courseID := r.URL.Query().Get("course_id")
 	if courseID == "" {
 		http.Error(w, "course_id is required", http.StatusBadRequest)
 		return
 	}
-	balance, err := h.service.GetBalance(courseID)
+	balance, err := h.service.GetBalance(courseID, tutorID)
 	if err != nil {
 		http.Error(w, "Failed to get balance", http.StatusInternalServerError)
 		h.log.Error("Failed to get balance", slog.String("error", err.Error()))
