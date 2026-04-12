@@ -5,43 +5,55 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func Auth(jwtSecret string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
+func Auth(jwtSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid token format", http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
 			return
 		}
 
-		tokenString := parts[1]
-
 		token, err := jwt.ParseWithClaims(
-			tokenString,
+			parts[1],
 			jwt.MapClaims{},
 			func(token *jwt.Token) (interface{}, error) {
 				return []byte(jwtSecret), nil
 			},
 			jwt.WithValidMethods([]string{"HS256"}),
 		)
-
 		if err != nil || !token.Valid {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-		tutorID := claims["id"].(string)
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
 
-		ctx := context.WithValue(r.Context(), "tutorID", tutorID)
-		next(w, r.WithContext(ctx))
+		tutorID, ok := claims["id"].(string)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+
+		// устанавливаем в gin контекст (для новых gin-хендлеров)
+		c.Set("tutorID", tutorID)
+		// устанавливаем в request context (для старых stdlib-хендлеров)
+		ctx := context.WithValue(c.Request.Context(), "tutorID", tutorID)
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
 	}
 }

@@ -70,7 +70,7 @@ func (r *lessonRepository) GetByIDForTutor(id string, tutorID string) (models.Le
 	err := r.pool.QueryRow(context.Background(),
 		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes
 		 FROM lessons l
-		 JOIN courses с ON c.id = l.course_id
+		 JOIN courses c ON c.id = l.course_id
 		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
 	return lesson, err

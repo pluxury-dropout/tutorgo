@@ -13,6 +13,8 @@ import (
 	"tutorgo/database"
 	"tutorgo/logger"
 	"tutorgo/router"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -22,25 +24,19 @@ func main() {
 	pool := database.Connect(cfg.DBUrl, log)
 	defer pool.Close()
 
-	mux := http.NewServeMux()
+	r := router.Setup(pool, log, &cfg)
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if err := pool.Ping(r.Context()); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error": "database unavailable"}`))
+	r.GET("/health", func(c *gin.Context) {
+		if err := pool.Ping(c.Request.Context()); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database unavailable"})
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "ok"}`))
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-
-	router.Setup(mux, pool, log, &cfg)
 
 	srv := &http.Server{
 		Addr:    cfg.ServerPort,
-		Handler: mux,
+		Handler: r,
 	}
 
 	go func() {
@@ -64,5 +60,4 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("Server exited cleanly")
-
 }

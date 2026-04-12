@@ -2,7 +2,6 @@ package router
 
 import (
 	"log/slog"
-	"net/http"
 
 	"tutorgo/config"
 	"tutorgo/handlers"
@@ -10,10 +9,11 @@ import (
 	"tutorgo/repository"
 	"tutorgo/service"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func Setup(mux *http.ServeMux, pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) {
+func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine {
 	// Repositories
 	tutorRepo := repository.NewTutorRepository(pool)
 	studentRepo := repository.NewStudentRepository(pool)
@@ -36,22 +36,45 @@ func Setup(mux *http.ServeMux, pool *pgxpool.Pool, log *slog.Logger, cfg *config
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
 	lessonHandler := handlers.NewLessonHandler(lessonService, log)
 
-	// Routes
-	mux.HandleFunc("/auth/register", authHandler.Register)
-	mux.HandleFunc("/auth/login", authHandler.Login)
+	r := gin.New()
+	r.Use(gin.Recovery())
 
-	mux.HandleFunc("/tutors", middleware.Auth(cfg.JWTSecret, tutorHandler.Handle))
-	mux.HandleFunc("/tutors/{id}", middleware.Auth(cfg.JWTSecret, tutorHandler.HandleOne))
+	// Public routes
+	r.POST("/auth/register", gin.WrapF(authHandler.Register))
+	r.POST("/auth/login", gin.WrapF(authHandler.Login))
 
-	mux.HandleFunc("/students", middleware.Auth(cfg.JWTSecret, studentHandler.Handle))
-	mux.HandleFunc("/students/{id}", middleware.Auth(cfg.JWTSecret, studentHandler.HandleOne))
+	// Protected routes
+	auth := r.Group("/")
+	auth.Use(middleware.Auth(cfg.JWTSecret))
+	{
+		auth.GET("/tutors", gin.WrapF(tutorHandler.Handle))
+		auth.GET("/tutors/:id", gin.WrapF(tutorHandler.HandleOne))
+		auth.PUT("/tutors/:id", gin.WrapF(tutorHandler.HandleOne))
+		auth.DELETE("/tutors/:id", gin.WrapF(tutorHandler.HandleOne))
 
-	mux.HandleFunc("/courses", middleware.Auth(cfg.JWTSecret, courseHandler.Handle))
-	mux.HandleFunc("/courses/{id}", middleware.Auth(cfg.JWTSecret, courseHandler.HandleOne))
+		auth.GET("/students", gin.WrapF(studentHandler.Handle))
+		auth.POST("/students", gin.WrapF(studentHandler.Handle))
+		auth.GET("/students/:id", gin.WrapF(studentHandler.HandleOne))
+		auth.PUT("/students/:id", gin.WrapF(studentHandler.HandleOne))
+		auth.DELETE("/students/:id", gin.WrapF(studentHandler.HandleOne))
 
-	mux.HandleFunc("/payments", middleware.Auth(cfg.JWTSecret, paymentHandler.Handle))
-	mux.HandleFunc("/payments/balance", middleware.Auth(cfg.JWTSecret, paymentHandler.GetBalance))
+		auth.GET("/courses", gin.WrapF(courseHandler.Handle))
+		auth.POST("/courses", gin.WrapF(courseHandler.Handle))
+		auth.GET("/courses/:id", gin.WrapF(courseHandler.HandleOne))
+		auth.PUT("/courses/:id", gin.WrapF(courseHandler.HandleOne))
+		auth.DELETE("/courses/:id", gin.WrapF(courseHandler.HandleOne))
 
-	mux.HandleFunc("/lessons", middleware.Auth(cfg.JWTSecret, lessonHandler.Handle))
-	mux.HandleFunc("/lessons/{id}", middleware.Auth(cfg.JWTSecret, lessonHandler.HandleOne))
+		auth.GET("/payments", gin.WrapF(paymentHandler.Handle))
+		auth.POST("/payments", gin.WrapF(paymentHandler.Handle))
+		auth.GET("/payments/balance", gin.WrapF(paymentHandler.GetBalance))
+
+		// Lesson handler — нативный Gin
+		auth.GET("/lessons", lessonHandler.GetByCourse)
+		auth.POST("/lessons", lessonHandler.Create)
+		auth.GET("/lessons/:id", lessonHandler.GetByID)
+		auth.PUT("/lessons/:id", lessonHandler.Update)
+		auth.DELETE("/lessons/:id", lessonHandler.Delete)
+	}
+
+	return r
 }
