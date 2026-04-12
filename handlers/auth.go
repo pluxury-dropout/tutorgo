@@ -42,7 +42,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	createReq := models.CreateTutorRequest{
 		Email:     req.Email,
-		Password:  req.Password,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Phone:     req.Phone,

@@ -13,8 +13,8 @@ type TutorHandler struct {
 	log     *slog.Logger
 }
 
-func NewTutorHandler(repo service.TutorService, log *slog.Logger) *TutorHandler {
-	return &TutorHandler{service: repo, log: log}
+func NewTutorHandler(svc service.TutorService, log *slog.Logger) *TutorHandler {
+	return &TutorHandler{service: svc, log: log}
 }
 
 func (h *TutorHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +27,14 @@ func (h *TutorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TutorHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
+	tutorID := r.Context().Value("tutorID").(string)
+	id := r.PathValue("id")
+
+	if id != tutorID {
+		respondError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		h.getTutorByID(w, r)

@@ -40,11 +40,7 @@ func (s *lessonService) GetByCourse(courseID string, tutorID string) ([]models.L
 }
 
 func (s *lessonService) GetByID(id string, tutorID string) (models.Lesson, error) {
-	lesson, err := s.repo.GetByID(id)
-	if err != nil {
-		return models.Lesson{}, err
-	}
-	_, err = s.courseRepo.GetByID(lesson.CourseID, tutorID)
+	lesson, err := s.repo.GetByIDForTutor(id, tutorID)
 	if err != nil {
 		return models.Lesson{}, errors.New("lesson not found or access denied")
 	}
@@ -52,11 +48,7 @@ func (s *lessonService) GetByID(id string, tutorID string) (models.Lesson, error
 }
 
 func (s *lessonService) Update(id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error) {
-	lesson, err := s.repo.GetByID(id)
-	if err != nil {
-		return models.Lesson{}, err
-	}
-	_, err = s.courseRepo.GetByID(lesson.CourseID, tutorID)
+	_, err := s.repo.GetByIDForTutor(id, tutorID)
 	if err != nil {
 		return models.Lesson{}, errors.New("lesson not found or access denied")
 	}
@@ -64,11 +56,7 @@ func (s *lessonService) Update(id string, req models.UpdateLessonRequest, tutorI
 }
 
 func (s *lessonService) Delete(id string, tutorID string) error {
-	lesson, err := s.repo.GetByID(id)
-	if err != nil {
-		return err
-	}
-	_, err = s.courseRepo.GetByID(lesson.CourseID, tutorID)
+	_, err := s.repo.GetByIDForTutor(id, tutorID)
 	if err != nil {
 		return errors.New("lesson not found or access denied")
 	}

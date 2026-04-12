@@ -11,6 +11,7 @@ type LessonRepository interface {
 	Create(req models.CreateLessonRequest) (models.Lesson, error)
 	GetByCourse(courseID string) ([]models.Lesson, error)
 	GetByID(id string) (models.Lesson, error)
+	GetByIDForTutor(id string, tutorID string) (models.Lesson, error)
 	Update(id string, req models.UpdateLessonRequest) (models.Lesson, error)
 	Delete(id string) error
 }
@@ -60,6 +61,17 @@ func (r *lessonRepository) GetByID(id string) (models.Lesson, error) {
 	err := r.pool.QueryRow(context.Background(),
 		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
 		 FROM lessons WHERE id = $1`, id,
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
+	return lesson, err
+}
+
+func (r *lessonRepository) GetByIDForTutor(id string, tutorID string) (models.Lesson, error) {
+	var lesson models.Lesson
+	err := r.pool.QueryRow(context.Background(),
+		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes
+		 FROM lessons l
+		 JOIN courses с ON c.id = l.course_id
+		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
 	return lesson, err
 }

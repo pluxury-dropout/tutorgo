@@ -16,7 +16,6 @@ func Auth(jwtSecret string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// заголовок должен быть "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "Invalid token format", http.StatusUnauthorized)
@@ -25,9 +24,14 @@ func Auth(jwtSecret string, next http.HandlerFunc) http.HandlerFunc {
 
 		tokenString := parts[1]
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return []byte(jwtSecret), nil
-		})
+		token, err := jwt.ParseWithClaims(
+			tokenString,
+			jwt.MapClaims{},
+			func(token *jwt.Token) (interface{}, error) {
+				return []byte(jwtSecret), nil
+			},
+			jwt.WithValidMethods([]string{"HS256"}),
+		)
 
 		if err != nil || !token.Valid {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)

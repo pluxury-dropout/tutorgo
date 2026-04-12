@@ -46,6 +46,8 @@ func formatError(err validator.FieldError) string {
 		return fmt.Sprintf("maximum length is %s", err.Param())
 	case "gt":
 		return fmt.Sprintf("must be greater than %s", err.Param())
+	case "oneof":
+		return fmt.Sprintf("must be one of: %s", strings.ReplaceAll(err.Param(), " ", ", "))
 	default:
 		return fmt.Sprintf("%s is invalid", strings.ToLower(err.Field()))
 	}
