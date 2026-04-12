@@ -26,7 +26,7 @@ func Setup(mux *http.ServeMux, pool *pgxpool.Pool, log *slog.Logger, cfg *config
 	studentService := service.NewStudentService(studentRepo)
 	courseService := service.NewCourseService(courseRepo, studentRepo, lessonRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
-	lessonService := service.NewLessonService(lessonRepo)
+	lessonService := service.NewLessonService(lessonRepo, courseRepo)
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, log)
