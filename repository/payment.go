@@ -50,7 +50,7 @@ func (r *paymentRepository) GetByCourse(courseID string) ([]models.Payment, erro
 		}
 		payments = append(payments, payment)
 	}
-	return payments, nil
+	return payments, rows.Err()
 }
 
 func (r *paymentRepository) GetBalance(courseID string) (int, error) {

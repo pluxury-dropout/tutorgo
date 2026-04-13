@@ -53,7 +53,7 @@ func (r *lessonRepository) GetByCourse(courseID string) ([]models.Lesson, error)
 		}
 		lessons = append(lessons, lesson)
 	}
-	return lessons, nil
+	return lessons, rows.Err()
 }
 
 func (r *lessonRepository) GetByID(id string) (models.Lesson, error) {

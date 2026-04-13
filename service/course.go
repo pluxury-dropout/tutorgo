@@ -47,7 +47,13 @@ func (s *courseService) Update(id string, tutorID string, req models.UpdateCours
 	}
 	return s.repo.Update(id, tutorID, req)
 }
+
 func (s *courseService) Delete(id string, tutorID string) error {
+	_, err := s.repo.GetByID(id, tutorID)
+	if err != nil {
+		return errors.New("course not found or access denied")
+	}
+
 	lessons, err := s.lessonRepo.GetByCourse(id)
 	if err != nil {
 		return err

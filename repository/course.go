@@ -52,7 +52,7 @@ func (r *courseRepository) GetAll(tutorID string) ([]models.Course, error) {
 		}
 		courses = append(courses, course)
 	}
-	return courses, nil
+	return courses, rows.Err()
 }
 
 func (r *courseRepository) GetByID(id string, tutorID string) (models.Course, error) {

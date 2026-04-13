@@ -51,7 +51,7 @@ func (r *tutorRepository) GetAll() ([]models.Tutor, error) {
 		}
 		tutors = append(tutors, tutor)
 	}
-	return tutors, nil
+	return tutors, rows.Err()
 }
 
 func (r *tutorRepository) GetByID(id string) (models.Tutor, error) {
