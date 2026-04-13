@@ -77,5 +77,5 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get balance"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"lessons_remaining": balance})
+	c.JSON(http.StatusOK, balance)
 }

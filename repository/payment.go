@@ -10,7 +10,7 @@ import (
 type PaymentRepository interface {
 	Create(req models.CreatePaymentRequest) (models.Payment, error)
 	GetByCourse(courseID string) ([]models.Payment, error)
-	GetBalance(courseID string) (int, error)
+	GetBalance(courseID string) (models.CourseBalance, error)
 }
 
 type paymentRepository struct {
@@ -53,10 +53,23 @@ func (r *paymentRepository) GetByCourse(courseID string) ([]models.Payment, erro
 	return payments, rows.Err()
 }
 
-func (r *paymentRepository) GetBalance(courseID string) (int, error) {
-	var balance int
+func (r *paymentRepository) GetBalance(courseID string) (models.CourseBalance, error) {
+	var paid, completed int
 	err := r.conn.QueryRow(context.Background(),
-		`SELECT COALESCE(SUM(lessons_count), 0) FROM payments WHERE course_id = $1`, courseID,
-	).Scan(&balance)
-	return balance, err
+		`SELECT
+			COALESCE(SUM(p.lessons_count), 0),
+			COUNT(l.id) FILTER (WHERE l.status = 'completed')
+		FROM payments p
+		LEFT JOIN lessons l ON l.course_id = p.course_id
+		WHERE p.course_id = $1`,
+		courseID,
+	).Scan(&paid, &completed)
+	if err != nil {
+		return models.CourseBalance{}, err
+	}
+	return models.CourseBalance{
+		LessonsPaid:      paid,
+		LessonsCompleted: completed,
+		LessonsRemaining: paid - completed,
+	}, nil
 }

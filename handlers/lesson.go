@@ -39,8 +39,7 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 func (h *LessonHandler) Create(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	var req models.CreateLessonRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindAndValidate(c, &req) {
 		return
 	}
 	lesson, err := h.service.Create(req, tutorID)
@@ -69,8 +68,7 @@ func (h *LessonHandler) Update(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	id := c.Param("id")
 	var req models.UpdateLessonRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindAndValidate(c, &req) {
 		return
 	}
 	lesson, err := h.service.Update(id, req, tutorID)

@@ -12,6 +12,12 @@ type Course struct {
 	EndedAt        time.Time `json:"ended_at"`
 }
 
+type CourseBalance struct {
+	LessonsPaid      int `json:"lessons_paid"`
+	LessonsCompleted int `json:"lessons_completed"`
+	LessonsRemaining int `json:"lessons_remaining"`
+}
+
 type CreateCourseRequest struct {
 	StudentID      string    `json:"student_id"       validate:"required,uuid"`
 	Subject        string    `json:"subject"          validate:"required,min=2"`

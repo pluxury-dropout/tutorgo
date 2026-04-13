@@ -9,7 +9,7 @@ import (
 type PaymentService interface {
 	Create(req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
 	GetByCourse(courseID string, tutorID string) ([]models.Payment, error)
-	GetBalance(courseID string, tutorID string) (int, error)
+	GetBalance(courseID string, tutorID string) (models.CourseBalance, error)
 }
 
 type paymentService struct {
@@ -35,9 +35,9 @@ func (s *paymentService) GetByCourse(courseID string, tutorID string) ([]models.
 	return s.repo.GetByCourse(courseID)
 }
 
-func (s *paymentService) GetBalance(courseID string, tutorID string) (int, error) {
+func (s *paymentService) GetBalance(courseID string, tutorID string) (models.CourseBalance, error) {
 	if _, err := s.courseRepo.GetByID(courseID, tutorID); err != nil {
-		return 0, errors.New("course not found or access denied")
+		return models.CourseBalance{}, errors.New("course not found or access denied")
 	}
 	return s.repo.GetBalance(courseID)
 }

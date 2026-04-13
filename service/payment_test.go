@@ -25,9 +25,9 @@ func (m *mockPaymentRepo) GetByCourse(courseID string) ([]models.Payment, error)
 	return args.Get(0).([]models.Payment), args.Error(1)
 }
 
-func (m *mockPaymentRepo) GetBalance(courseID string) (int, error) {
+func (m *mockPaymentRepo) GetBalance(courseID string) (models.CourseBalance, error) {
 	args := m.Called(courseID)
-	return args.Int(0), args.Error(1)
+	return args.Get(0).(models.CourseBalance), args.Error(1)
 }
 
 var (
@@ -151,13 +151,18 @@ func TestPaymentGetBalance_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	svc := newPaymentSvc(payRepo, courseRepo)
 
+	expected := models.CourseBalance{
+		LessonsPaid:      10,
+		LessonsCompleted: 3,
+		LessonsRemaining: 7,
+	}
 	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
-	payRepo.On("GetBalance", courseID).Return(10, nil)
+	payRepo.On("GetBalance", courseID).Return(expected, nil)
 
 	balance, err := svc.GetBalance(courseID, tutorID)
 
 	assert.NoError(t, err)
-	assert.Equal(t, 10, balance)
+	assert.Equal(t, expected, balance)
 	courseRepo.AssertExpectations(t)
 	payRepo.AssertExpectations(t)
 }
@@ -173,7 +178,7 @@ func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.EqualError(t, err, "course not found or access denied")
-	assert.Zero(t, balance)
+	assert.Empty(t, balance)
 	payRepo.AssertNotCalled(t, "GetBalance")
 	courseRepo.AssertExpectations(t)
 }

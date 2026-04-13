@@ -6,8 +6,9 @@ tmp/
 *.exe
 *.exe~
 
-# Claude Code (local settings, not project instructions)
+# Claude Code
 .claude/
+CLAUDE.md
 
 # IDE
 .idea/
