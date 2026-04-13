@@ -1,2 +1,20 @@
+# Environment
 .env
+
+# Build output
 tmp/
+*.exe
+*.exe~
+
+# Claude Code (local settings, not project instructions)
+.claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

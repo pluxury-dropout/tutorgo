@@ -40,35 +40,33 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	r.Use(gin.Recovery())
 
 	// Public routes
-	r.POST("/auth/register", gin.WrapF(authHandler.Register))
-	r.POST("/auth/login", gin.WrapF(authHandler.Login))
+	r.POST("/auth/register", authHandler.Register)
+	r.POST("/auth/login", authHandler.Login)
 
 	// Protected routes
 	auth := r.Group("/")
 	auth.Use(middleware.Auth(cfg.JWTSecret))
 	{
-		auth.GET("/tutors", gin.WrapF(tutorHandler.Handle))
-		auth.GET("/tutors/:id", gin.WrapF(tutorHandler.HandleOne))
-		auth.PUT("/tutors/:id", gin.WrapF(tutorHandler.HandleOne))
-		auth.DELETE("/tutors/:id", gin.WrapF(tutorHandler.HandleOne))
+		auth.GET("/tutors/:id", tutorHandler.GetByID)
+		auth.PUT("/tutors/:id", tutorHandler.Update)
+		auth.DELETE("/tutors/:id", tutorHandler.Delete)
 
-		auth.GET("/students", gin.WrapF(studentHandler.Handle))
-		auth.POST("/students", gin.WrapF(studentHandler.Handle))
-		auth.GET("/students/:id", gin.WrapF(studentHandler.HandleOne))
-		auth.PUT("/students/:id", gin.WrapF(studentHandler.HandleOne))
-		auth.DELETE("/students/:id", gin.WrapF(studentHandler.HandleOne))
+		auth.GET("/students", studentHandler.GetAll)
+		auth.POST("/students", studentHandler.Create)
+		auth.GET("/students/:id", studentHandler.GetByID)
+		auth.PUT("/students/:id", studentHandler.Update)
+		auth.DELETE("/students/:id", studentHandler.Delete)
 
-		auth.GET("/courses", gin.WrapF(courseHandler.Handle))
-		auth.POST("/courses", gin.WrapF(courseHandler.Handle))
-		auth.GET("/courses/:id", gin.WrapF(courseHandler.HandleOne))
-		auth.PUT("/courses/:id", gin.WrapF(courseHandler.HandleOne))
-		auth.DELETE("/courses/:id", gin.WrapF(courseHandler.HandleOne))
+		auth.GET("/courses", courseHandler.GetAll)
+		auth.POST("/courses", courseHandler.Create)
+		auth.GET("/courses/:id", courseHandler.GetByID)
+		auth.PUT("/courses/:id", courseHandler.Update)
+		auth.DELETE("/courses/:id", courseHandler.Delete)
 
-		auth.GET("/payments", gin.WrapF(paymentHandler.Handle))
-		auth.POST("/payments", gin.WrapF(paymentHandler.Handle))
-		auth.GET("/payments/balance", gin.WrapF(paymentHandler.GetBalance))
+		auth.GET("/payments", paymentHandler.GetAll)
+		auth.POST("/payments", paymentHandler.Create)
+		auth.GET("/payments/balance", paymentHandler.GetBalance)
 
-		// Lesson handler — нативный Gin
 		auth.GET("/lessons", lessonHandler.GetByCourse)
 		auth.POST("/lessons", lessonHandler.Create)
 		auth.GET("/lessons/:id", lessonHandler.GetByID)

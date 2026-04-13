@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -48,11 +47,7 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		// устанавливаем в gin контекст (для новых gin-хендлеров)
 		c.Set("tutorID", tutorID)
-		// устанавливаем в request context (для старых stdlib-хендлеров)
-		ctx := context.WithValue(c.Request.Context(), "tutorID", tutorID)
-		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

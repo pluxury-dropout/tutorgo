@@ -6,6 +6,8 @@ import (
 
 	"tutorgo/models"
 	"tutorgo/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 type TutorHandler struct {
@@ -17,84 +19,56 @@ func NewTutorHandler(svc service.TutorService, log *slog.Logger) *TutorHandler {
 	return &TutorHandler{service: svc, log: log}
 }
 
-func (h *TutorHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		h.getTutors(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (h *TutorHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
-	tutorID := r.Context().Value("tutorID").(string)
-	id := r.PathValue("id")
-
+func (h *TutorHandler) GetByID(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	id := c.Param("id")
 	if id != tutorID {
-		respondError(w, http.StatusForbidden, "access denied")
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
-
-	switch r.Method {
-	case http.MethodGet:
-		h.getTutorByID(w, r)
-	case http.MethodPut:
-		h.updateTutor(w, r)
-	case http.MethodDelete:
-		h.deleteTutor(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (h *TutorHandler) getTutors(w http.ResponseWriter, r *http.Request) {
-	tutors, err := h.service.GetAll()
-	if err != nil {
-		http.Error(w, "Failed to retrieve tutors", http.StatusInternalServerError)
-		h.log.Error("Failed to get tutors", slog.String("error", err.Error()))
-		return
-	}
-	h.log.Info("Tutors retrieved", slog.Int("count", len(tutors)))
-	respondJSON(w, http.StatusOK, tutors)
-}
-
-func (h *TutorHandler) getTutorByID(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
 	tutor, err := h.service.GetByID(id)
 	if err != nil {
-		http.Error(w, "Tutor not found", http.StatusNotFound)
 		h.log.Error("Failed to get tutor", slog.String("id", id), slog.String("error", err.Error()))
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tutor not found"})
 		return
 	}
 	h.log.Info("Tutor retrieved", slog.String("id", id))
-	respondJSON(w, http.StatusOK, tutor)
-
+	c.JSON(http.StatusOK, tutor)
 }
 
-func (h *TutorHandler) updateTutor(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+func (h *TutorHandler) Update(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	id := c.Param("id")
+	if id != tutorID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
 	var req models.UpdateTutorRequest
-	if !decodeAndValidate(w, r, &req) {
+	if !bindAndValidate(c, &req) {
 		return
 	}
 	tutor, err := h.service.Update(id, req)
 	if err != nil {
-		http.Error(w, "Failed to update tutor", http.StatusInternalServerError)
 		h.log.Error("Failed to update tutor", slog.String("id", id), slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update tutor"})
 		return
 	}
 	h.log.Info("Tutor updated", slog.String("id", id))
-	respondJSON(w, http.StatusOK, tutor)
+	c.JSON(http.StatusOK, tutor)
 }
 
-func (h *TutorHandler) deleteTutor(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	err := h.service.Delete(id)
-	if err != nil {
-		http.Error(w, "Failed to delete tutor", http.StatusInternalServerError)
+func (h *TutorHandler) Delete(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	id := c.Param("id")
+	if id != tutorID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+	if err := h.service.Delete(id); err != nil {
 		h.log.Error("Failed to delete tutor", slog.String("id", id), slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete tutor"})
 		return
 	}
 	h.log.Info("Tutor deleted", slog.String("id", id))
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }

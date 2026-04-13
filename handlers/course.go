@@ -6,6 +6,8 @@ import (
 
 	"tutorgo/models"
 	"tutorgo/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 type CourseHandler struct {
@@ -17,98 +19,91 @@ func NewCourseHandler(svc service.CourseService, log *slog.Logger) *CourseHandle
 	return &CourseHandler{service: svc, log: log}
 }
 
-func (h *CourseHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	tutorID := r.Context().Value("tutorID").(string)
-
-	switch r.Method {
-	case http.MethodGet:
-		h.getCourses(w, r, tutorID)
-	case http.MethodPost:
-		h.createCourse(w, r, tutorID)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func (h *CourseHandler) GetAll(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
 	}
-}
-
-func (h *CourseHandler) HandleOne(w http.ResponseWriter, r *http.Request) {
-	tutorID := r.Context().Value("tutorID").(string)
-
-	switch r.Method {
-	case http.MethodGet:
-		h.getCourseByID(w, r, tutorID)
-	case http.MethodPut:
-		h.updateCourse(w, r, tutorID)
-	case http.MethodDelete:
-		h.deleteCourse(w, r, tutorID)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (h *CourseHandler) getCourses(w http.ResponseWriter, r *http.Request, tutorID string) {
 	courses, err := h.service.GetAll(tutorID)
 	if err != nil {
-		http.Error(w, "Failed to retrieve courses", http.StatusInternalServerError)
 		h.log.Error("Failed to get courses", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve courses"})
 		return
 	}
 	h.log.Info("Courses retrieved", slog.Int("count", len(courses)))
-	respondJSON(w, http.StatusOK, courses)
-
+	c.JSON(http.StatusOK, courses)
 }
 
-func (h *CourseHandler) createCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
+func (h *CourseHandler) Create(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	var req models.CreateCourseRequest
-	if !decodeAndValidate(w, r, &req) {
+	if !bindAndValidate(c, &req) {
 		return
 	}
 	course, err := h.service.Create(req, tutorID)
 	if err != nil {
-		http.Error(w, "Failed to create course", http.StatusInternalServerError)
 		h.log.Error("Failed to create course", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
 		return
 	}
 	h.log.Info("Course created", slog.String("id", course.ID))
-	respondJSON(w, http.StatusCreated, course)
-
+	c.JSON(http.StatusCreated, course)
 }
 
-func (h *CourseHandler) getCourseByID(w http.ResponseWriter, r *http.Request, tutorID string) {
-	id := r.PathValue("id")
-	course, err := h.service.GetByID(id, tutorID)
-	if err != nil {
-		http.Error(w, "Course not found", http.StatusNotFound)
-		h.log.Error("Failed to get course", slog.String("id", id), slog.String("error", err.Error()))
+func (h *CourseHandler) GetByID(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	respondJSON(w, http.StatusOK, course)
-
+	id := c.Param("id")
+	course, err := h.service.GetByID(id, tutorID)
+	if err != nil {
+		h.log.Error("Failed to get course", slog.String("id", id), slog.String("error", err.Error()))
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+	c.JSON(http.StatusOK, course)
 }
 
-func (h *CourseHandler) updateCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
-	id := r.PathValue("id")
+func (h *CourseHandler) Update(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
 	var req models.UpdateCourseRequest
-	if !decodeAndValidate(w, r, &req) {
+	if !bindAndValidate(c, &req) {
 		return
 	}
 	course, err := h.service.Update(id, tutorID, req)
 	if err != nil {
-		http.Error(w, "Failed to update course", http.StatusInternalServerError)
 		h.log.Error("Failed to update course", slog.String("id", id), slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
 		return
 	}
 	h.log.Info("Course updated", slog.String("id", id))
-	respondJSON(w, http.StatusOK, course)
+	c.JSON(http.StatusOK, course)
 }
 
-func (h *CourseHandler) deleteCourse(w http.ResponseWriter, r *http.Request, tutorID string) {
-	id := r.PathValue("id")
-	err := h.service.Delete(id, tutorID)
-	if err != nil {
-		http.Error(w, "Failed to delete course", http.StatusInternalServerError)
+func (h *CourseHandler) Delete(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
+	if err := h.service.Delete(id, tutorID); err != nil {
 		h.log.Error("Failed to delete course", slog.String("id", id), slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
 		return
 	}
 	h.log.Info("Course deleted", slog.String("id", id))
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }
