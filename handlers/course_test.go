@@ -26,13 +26,16 @@ func newCourseRouter(svc *mockCourseService, tutorID string) *gin.Engine {
 	return r
 }
 
-var testCreateCourseReq = models.CreateCourseRequest{
-	StudentID:      testStudentID,
-	Subject:        "Mathematics",
-	PricePerLesson: 5000,
-	StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-	EndedAt:        time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
-}
+var (
+	testEndedAt          = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
+	testCreateCourseReq  = models.CreateCourseRequest{
+		StudentID:      testStudentID,
+		Subject:        "Mathematics",
+		PricePerLesson: 5000,
+		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:        testEndedAt,
+	}
+)
 
 // GetAll
 

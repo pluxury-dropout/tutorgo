@@ -49,7 +49,7 @@ var (
 		Subject:        "Mathematics",
 		PricePerLesson: 5000,
 		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:        func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }(),
 	}
 
 	testLesson = models.Lesson{

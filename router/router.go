@@ -9,6 +9,7 @@ import (
 	"tutorgo/repository"
 	"tutorgo/service"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -38,6 +39,12 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 
 	// Public routes
 	r.POST("/auth/register", authHandler.Register)
@@ -59,7 +66,6 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 		auth.GET("/courses", courseHandler.GetAll)
 		auth.POST("/courses", courseHandler.Create)
-		auth.GET("/courses/:id", courseHandler.GetByID)
 		auth.PUT("/courses/:id", courseHandler.Update)
 		auth.DELETE("/courses/:id", courseHandler.Delete)
 

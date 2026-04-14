@@ -36,19 +36,21 @@ func (m *mockCourseRepo) Delete(ctx context.Context, id string, tutorID string) 
 }
 
 var (
+	endedAt = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
+
 	courseReq = models.CreateCourseRequest{
 		StudentID:      "student-uuid-1",
 		Subject:        "Mathematics",
 		PricePerLesson: 5000,
 		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:        endedAt,
 	}
 
 	updateCourseReq = models.UpdateCourseRequest{
 		Subject:        "Physics",
 		PricePerLesson: 6000,
 		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:        endedAt,
 	}
 
 	expectedStudent = models.Student{ID: "student-uuid-1", TutorID: tutorID}
