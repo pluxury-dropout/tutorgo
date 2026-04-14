@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"log/slog"
 )
 
@@ -39,7 +40,7 @@ func TestCourseGetAll_Success(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetAll", testTutorID).Return([]models.Course{testCourse}, nil)
+	svc.On("GetAll", mock.Anything, testTutorID).Return([]models.Course{testCourse}, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/courses", nil)
 
@@ -61,7 +62,7 @@ func TestCourseGetAll_ServiceError(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetAll", testTutorID).Return([]models.Course{}, errors.New("db error"))
+	svc.On("GetAll", mock.Anything, testTutorID).Return([]models.Course{}, errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodGet, "/courses", nil)
 
@@ -75,7 +76,7 @@ func TestCourseCreate_Success(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("Create", testCreateCourseReq, testTutorID).Return(testCourse, nil)
+	svc.On("Create", mock.Anything, testCreateCourseReq, testTutorID).Return(testCourse, nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/courses", testCreateCourseReq)
 
@@ -88,7 +89,7 @@ func TestCourseCreate_ValidationError(t *testing.T) {
 	r := newCourseRouter(svc, testTutorID)
 
 	// subject is required
-	w := makeRequest(t, r, http.MethodPost, "/courses", map[string]interface{}{
+	w := makeRequest(t, r, http.MethodPost, "/courses", map[string]any{
 		"student_id":       testStudentID,
 		"price_per_lesson": 5000,
 	})
@@ -101,7 +102,7 @@ func TestCourseCreate_ServiceError(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("Create", testCreateCourseReq, testTutorID).Return(models.Course{}, errors.New("student not found or access denied"))
+	svc.On("Create", mock.Anything, testCreateCourseReq, testTutorID).Return(models.Course{}, errors.New("student not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodPost, "/courses", testCreateCourseReq)
 
@@ -115,7 +116,7 @@ func TestCourseGetByID_Success(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetByID", testCourseID, testTutorID).Return(testCourse, nil)
+	svc.On("GetByID", mock.Anything, testCourseID, testTutorID).Return(testCourse, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/courses/"+testCourseID, nil)
 
@@ -127,7 +128,7 @@ func TestCourseGetByID_NotFound(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetByID", testCourseID, testTutorID).Return(models.Course{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testCourseID, testTutorID).Return(models.Course{}, errors.New("not found"))
 
 	w := makeRequest(t, r, http.MethodGet, "/courses/"+testCourseID, nil)
 
@@ -141,7 +142,7 @@ func TestCourseDelete_Success(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("Delete", testCourseID, testTutorID).Return(nil)
+	svc.On("Delete", mock.Anything, testCourseID, testTutorID).Return(nil)
 
 	w := makeRequest(t, r, http.MethodDelete, "/courses/"+testCourseID, nil)
 
@@ -153,7 +154,7 @@ func TestCourseDelete_ServiceError(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("Delete", testCourseID, testTutorID).Return(errors.New("cannot delete a course with existing lessons"))
+	svc.On("Delete", mock.Anything, testCourseID, testTutorID).Return(errors.New("cannot delete a course with existing lessons"))
 
 	w := makeRequest(t, r, http.MethodDelete, "/courses/"+testCourseID, nil)
 

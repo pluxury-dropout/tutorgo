@@ -30,7 +30,7 @@ func (h *PaymentHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
 		return
 	}
-	payments, err := h.service.GetByCourse(courseID, tutorID)
+	payments, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get payments", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve payments"})
@@ -50,7 +50,7 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	payment, err := h.service.Create(req, tutorID)
+	payment, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create payment", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create payment"})
@@ -71,7 +71,7 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
 		return
 	}
-	balance, err := h.service.GetBalance(courseID, tutorID)
+	balance, err := h.service.GetBalance(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get balance", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get balance"})

@@ -36,7 +36,7 @@ func TestAuthRegister_Success(t *testing.T) {
 	}
 
 	// Password is hashed internally — we can't predict the exact hash, use mock.Anything
-	svc.On("Create", mock.MatchedBy(func(cr models.CreateTutorRequest) bool {
+	svc.On("Create", mock.Anything, mock.MatchedBy(func(cr models.CreateTutorRequest) bool {
 		return cr.Email == req.Email && cr.FirstName == req.FirstName
 	}), mock.AnythingOfType("string")).Return(testTutor, nil)
 
@@ -73,7 +73,7 @@ func TestAuthRegister_ServiceError(t *testing.T) {
 		LastName:  "Bekov",
 	}
 
-	svc.On("Create", mock.Anything, mock.AnythingOfType("string")).Return(models.Tutor{}, errors.New("email already exists"))
+	svc.On("Create", mock.Anything, mock.Anything, mock.AnythingOfType("string")).Return(models.Tutor{}, errors.New("email already exists"))
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/register", req)
 
@@ -90,7 +90,7 @@ func TestAuthLogin_Success(t *testing.T) {
 	password := "password123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
-	svc.On("GetByEmail", "tutor@example.com").Return(testTutorID, string(hash), nil)
+	svc.On("GetByEmail", mock.Anything, "tutor@example.com").Return(testTutorID, string(hash), nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
 		Email:    "tutor@example.com",
@@ -109,7 +109,7 @@ func TestAuthLogin_WrongPassword(t *testing.T) {
 	r := newAuthRouter(svc)
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
-	svc.On("GetByEmail", "tutor@example.com").Return(testTutorID, string(hash), nil)
+	svc.On("GetByEmail", mock.Anything, "tutor@example.com").Return(testTutorID, string(hash), nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
 		Email:    "tutor@example.com",
@@ -124,7 +124,7 @@ func TestAuthLogin_EmailNotFound(t *testing.T) {
 	svc := new(mockTutorService)
 	r := newAuthRouter(svc)
 
-	svc.On("GetByEmail", "unknown@example.com").Return("", "", errors.New("not found"))
+	svc.On("GetByEmail", mock.Anything, "unknown@example.com").Return("", "", errors.New("not found"))
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
 		Email:    "unknown@example.com",

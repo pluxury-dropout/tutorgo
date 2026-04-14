@@ -43,7 +43,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Phone:     req.Phone,
 	}
 
-	tutor, err := h.service.Create(createReq, string(passwordHash))
+	tutor, err := h.service.Create(c.Request.Context(), createReq, string(passwordHash))
 	if err != nil {
 		h.log.Error("Failed to register tutor", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register tutor"})
@@ -60,7 +60,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	id, passwordHash, err := h.service.GetByEmail(req.Email)
+	id, passwordHash, err := h.service.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return

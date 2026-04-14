@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -14,24 +15,24 @@ import (
 // mockCourseRepo is shared across service tests (payment_test.go, lesson_test.go)
 type mockCourseRepo struct{ mock.Mock }
 
-func (m *mockCourseRepo) Create(req models.CreateCourseRequest, tutorID string) (models.Course, error) {
-	args := m.Called(req, tutorID)
+func (m *mockCourseRepo) Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error) {
+	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseRepo) GetAll(tutorID string) ([]models.Course, error) {
-	args := m.Called(tutorID)
+func (m *mockCourseRepo) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
+	args := m.Called(ctx, tutorID)
 	return args.Get(0).([]models.Course), args.Error(1)
 }
-func (m *mockCourseRepo) GetByID(id string, tutorID string) (models.Course, error) {
-	args := m.Called(id, tutorID)
+func (m *mockCourseRepo) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
+	args := m.Called(ctx, id, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseRepo) Update(id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
-	args := m.Called(id, tutorID, req)
+func (m *mockCourseRepo) Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
+	args := m.Called(ctx, id, tutorID, req)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseRepo) Delete(id string, tutorID string) error {
-	return m.Called(id, tutorID).Error(0)
+func (m *mockCourseRepo) Delete(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
 }
 
 var (
@@ -65,10 +66,10 @@ func TestCourseCreate_Success(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	studentRepo.On("GetByID", courseReq.StudentID, tutorID).Return(expectedStudent, nil)
-	courseRepo.On("Create", courseReq, tutorID).Return(expectedCourse, nil)
+	studentRepo.On("GetByID", mock.Anything, courseReq.StudentID, tutorID).Return(expectedStudent, nil)
+	courseRepo.On("Create", mock.Anything, courseReq, tutorID).Return(expectedCourse, nil)
 
-	course, err := svc.Create(courseReq, tutorID)
+	course, err := svc.Create(context.Background(), courseReq, tutorID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedCourse, course)
@@ -82,9 +83,9 @@ func TestCourseCreate_StudentNotFound(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	studentRepo.On("GetByID", courseReq.StudentID, tutorID).Return(models.Student{}, errors.New("not found"))
+	studentRepo.On("GetByID", mock.Anything, courseReq.StudentID, tutorID).Return(models.Student{}, errors.New("not found"))
 
-	course, err := svc.Create(courseReq, tutorID)
+	course, err := svc.Create(context.Background(), courseReq, tutorID)
 
 	assert.Error(t, err)
 	assert.EqualError(t, err, "student not found or access denied")
@@ -99,10 +100,10 @@ func TestCourseCreate_RepoError(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	studentRepo.On("GetByID", courseReq.StudentID, tutorID).Return(expectedStudent, nil)
-	courseRepo.On("Create", courseReq, tutorID).Return(models.Course{}, errors.New("db error"))
+	studentRepo.On("GetByID", mock.Anything, courseReq.StudentID, tutorID).Return(expectedStudent, nil)
+	courseRepo.On("Create", mock.Anything, courseReq, tutorID).Return(models.Course{}, errors.New("db error"))
 
-	course, err := svc.Create(courseReq, tutorID)
+	course, err := svc.Create(context.Background(), courseReq, tutorID)
 
 	assert.Error(t, err)
 	assert.Empty(t, course)
@@ -119,9 +120,9 @@ func TestCourseGetAll_Success(t *testing.T) {
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
 	expected := []models.Course{expectedCourse}
-	courseRepo.On("GetAll", tutorID).Return(expected, nil)
+	courseRepo.On("GetAll", mock.Anything, tutorID).Return(expected, nil)
 
-	courses, err := svc.GetAll(tutorID)
+	courses, err := svc.GetAll(context.Background(), tutorID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, courses)
@@ -134,9 +135,9 @@ func TestCourseGetAll_Error(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetAll", tutorID).Return([]models.Course{}, errors.New("db error"))
+	courseRepo.On("GetAll", mock.Anything, tutorID).Return([]models.Course{}, errors.New("db error"))
 
-	courses, err := svc.GetAll(tutorID)
+	courses, err := svc.GetAll(context.Background(), tutorID)
 
 	assert.Error(t, err)
 	assert.Empty(t, courses)
@@ -151,9 +152,9 @@ func TestCourseGetByID_Success(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
 
-	course, err := svc.GetByID(courseID, tutorID)
+	course, err := svc.GetByID(context.Background(), courseID, tutorID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedCourse, course)
@@ -166,9 +167,9 @@ func TestCourseGetByID_NotFound(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
-	course, err := svc.GetByID(courseID, tutorID)
+	course, err := svc.GetByID(context.Background(), courseID, tutorID)
 
 	assert.Error(t, err)
 	assert.Empty(t, course)
@@ -184,10 +185,10 @@ func TestCourseUpdate_Success(t *testing.T) {
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
 	updated := models.Course{ID: courseID, TutorID: tutorID, Subject: "Physics"}
-	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
-	courseRepo.On("Update", courseID, tutorID, updateCourseReq).Return(updated, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	courseRepo.On("Update", mock.Anything, courseID, tutorID, updateCourseReq).Return(updated, nil)
 
-	course, err := svc.Update(courseID, tutorID, updateCourseReq)
+	course, err := svc.Update(context.Background(), courseID, tutorID, updateCourseReq)
 
 	assert.NoError(t, err)
 	assert.Equal(t, updated, course)
@@ -200,9 +201,9 @@ func TestCourseUpdate_NotFound(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
-	course, err := svc.Update(courseID, tutorID, updateCourseReq)
+	course, err := svc.Update(context.Background(), courseID, tutorID, updateCourseReq)
 
 	assert.Error(t, err)
 	assert.EqualError(t, err, "course not found or access denied")
@@ -217,10 +218,10 @@ func TestCourseUpdate_RepoError(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
-	courseRepo.On("Update", courseID, tutorID, updateCourseReq).Return(models.Course{}, errors.New("db error"))
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	courseRepo.On("Update", mock.Anything, courseID, tutorID, updateCourseReq).Return(models.Course{}, errors.New("db error"))
 
-	course, err := svc.Update(courseID, tutorID, updateCourseReq)
+	course, err := svc.Update(context.Background(), courseID, tutorID, updateCourseReq)
 
 	assert.Error(t, err)
 	assert.Empty(t, course)
@@ -235,11 +236,11 @@ func TestCourseDelete_Success(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
-	lessonRepo.On("GetByCourse", courseID).Return([]models.Lesson{}, nil)
-	courseRepo.On("Delete", courseID, tutorID).Return(nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	lessonRepo.On("GetByCourse", mock.Anything, courseID).Return([]models.Lesson{}, nil)
+	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(nil)
 
-	err := svc.Delete(courseID, tutorID)
+	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.NoError(t, err)
 	courseRepo.AssertExpectations(t)
@@ -252,9 +253,9 @@ func TestCourseDelete_CourseNotFound(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
-	err := svc.Delete(courseID, tutorID)
+	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.Error(t, err)
 	assert.EqualError(t, err, "course not found or access denied")
@@ -269,10 +270,10 @@ func TestCourseDelete_HasLessons(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
-	lessonRepo.On("GetByCourse", courseID).Return([]models.Lesson{expectedLesson}, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	lessonRepo.On("GetByCourse", mock.Anything, courseID).Return([]models.Lesson{expectedLesson}, nil)
 
-	err := svc.Delete(courseID, tutorID)
+	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.Error(t, err)
 	assert.EqualError(t, err, "cannot delete a course with existing lessons")
@@ -287,11 +288,11 @@ func TestCourseDelete_RepoError(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetByID", courseID, tutorID).Return(expectedCourse, nil)
-	lessonRepo.On("GetByCourse", courseID).Return([]models.Lesson{}, nil)
-	courseRepo.On("Delete", courseID, tutorID).Return(errors.New("db error"))
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	lessonRepo.On("GetByCourse", mock.Anything, courseID).Return([]models.Lesson{}, nil)
+	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(errors.New("db error"))
 
-	err := svc.Delete(courseID, tutorID)
+	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.Error(t, err)
 	courseRepo.AssertExpectations(t)

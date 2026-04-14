@@ -25,7 +25,7 @@ func (h *CourseHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	courses, err := h.service.GetAll(tutorID)
+	courses, err := h.service.GetAll(c.Request.Context(), tutorID)
 	if err != nil {
 		h.log.Error("Failed to get courses", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve courses"})
@@ -45,7 +45,7 @@ func (h *CourseHandler) Create(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	course, err := h.service.Create(req, tutorID)
+	course, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create course", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
@@ -62,7 +62,7 @@ func (h *CourseHandler) GetByID(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	course, err := h.service.GetByID(id, tutorID)
+	course, err := h.service.GetByID(c.Request.Context(), id, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get course", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
@@ -82,7 +82,7 @@ func (h *CourseHandler) Update(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	course, err := h.service.Update(id, tutorID, req)
+	course, err := h.service.Update(c.Request.Context(), id, tutorID, req)
 	if err != nil {
 		h.log.Error("Failed to update course", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
@@ -99,7 +99,7 @@ func (h *CourseHandler) Delete(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if err := h.service.Delete(id, tutorID); err != nil {
+	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete course", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
 		return

@@ -25,7 +25,7 @@ func (h *StudentHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	students, err := h.service.GetAll(tutorID)
+	students, err := h.service.GetAll(c.Request.Context(), tutorID)
 	if err != nil {
 		h.log.Error("Failed to get students", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve students"})
@@ -45,7 +45,7 @@ func (h *StudentHandler) Create(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	student, err := h.service.Create(req, tutorID)
+	student, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create student", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create student"})
@@ -62,7 +62,7 @@ func (h *StudentHandler) GetByID(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	student, err := h.service.GetByID(id, tutorID)
+	student, err := h.service.GetByID(c.Request.Context(), id, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get student", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
@@ -82,7 +82,7 @@ func (h *StudentHandler) Update(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	student, err := h.service.Update(id, tutorID, req)
+	student, err := h.service.Update(c.Request.Context(), id, tutorID, req)
 	if err != nil {
 		h.log.Error("Failed to update student", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student"})
@@ -99,7 +99,7 @@ func (h *StudentHandler) Delete(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if err := h.service.Delete(id, tutorID); err != nil {
+	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete student", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete student"})
 		return

@@ -26,7 +26,7 @@ func (h *TutorHandler) GetByID(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
-	tutor, err := h.service.GetByID(id)
+	tutor, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("Failed to get tutor", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusNotFound, gin.H{"error": "Tutor not found"})
@@ -47,7 +47,7 @@ func (h *TutorHandler) Update(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	tutor, err := h.service.Update(id, req)
+	tutor, err := h.service.Update(c.Request.Context(), id, req)
 	if err != nil {
 		h.log.Error("Failed to update tutor", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update tutor"})
@@ -64,7 +64,7 @@ func (h *TutorHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
-	if err := h.service.Delete(id); err != nil {
+	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		h.log.Error("Failed to delete tutor", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete tutor"})
 		return

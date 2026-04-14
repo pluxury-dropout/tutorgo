@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"log/slog"
 )
 
@@ -36,7 +37,7 @@ func TestPaymentGetAll_Success(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", testCourseID, testTutorID).Return([]models.Payment{testPayment}, nil)
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Payment{testPayment}, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/payments?course_id="+testCourseID, nil)
 
@@ -68,7 +69,7 @@ func TestPaymentGetAll_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", testCourseID, testTutorID).Return([]models.Payment{}, errors.New("db error"))
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Payment{}, errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodGet, "/payments?course_id="+testCourseID, nil)
 
@@ -82,7 +83,7 @@ func TestPaymentCreate_Success(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("Create", testCreatePaymentReq, testTutorID).Return(testPayment, nil)
+	svc.On("Create", mock.Anything, testCreatePaymentReq, testTutorID).Return(testPayment, nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/payments", testCreatePaymentReq)
 
@@ -95,7 +96,7 @@ func TestPaymentCreate_ValidationError(t *testing.T) {
 	r := newPaymentRouter(svc, testTutorID)
 
 	// amount is required
-	w := makeRequest(t, r, http.MethodPost, "/payments", map[string]interface{}{
+	w := makeRequest(t, r, http.MethodPost, "/payments", map[string]any{
 		"course_id":     testCourseID,
 		"lessons_count": 10,
 	})
@@ -108,7 +109,7 @@ func TestPaymentCreate_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("Create", testCreatePaymentReq, testTutorID).Return(models.Payment{}, errors.New("course not found or access denied"))
+	svc.On("Create", mock.Anything, testCreatePaymentReq, testTutorID).Return(models.Payment{}, errors.New("course not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodPost, "/payments", testCreatePaymentReq)
 
@@ -123,7 +124,7 @@ func TestPaymentGetBalance_Success(t *testing.T) {
 	r := newPaymentRouter(svc, testTutorID)
 
 	expected := models.CourseBalance{LessonsPaid: 10, LessonsCompleted: 3, LessonsRemaining: 7}
-	svc.On("GetBalance", testCourseID, testTutorID).Return(expected, nil)
+	svc.On("GetBalance", mock.Anything, testCourseID, testTutorID).Return(expected, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
 
@@ -148,7 +149,7 @@ func TestPaymentGetBalance_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetBalance", testCourseID, testTutorID).Return(models.CourseBalance{}, errors.New("course not found or access denied"))
+	svc.On("GetBalance", mock.Anything, testCourseID, testTutorID).Return(models.CourseBalance{}, errors.New("course not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
 

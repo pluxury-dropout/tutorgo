@@ -8,9 +8,9 @@ import (
 )
 
 type PaymentRepository interface {
-	Create(req models.CreatePaymentRequest) (models.Payment, error)
-	GetByCourse(courseID string) ([]models.Payment, error)
-	GetBalance(courseID string) (models.CourseBalance, error)
+	Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error)
+	GetByCourse(ctx context.Context, courseID string) ([]models.Payment, error)
+	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
 }
 
 type paymentRepository struct {
@@ -21,9 +21,9 @@ func NewPaymentRepository(conn *pgxpool.Pool) PaymentRepository {
 	return &paymentRepository{conn: conn}
 }
 
-func (r *paymentRepository) Create(req models.CreatePaymentRequest) (models.Payment, error) {
+func (r *paymentRepository) Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error) {
 	var payment models.Payment
-	err := r.conn.QueryRow(context.Background(),
+	err := r.conn.QueryRow(ctx,
 		`INSERT INTO payments (course_id, amount, lessons_count, paid_at)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING id, course_id, amount, lessons_count, paid_at`,
@@ -32,8 +32,8 @@ func (r *paymentRepository) Create(req models.CreatePaymentRequest) (models.Paym
 	return payment, err
 }
 
-func (r *paymentRepository) GetByCourse(courseID string) ([]models.Payment, error) {
-	rows, err := r.conn.Query(context.Background(),
+func (r *paymentRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Payment, error) {
+	rows, err := r.conn.Query(ctx,
 		`SELECT id, course_id, amount, lessons_count, paid_at
 		 FROM payments WHERE course_id = $1`, courseID)
 	if err != nil {
@@ -53,9 +53,9 @@ func (r *paymentRepository) GetByCourse(courseID string) ([]models.Payment, erro
 	return payments, rows.Err()
 }
 
-func (r *paymentRepository) GetBalance(courseID string) (models.CourseBalance, error) {
+func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error) {
 	var paid, completed int
-	err := r.conn.QueryRow(context.Background(),
+	err := r.conn.QueryRow(ctx,
 		`SELECT
 			COALESCE(SUM(p.lessons_count), 0),
 			COUNT(l.id) FILTER (WHERE l.status = 'completed')

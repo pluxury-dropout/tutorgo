@@ -8,11 +8,11 @@ import (
 )
 
 type StudentRepository interface {
-	Create(req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(tutorID string) ([]models.Student, error)
-	GetByID(id string, tutorID string) (models.Student, error)
-	Update(id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
-	Delete(id string, tutorID string) error
+	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
+	GetAll(ctx context.Context, tutorID string) ([]models.Student, error)
+	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
+	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
+	Delete(ctx context.Context, id string, tutorID string) error
 }
 
 type studentRepository struct {
@@ -23,9 +23,9 @@ func NewStudentRepository(conn *pgxpool.Pool) StudentRepository {
 	return &studentRepository{conn: conn}
 }
 
-func (r *studentRepository) Create(req models.CreateStudentRequest, tutorID string) (models.Student, error) {
+func (r *studentRepository) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
 	var student models.Student
-	err := r.conn.QueryRow(context.Background(),
+	err := r.conn.QueryRow(ctx,
 		`INSERT INTO students (tutor_id, first_name, last_name, phone, email, notes)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, tutor_id, first_name, last_name, phone, email, notes, active`,
@@ -34,8 +34,8 @@ func (r *studentRepository) Create(req models.CreateStudentRequest, tutorID stri
 	return student, err
 }
 
-func (r *studentRepository) GetAll(tutorID string) ([]models.Student, error) {
-	rows, err := r.conn.Query(context.Background(),
+func (r *studentRepository) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
+	rows, err := r.conn.Query(ctx,
 		`SELECT id, tutor_id, first_name, last_name, phone, email, notes, active
 		 FROM students WHERE tutor_id = $1`, tutorID)
 	if err != nil {
@@ -55,18 +55,18 @@ func (r *studentRepository) GetAll(tutorID string) ([]models.Student, error) {
 	return students, rows.Err()
 }
 
-func (r *studentRepository) GetByID(id string, tutorID string) (models.Student, error) {
+func (r *studentRepository) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {
 	var student models.Student
-	err := r.conn.QueryRow(context.Background(),
+	err := r.conn.QueryRow(ctx,
 		`SELECT id, tutor_id, first_name, last_name, phone, email, notes, active
 		 FROM students WHERE id = $1 AND tutor_id = $2`, id, tutorID,
 	).Scan(&student.ID, &student.TutorID, &student.FirstName, &student.LastName, &student.Phone, &student.Email, &student.Notes, &student.Active)
 	return student, err
 }
 
-func (r *studentRepository) Update(id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
+func (r *studentRepository) Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
 	var student models.Student
-	err := r.conn.QueryRow(context.Background(),
+	err := r.conn.QueryRow(ctx,
 		`UPDATE students SET first_name=$1, last_name=$2, phone=$3, email=$4, notes=$5
 		 WHERE id=$6 AND tutor_id=$7
 		 RETURNING id, tutor_id, first_name, last_name, phone, email, notes, active`,
@@ -75,8 +75,8 @@ func (r *studentRepository) Update(id string, tutorID string, req models.UpdateS
 	return student, err
 }
 
-func (r *studentRepository) Delete(id string, tutorID string) error {
-	_, err := r.conn.Exec(context.Background(),
+func (r *studentRepository) Delete(ctx context.Context, id string, tutorID string) error {
+	_, err := r.conn.Exec(ctx,
 		`DELETE FROM students WHERE id = $1 AND tutor_id = $2`, id, tutorID)
 	return err
 }

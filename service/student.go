@@ -1,16 +1,17 @@
 package service
 
 import (
+	"context"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
 
 type StudentService interface {
-	Create(req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(tutorID string) ([]models.Student, error)
-	GetByID(id string, tutorID string) (models.Student, error)
-	Update(id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
-	Delete(id string, tutorID string) error
+	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
+	GetAll(ctx context.Context, tutorID string) ([]models.Student, error)
+	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
+	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
+	Delete(ctx context.Context, id string, tutorID string) error
 }
 
 type studentService struct {
@@ -21,22 +22,22 @@ func NewStudentService(repo repository.StudentRepository) StudentService {
 	return &studentService{repo: repo}
 }
 
-func (s *studentService) Create(req models.CreateStudentRequest, tutorID string) (models.Student, error) {
-	return s.repo.Create(req, tutorID)
+func (s *studentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
+	return s.repo.Create(ctx, req, tutorID)
 }
 
-func (s *studentService) GetAll(tutorID string) ([]models.Student, error) {
-	return s.repo.GetAll(tutorID)
+func (s *studentService) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
+	return s.repo.GetAll(ctx, tutorID)
 }
 
-func (s *studentService) GetByID(id string, tutorID string) (models.Student, error) {
-	return s.repo.GetByID(id, tutorID)
+func (s *studentService) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {
+	return s.repo.GetByID(ctx, id, tutorID)
 }
 
-func (s *studentService) Update(id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
-	return s.repo.Update(id, tutorID, req)
+func (s *studentService) Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
+	return s.repo.Update(ctx, id, tutorID, req)
 }
 
-func (s *studentService) Delete(id string, tutorID string) error {
-	return s.repo.Delete(id, tutorID)
+func (s *studentService) Delete(ctx context.Context, id string, tutorID string) error {
+	return s.repo.Delete(ctx, id, tutorID)
 }

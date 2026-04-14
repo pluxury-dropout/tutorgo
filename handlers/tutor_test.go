@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"log/slog"
 )
 
@@ -28,7 +29,7 @@ func TestTutorGetByID_Success(t *testing.T) {
 	svc := new(mockTutorService)
 	r := newTutorRouter(svc, testTutorID)
 
-	svc.On("GetByID", testTutorID).Return(testTutor, nil)
+	svc.On("GetByID", mock.Anything, testTutorID).Return(testTutor, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/tutors/"+testTutorID, nil)
 
@@ -54,7 +55,7 @@ func TestTutorGetByID_NotFound(t *testing.T) {
 	svc := new(mockTutorService)
 	r := newTutorRouter(svc, testTutorID)
 
-	svc.On("GetByID", testTutorID).Return(models.Tutor{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testTutorID).Return(models.Tutor{}, errors.New("not found"))
 
 	w := makeRequest(t, r, http.MethodGet, "/tutors/"+testTutorID, nil)
 
@@ -73,7 +74,7 @@ func TestTutorUpdate_Success(t *testing.T) {
 		FirstName: "Amir",
 		LastName:  "Bekov",
 	}
-	svc.On("Update", testTutorID, req).Return(testTutor, nil)
+	svc.On("Update", mock.Anything, testTutorID, req).Return(testTutor, nil)
 
 	w := makeRequest(t, r, http.MethodPut, "/tutors/"+testTutorID, req)
 
@@ -109,7 +110,7 @@ func TestTutorDelete_Success(t *testing.T) {
 	svc := new(mockTutorService)
 	r := newTutorRouter(svc, testTutorID)
 
-	svc.On("Delete", testTutorID).Return(nil)
+	svc.On("Delete", mock.Anything, testTutorID).Return(nil)
 
 	w := makeRequest(t, r, http.MethodDelete, "/tutors/"+testTutorID, nil)
 
@@ -131,7 +132,7 @@ func TestTutorDelete_ServiceError(t *testing.T) {
 	svc := new(mockTutorService)
 	r := newTutorRouter(svc, testTutorID)
 
-	svc.On("Delete", testTutorID).Return(errors.New("db error"))
+	svc.On("Delete", mock.Anything, testTutorID).Return(errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodDelete, "/tutors/"+testTutorID, nil)
 

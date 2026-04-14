@@ -26,7 +26,7 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
 		return
 	}
-	lessons, err := h.service.GetByCourse(courseID, tutorID)
+	lessons, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get lessons", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve lessons"})
@@ -42,7 +42,7 @@ func (h *LessonHandler) Create(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	lesson, err := h.service.Create(req, tutorID)
+	lesson, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create lesson", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lesson"})
@@ -55,7 +55,7 @@ func (h *LessonHandler) Create(c *gin.Context) {
 func (h *LessonHandler) GetByID(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	id := c.Param("id")
-	lesson, err := h.service.GetByID(id, tutorID)
+	lesson, err := h.service.GetByID(c.Request.Context(), id, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get lesson", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusNotFound, gin.H{"error": "Lesson not found"})
@@ -71,7 +71,7 @@ func (h *LessonHandler) Update(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	lesson, err := h.service.Update(id, req, tutorID)
+	lesson, err := h.service.Update(c.Request.Context(), id, req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to update lesson", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update lesson"})
@@ -84,7 +84,7 @@ func (h *LessonHandler) Update(c *gin.Context) {
 func (h *LessonHandler) Delete(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	id := c.Param("id")
-	if err := h.service.Delete(id, tutorID); err != nil {
+	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete lesson", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete lesson"})
 		return

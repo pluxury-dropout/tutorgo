@@ -1,17 +1,18 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
 
 type CourseService interface {
-	Create(req models.CreateCourseRequest, tutorID string) (models.Course, error)
-	GetAll(tutorID string) ([]models.Course, error)
-	GetByID(id string, tutorID string) (models.Course, error)
-	Update(id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
-	Delete(id string, tutorID string) error
+	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
+	GetAll(ctx context.Context, tutorID string) ([]models.Course, error)
+	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
+	Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
+	Delete(ctx context.Context, id string, tutorID string) error
 }
 
 type courseService struct {
@@ -24,42 +25,42 @@ func NewCourseService(repo repository.CourseRepository, studentRepo repository.S
 	return &courseService{repo: repo, studentRepo: studentRepo, lessonRepo: lessonRepo}
 }
 
-func (s *courseService) Create(req models.CreateCourseRequest, tutorID string) (models.Course, error) {
-	_, err := s.studentRepo.GetByID(req.StudentID, tutorID)
+func (s *courseService) Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error) {
+	_, err := s.studentRepo.GetByID(ctx, req.StudentID, tutorID)
 	if err != nil {
 		return models.Course{}, errors.New("student not found or access denied")
 	}
-	return s.repo.Create(req, tutorID)
+	return s.repo.Create(ctx, req, tutorID)
 }
 
-func (s *courseService) GetAll(tutorID string) ([]models.Course, error) {
-	return s.repo.GetAll(tutorID)
+func (s *courseService) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
+	return s.repo.GetAll(ctx, tutorID)
 }
 
-func (s *courseService) GetByID(id string, tutorID string) (models.Course, error) {
-	return s.repo.GetByID(id, tutorID)
+func (s *courseService) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
+	return s.repo.GetByID(ctx, id, tutorID)
 }
 
-func (s *courseService) Update(id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
-	_, err := s.repo.GetByID(id, tutorID)
+func (s *courseService) Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
+	_, err := s.repo.GetByID(ctx, id, tutorID)
 	if err != nil {
 		return models.Course{}, errors.New("course not found or access denied")
 	}
-	return s.repo.Update(id, tutorID, req)
+	return s.repo.Update(ctx, id, tutorID, req)
 }
 
-func (s *courseService) Delete(id string, tutorID string) error {
-	_, err := s.repo.GetByID(id, tutorID)
+func (s *courseService) Delete(ctx context.Context, id string, tutorID string) error {
+	_, err := s.repo.GetByID(ctx, id, tutorID)
 	if err != nil {
 		return errors.New("course not found or access denied")
 	}
 
-	lessons, err := s.lessonRepo.GetByCourse(id)
+	lessons, err := s.lessonRepo.GetByCourse(ctx, id)
 	if err != nil {
 		return err
 	}
 	if len(lessons) > 0 {
 		return errors.New("cannot delete a course with existing lessons")
 	}
-	return s.repo.Delete(id, tutorID)
+	return s.repo.Delete(ctx, id, tutorID)
 }

@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -103,92 +104,92 @@ func withTutorID(tutorID string) gin.HandlerFunc {
 
 type mockStudentService struct{ mock.Mock }
 
-func (m *mockStudentService) GetAll(tutorID string) ([]models.Student, error) {
-	args := m.Called(tutorID)
+func (m *mockStudentService) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
+	args := m.Called(ctx, tutorID)
 	return args.Get(0).([]models.Student), args.Error(1)
 }
-func (m *mockStudentService) Create(req models.CreateStudentRequest, tutorID string) (models.Student, error) {
-	args := m.Called(req, tutorID)
+func (m *mockStudentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
+	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Student), args.Error(1)
 }
-func (m *mockStudentService) GetByID(id string, tutorID string) (models.Student, error) {
-	args := m.Called(id, tutorID)
+func (m *mockStudentService) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {
+	args := m.Called(ctx, id, tutorID)
 	return args.Get(0).(models.Student), args.Error(1)
 }
-func (m *mockStudentService) Update(id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
-	args := m.Called(id, tutorID, req)
+func (m *mockStudentService) Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
+	args := m.Called(ctx, id, tutorID, req)
 	return args.Get(0).(models.Student), args.Error(1)
 }
-func (m *mockStudentService) Delete(id string, tutorID string) error {
-	return m.Called(id, tutorID).Error(0)
+func (m *mockStudentService) Delete(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
 }
 
 // --- Mock: TutorService ---
 
 type mockTutorService struct{ mock.Mock }
 
-func (m *mockTutorService) Create(req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
-	args := m.Called(req, passwordHash)
+func (m *mockTutorService) Create(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
+	args := m.Called(ctx, req, passwordHash)
 	return args.Get(0).(models.Tutor), args.Error(1)
 }
-func (m *mockTutorService) GetAll() ([]models.Tutor, error) {
-	args := m.Called()
+func (m *mockTutorService) GetAll(ctx context.Context) ([]models.Tutor, error) {
+	args := m.Called(ctx)
 	return args.Get(0).([]models.Tutor), args.Error(1)
 }
-func (m *mockTutorService) GetByID(id string) (models.Tutor, error) {
-	args := m.Called(id)
+func (m *mockTutorService) GetByID(ctx context.Context, id string) (models.Tutor, error) {
+	args := m.Called(ctx, id)
 	return args.Get(0).(models.Tutor), args.Error(1)
 }
-func (m *mockTutorService) GetByEmail(email string) (string, string, error) {
-	args := m.Called(email)
+func (m *mockTutorService) GetByEmail(ctx context.Context, email string) (string, string, error) {
+	args := m.Called(ctx, email)
 	return args.String(0), args.String(1), args.Error(2)
 }
-func (m *mockTutorService) Update(id string, req models.UpdateTutorRequest) (models.Tutor, error) {
-	args := m.Called(id, req)
+func (m *mockTutorService) Update(ctx context.Context, id string, req models.UpdateTutorRequest) (models.Tutor, error) {
+	args := m.Called(ctx, id, req)
 	return args.Get(0).(models.Tutor), args.Error(1)
 }
-func (m *mockTutorService) Delete(id string) error {
-	return m.Called(id).Error(0)
+func (m *mockTutorService) Delete(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
 }
 
 // --- Mock: CourseService ---
 
 type mockCourseService struct{ mock.Mock }
 
-func (m *mockCourseService) Create(req models.CreateCourseRequest, tutorID string) (models.Course, error) {
-	args := m.Called(req, tutorID)
+func (m *mockCourseService) Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error) {
+	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseService) GetAll(tutorID string) ([]models.Course, error) {
-	args := m.Called(tutorID)
+func (m *mockCourseService) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
+	args := m.Called(ctx, tutorID)
 	return args.Get(0).([]models.Course), args.Error(1)
 }
-func (m *mockCourseService) GetByID(id string, tutorID string) (models.Course, error) {
-	args := m.Called(id, tutorID)
+func (m *mockCourseService) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
+	args := m.Called(ctx, id, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseService) Update(id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
-	args := m.Called(id, tutorID, req)
+func (m *mockCourseService) Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {
+	args := m.Called(ctx, id, tutorID, req)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseService) Delete(id string, tutorID string) error {
-	return m.Called(id, tutorID).Error(0)
+func (m *mockCourseService) Delete(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
 }
 
 // --- Mock: PaymentService ---
 
 type mockPaymentService struct{ mock.Mock }
 
-func (m *mockPaymentService) Create(req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
-	args := m.Called(req, tutorID)
+func (m *mockPaymentService) Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
+	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Payment), args.Error(1)
 }
-func (m *mockPaymentService) GetByCourse(courseID string, tutorID string) ([]models.Payment, error) {
-	args := m.Called(courseID, tutorID)
+func (m *mockPaymentService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error) {
+	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).([]models.Payment), args.Error(1)
 }
-func (m *mockPaymentService) GetBalance(courseID string, tutorID string) (models.CourseBalance, error) {
-	args := m.Called(courseID, tutorID)
+func (m *mockPaymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
+	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).(models.CourseBalance), args.Error(1)
 }
 
@@ -196,22 +197,22 @@ func (m *mockPaymentService) GetBalance(courseID string, tutorID string) (models
 
 type mockLessonService struct{ mock.Mock }
 
-func (m *mockLessonService) Create(req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
-	args := m.Called(req, tutorID)
+func (m *mockLessonService) Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
+	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Lesson), args.Error(1)
 }
-func (m *mockLessonService) GetByCourse(courseID string, tutorID string) ([]models.Lesson, error) {
-	args := m.Called(courseID, tutorID)
+func (m *mockLessonService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error) {
+	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).([]models.Lesson), args.Error(1)
 }
-func (m *mockLessonService) GetByID(id string, tutorID string) (models.Lesson, error) {
-	args := m.Called(id, tutorID)
+func (m *mockLessonService) GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error) {
+	args := m.Called(ctx, id, tutorID)
 	return args.Get(0).(models.Lesson), args.Error(1)
 }
-func (m *mockLessonService) Update(id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error) {
-	args := m.Called(id, req, tutorID)
+func (m *mockLessonService) Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error) {
+	args := m.Called(ctx, id, req, tutorID)
 	return args.Get(0).(models.Lesson), args.Error(1)
 }
-func (m *mockLessonService) Delete(id string, tutorID string) error {
-	return m.Called(id, tutorID).Error(0)
+func (m *mockLessonService) Delete(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
 }

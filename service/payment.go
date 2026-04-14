@@ -1,15 +1,16 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
 
 type PaymentService interface {
-	Create(req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
-	GetByCourse(courseID string, tutorID string) ([]models.Payment, error)
-	GetBalance(courseID string, tutorID string) (models.CourseBalance, error)
+	Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
+	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error)
+	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
 }
 
 type paymentService struct {
@@ -21,23 +22,23 @@ func NewPaymentService(repo repository.PaymentRepository, courseRepo repository.
 	return &paymentService{repo: repo, courseRepo: courseRepo}
 }
 
-func (s *paymentService) Create(req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
-	if _, err := s.courseRepo.GetByID(req.CourseID, tutorID); err != nil {
+func (s *paymentService) Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
+	if _, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID); err != nil {
 		return models.Payment{}, errors.New("course not found or access denied")
 	}
-	return s.repo.Create(req)
+	return s.repo.Create(ctx, req)
 }
 
-func (s *paymentService) GetByCourse(courseID string, tutorID string) ([]models.Payment, error) {
-	if _, err := s.courseRepo.GetByID(courseID, tutorID); err != nil {
+func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error) {
+	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
 		return nil, errors.New("course not found or access denied")
 	}
-	return s.repo.GetByCourse(courseID)
+	return s.repo.GetByCourse(ctx, courseID)
 }
 
-func (s *paymentService) GetBalance(courseID string, tutorID string) (models.CourseBalance, error) {
-	if _, err := s.courseRepo.GetByID(courseID, tutorID); err != nil {
+func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
+	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
 		return models.CourseBalance{}, errors.New("course not found or access denied")
 	}
-	return s.repo.GetBalance(courseID)
+	return s.repo.GetBalance(ctx, courseID)
 }

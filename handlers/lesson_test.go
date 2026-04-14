@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"log/slog"
 )
 
@@ -43,7 +44,7 @@ func TestLessonGetByCourse_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", testCourseID, testTutorID).Return([]models.Lesson{testLesson}, nil)
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Lesson{testLesson}, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/lessons?course_id="+testCourseID, nil)
 
@@ -65,7 +66,7 @@ func TestLessonGetByCourse_ServiceError(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", testCourseID, testTutorID).Return([]models.Lesson{}, errors.New("course not found or access denied"))
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Lesson{}, errors.New("course not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodGet, "/lessons?course_id="+testCourseID, nil)
 
@@ -79,7 +80,7 @@ func TestLessonCreate_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Create", testCreateLessonReq, testTutorID).Return(testLesson, nil)
+	svc.On("Create", mock.Anything, testCreateLessonReq, testTutorID).Return(testLesson, nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/lessons", testCreateLessonReq)
 
@@ -102,7 +103,7 @@ func TestLessonCreate_ServiceError(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Create", testCreateLessonReq, testTutorID).Return(models.Lesson{}, errors.New("course not found or access denied"))
+	svc.On("Create", mock.Anything, testCreateLessonReq, testTutorID).Return(models.Lesson{}, errors.New("course not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodPost, "/lessons", testCreateLessonReq)
 
@@ -116,7 +117,7 @@ func TestLessonGetByID_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("GetByID", testLessonID, testTutorID).Return(testLesson, nil)
+	svc.On("GetByID", mock.Anything, testLessonID, testTutorID).Return(testLesson, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/lessons/"+testLessonID, nil)
 
@@ -128,7 +129,7 @@ func TestLessonGetByID_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("GetByID", testLessonID, testTutorID).Return(models.Lesson{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testLessonID, testTutorID).Return(models.Lesson{}, errors.New("not found"))
 
 	w := makeRequest(t, r, http.MethodGet, "/lessons/"+testLessonID, nil)
 
@@ -142,7 +143,7 @@ func TestLessonUpdate_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Update", testLessonID, testUpdateLessonReq, testTutorID).Return(testLesson, nil)
+	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID).Return(testLesson, nil)
 
 	w := makeRequest(t, r, http.MethodPut, "/lessons/"+testLessonID, testUpdateLessonReq)
 
@@ -154,7 +155,7 @@ func TestLessonUpdate_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Update", testLessonID, testUpdateLessonReq, testTutorID).Return(models.Lesson{}, errors.New("lesson not found or access denied"))
+	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID).Return(models.Lesson{}, errors.New("lesson not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodPut, "/lessons/"+testLessonID, testUpdateLessonReq)
 
@@ -168,7 +169,7 @@ func TestLessonDelete_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Delete", testLessonID, testTutorID).Return(nil)
+	svc.On("Delete", mock.Anything, testLessonID, testTutorID).Return(nil)
 
 	w := makeRequest(t, r, http.MethodDelete, "/lessons/"+testLessonID, nil)
 
@@ -180,7 +181,7 @@ func TestLessonDelete_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Delete", testLessonID, testTutorID).Return(errors.New("lesson not found or access denied"))
+	svc.On("Delete", mock.Anything, testLessonID, testTutorID).Return(errors.New("lesson not found or access denied"))
 
 	w := makeRequest(t, r, http.MethodDelete, "/lessons/"+testLessonID, nil)
 

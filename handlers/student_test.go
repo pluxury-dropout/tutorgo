@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"log/slog"
 )
 
@@ -31,7 +32,7 @@ func TestStudentGetAll_Success(t *testing.T) {
 	r := newStudentRouter(svc, testTutorID)
 
 	expected := []models.Student{testStudent}
-	svc.On("GetAll", testTutorID).Return(expected, nil)
+	svc.On("GetAll", mock.Anything, testTutorID).Return(expected, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/students", nil)
 
@@ -57,7 +58,7 @@ func TestStudentGetAll_ServiceError(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("GetAll", testTutorID).Return([]models.Student{}, errors.New("db error"))
+	svc.On("GetAll", mock.Anything, testTutorID).Return([]models.Student{}, errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodGet, "/students", nil)
 
@@ -72,7 +73,7 @@ func TestStudentCreate_Success(t *testing.T) {
 	r := newStudentRouter(svc, testTutorID)
 
 	req := models.CreateStudentRequest{FirstName: "Aiya", LastName: "Bekova"}
-	svc.On("Create", req, testTutorID).Return(testStudent, nil)
+	svc.On("Create", mock.Anything, req, testTutorID).Return(testStudent, nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/students", req)
 
@@ -109,7 +110,7 @@ func TestStudentCreate_ServiceError(t *testing.T) {
 	r := newStudentRouter(svc, testTutorID)
 
 	req := models.CreateStudentRequest{FirstName: "Aiya", LastName: "Bekova"}
-	svc.On("Create", req, testTutorID).Return(models.Student{}, errors.New("db error"))
+	svc.On("Create", mock.Anything, req, testTutorID).Return(models.Student{}, errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodPost, "/students", req)
 
@@ -123,7 +124,7 @@ func TestStudentGetByID_Success(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("GetByID", testStudentID, testTutorID).Return(testStudent, nil)
+	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(testStudent, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID, nil)
 
@@ -138,7 +139,7 @@ func TestStudentGetByID_NotFound(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("GetByID", testStudentID, testTutorID).Return(models.Student{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, errors.New("not found"))
 
 	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID, nil)
 
@@ -154,7 +155,7 @@ func TestStudentUpdate_Success(t *testing.T) {
 
 	req := models.UpdateStudentRequest{FirstName: "Aiya", LastName: "Bekova"}
 	updated := models.Student{ID: testStudentID, FirstName: "Aiya", LastName: "Bekova"}
-	svc.On("Update", testStudentID, testTutorID, req).Return(updated, nil)
+	svc.On("Update", mock.Anything, testStudentID, testTutorID, req).Return(updated, nil)
 
 	w := makeRequest(t, r, http.MethodPut, "/students/"+testStudentID, req)
 
@@ -167,7 +168,7 @@ func TestStudentUpdate_ServiceError(t *testing.T) {
 	r := newStudentRouter(svc, testTutorID)
 
 	req := models.UpdateStudentRequest{FirstName: "Aiya", LastName: "Bekova"}
-	svc.On("Update", testStudentID, testTutorID, req).Return(models.Student{}, errors.New("db error"))
+	svc.On("Update", mock.Anything, testStudentID, testTutorID, req).Return(models.Student{}, errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodPut, "/students/"+testStudentID, req)
 
@@ -181,7 +182,7 @@ func TestStudentDelete_Success(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("Delete", testStudentID, testTutorID).Return(nil)
+	svc.On("Delete", mock.Anything, testStudentID, testTutorID).Return(nil)
 
 	w := makeRequest(t, r, http.MethodDelete, "/students/"+testStudentID, nil)
 
@@ -193,7 +194,7 @@ func TestStudentDelete_ServiceError(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("Delete", testStudentID, testTutorID).Return(errors.New("db error"))
+	svc.On("Delete", mock.Anything, testStudentID, testTutorID).Return(errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodDelete, "/students/"+testStudentID, nil)
 
