@@ -13,6 +13,7 @@ type LessonService interface {
 	GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 }
 
 type lessonService struct {
@@ -62,4 +63,8 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID string) e
 		return errors.New("lesson not found or access denied")
 	}
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
+	return s.repo.GetCalendar(ctx, tutorID, from, to)
 }

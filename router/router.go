@@ -21,6 +21,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	courseRepo := repository.NewCourseRepository(pool)
 	paymentRepo := repository.NewPaymentRepository(pool)
 	lessonRepo := repository.NewLessonRepository(pool)
+	enrollmentRepo := repository.NewEnrollmentRepository(pool)
+	attendanceRepo := repository.NewAttendanceRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo)
@@ -28,6 +30,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	courseService := service.NewCourseService(courseRepo, studentRepo, lessonRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
 	lessonService := service.NewLessonService(lessonRepo, courseRepo)
+	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
+	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, log)
@@ -36,6 +40,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	courseHandler := handlers.NewCourseHandler(courseService, log)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
 	lessonHandler := handlers.NewLessonHandler(lessonService, log)
+	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
+	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -78,6 +84,15 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.GET("/lessons/:id", lessonHandler.GetByID)
 		auth.PUT("/lessons/:id", lessonHandler.Update)
 		auth.DELETE("/lessons/:id", lessonHandler.Delete)
+
+		auth.GET("/calendar", lessonHandler.GetCalendar)
+
+		auth.GET("/courses/:id/enrollments", enrollmentHandler.GetByCourse)
+		auth.POST("/courses/:id/enrollments", enrollmentHandler.Add)
+		auth.DELETE("/courses/:id/enrollments/:studentId", enrollmentHandler.Remove)
+
+		auth.GET("/lessons/:id/attendance", attendanceHandler.Get)
+		auth.PUT("/lessons/:id/attendance", attendanceHandler.Update)
 	}
 
 	return r

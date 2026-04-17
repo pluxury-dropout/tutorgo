@@ -12,6 +12,7 @@ import (
 	"tutorgo/config"
 	"tutorgo/database"
 	"tutorgo/logger"
+	"tutorgo/repository"
 	"tutorgo/router"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,21 @@ func main() {
 	defer pool.Close()
 
 	r := router.Setup(pool, log, &cfg)
+
+	// Auto-complete: mark expired lessons as completed every minute
+	lessonRepo := repository.NewLessonRepository(pool)
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			count, err := lessonRepo.AutoComplete(context.Background())
+			if err != nil {
+				log.Error("Auto-complete failed", slog.String("error", err.Error()))
+			} else if count > 0 {
+				log.Info("Auto-completed lessons", slog.Int64("count", count))
+			}
+		}
+	}()
 
 	r.GET("/health", func(c *gin.Context) {
 		if err := pool.Ping(c.Request.Context()); err != nil {

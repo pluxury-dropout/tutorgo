@@ -21,6 +21,18 @@ type CreateLessonRequest struct {
 type UpdateLessonRequest struct {
 	ScheduledAt     time.Time `json:"scheduled_at"      validate:"required"`
 	DurationMinutes int       `json:"duration_minutes"  validate:"omitempty,gt=0"`
-	Status          string    `json:"status"            validate:"omitempty,oneof=scheduled completed cancelled"`
+	Status          string    `json:"status"            validate:"omitempty,oneof=scheduled completed cancelled missed"`
 	Notes           string    `json:"notes"             validate:"omitempty,max=500"`
+}
+
+type CalendarLesson struct {
+	ID              string    `json:"id"`
+	CourseID        string    `json:"course_id"`
+	ScheduledAt     time.Time `json:"scheduled_at"`
+	DurationMinutes int       `json:"duration_minutes"`
+	Status          string    `json:"status"`
+	Notes           string    `json:"notes"`
+	Subject         string    `json:"subject"`
+	StudentName     *string   `json:"student_name"`
+	IsGroup         bool      `json:"is_group"`
 }

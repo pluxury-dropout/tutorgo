@@ -26,9 +26,11 @@ func NewCourseService(repo repository.CourseRepository, studentRepo repository.S
 }
 
 func (s *courseService) Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error) {
-	_, err := s.studentRepo.GetByID(ctx, req.StudentID, tutorID)
-	if err != nil {
-		return models.Course{}, errors.New("student not found or access denied")
+	if req.StudentID != nil {
+		_, err := s.studentRepo.GetByID(ctx, *req.StudentID, tutorID)
+		if err != nil {
+			return models.Course{}, errors.New("student not found or access denied")
+		}
 	}
 	return s.repo.Create(ctx, req, tutorID)
 }

@@ -92,3 +92,24 @@ func (h *LessonHandler) Delete(c *gin.Context) {
 	h.log.Info("Lesson deleted", slog.String("id", id))
 	c.Status(http.StatusNoContent)
 }
+
+func (h *LessonHandler) GetCalendar(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	from := c.Query("from")
+	to := c.Query("to")
+	if from == "" || to == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "from and to query parameters are required"})
+		return
+	}
+	lessons, err := h.service.GetCalendar(c.Request.Context(), tutorID, from, to)
+	if err != nil {
+		h.log.Error("Failed to get calendar", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve calendar"})
+		return
+	}
+	c.JSON(http.StatusOK, lessons)
+}

@@ -4,7 +4,7 @@ import "time"
 
 type Course struct {
 	ID             string     `json:"id"`
-	StudentID      string     `json:"student_id"`
+	StudentID      *string    `json:"student_id"`
 	TutorID        string     `json:"tutor_id"`
 	Subject        string     `json:"subject"`
 	PricePerLesson float64    `json:"price_per_lesson"`
@@ -19,7 +19,7 @@ type CourseBalance struct {
 }
 
 type CreateCourseRequest struct {
-	StudentID      string     `json:"student_id"       validate:"required,uuid"`
+	StudentID      *string    `json:"student_id"       validate:"omitempty,uuid"`
 	Subject        string     `json:"subject"          validate:"required,min=2"`
 	PricePerLesson float64    `json:"price_per_lesson" validate:"required,gt=0"`
 	StartedAt      time.Time  `json:"started_at"       validate:"required"`

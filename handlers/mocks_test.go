@@ -42,10 +42,12 @@ var (
 		LastName:  "Bekova",
 	}
 
+	testStudentIDPtr = func() *string { s := testStudentID; return &s }()
+
 	testCourse = models.Course{
 		ID:             testCourseID,
 		TutorID:        testTutorID,
-		StudentID:      testStudentID,
+		StudentID:      testStudentIDPtr,
 		Subject:        "Mathematics",
 		PricePerLesson: 5000,
 		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
@@ -215,4 +217,9 @@ func (m *mockLessonService) Update(ctx context.Context, id string, req models.Up
 }
 func (m *mockLessonService) Delete(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
+}
+
+func (m *mockLessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
+	args := m.Called(ctx, tutorID, from, to)
+	return args.Get(0).([]models.CalendarLesson), args.Error(1)
 }

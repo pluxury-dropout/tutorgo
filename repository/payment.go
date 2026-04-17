@@ -58,7 +58,7 @@ func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (mo
 	err := r.conn.QueryRow(ctx,
 		`SELECT
 			COALESCE((SELECT SUM(lessons_count) FROM payments WHERE course_id = $1), 0),
-			COUNT(id) FILTER (WHERE status = 'completed')
+			COUNT(id) FILTER (WHERE status IN ('completed', 'missed'))
 		FROM lessons
 		WHERE course_id = $1`,
 		courseID,

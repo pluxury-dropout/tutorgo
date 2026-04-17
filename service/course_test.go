@@ -38,8 +38,10 @@ func (m *mockCourseRepo) Delete(ctx context.Context, id string, tutorID string) 
 var (
 	endedAt = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
 
+	studentUUID = func() *string { s := "student-uuid-1"; return &s }()
+
 	courseReq = models.CreateCourseRequest{
-		StudentID:      "student-uuid-1",
+		StudentID:      studentUUID,
 		Subject:        "Mathematics",
 		PricePerLesson: 5000,
 		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
@@ -68,7 +70,7 @@ func TestCourseCreate_Success(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	studentRepo.On("GetByID", mock.Anything, courseReq.StudentID, tutorID).Return(expectedStudent, nil)
+	studentRepo.On("GetByID", mock.Anything, *courseReq.StudentID, tutorID).Return(expectedStudent, nil)
 	courseRepo.On("Create", mock.Anything, courseReq, tutorID).Return(expectedCourse, nil)
 
 	course, err := svc.Create(context.Background(), courseReq, tutorID)
@@ -85,7 +87,7 @@ func TestCourseCreate_StudentNotFound(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	studentRepo.On("GetByID", mock.Anything, courseReq.StudentID, tutorID).Return(models.Student{}, errors.New("not found"))
+	studentRepo.On("GetByID", mock.Anything, *courseReq.StudentID, tutorID).Return(models.Student{}, errors.New("not found"))
 
 	course, err := svc.Create(context.Background(), courseReq, tutorID)
 
@@ -102,7 +104,7 @@ func TestCourseCreate_RepoError(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	studentRepo.On("GetByID", mock.Anything, courseReq.StudentID, tutorID).Return(expectedStudent, nil)
+	studentRepo.On("GetByID", mock.Anything, *courseReq.StudentID, tutorID).Return(expectedStudent, nil)
 	courseRepo.On("Create", mock.Anything, courseReq, tutorID).Return(models.Course{}, errors.New("db error"))
 
 	course, err := svc.Create(context.Background(), courseReq, tutorID)
