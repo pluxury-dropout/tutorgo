@@ -57,11 +57,10 @@ func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (mo
 	var paid, completed int
 	err := r.conn.QueryRow(ctx,
 		`SELECT
-			COALESCE(SUM(p.lessons_count), 0),
-			COUNT(l.id) FILTER (WHERE l.status = 'completed')
-		FROM payments p
-		LEFT JOIN lessons l ON l.course_id = p.course_id
-		WHERE p.course_id = $1`,
+			COALESCE((SELECT SUM(lessons_count) FROM payments WHERE course_id = $1), 0),
+			COUNT(id) FILTER (WHERE status = 'completed')
+		FROM lessons
+		WHERE course_id = $1`,
 		courseID,
 	).Scan(&paid, &completed)
 	if err != nil {
