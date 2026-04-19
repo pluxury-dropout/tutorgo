@@ -146,6 +146,11 @@ func (m *mockTutorService) GetByEmail(ctx context.Context, email string) (string
 	args := m.Called(ctx, email)
 	return args.String(0), args.String(1), args.Error(2)
 }
+func (m *mockTutorService) GetByPhone(ctx context.Context, phone string) (string, string, error) {
+	args := m.Called(ctx, phone)
+	return args.String(0), args.String(1), args.Error(2)
+}
+
 func (m *mockTutorService) Update(ctx context.Context, id string, req models.UpdateTutorRequest) (models.Tutor, error) {
 	args := m.Called(ctx, id, req)
 	return args.Get(0).(models.Tutor), args.Error(1)

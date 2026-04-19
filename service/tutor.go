@@ -11,6 +11,7 @@ type TutorService interface {
 	GetAll(ctx context.Context) ([]models.Tutor, error)
 	GetByID(ctx context.Context, id string) (models.Tutor, error)
 	GetByEmail(ctx context.Context, email string) (string, string, error)
+	GetByPhone(ctx context.Context, phone string) (string, string, error)
 	Update(ctx context.Context, id string, req models.UpdateTutorRequest) (models.Tutor, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -37,6 +38,10 @@ func (s *tutorService) GetByID(ctx context.Context, id string) (models.Tutor, er
 
 func (s *tutorService) GetByEmail(ctx context.Context, email string) (string, string, error) {
 	return s.repo.GetByEmail(ctx, email)
+}
+
+func (s *tutorService) GetByPhone(ctx context.Context, phone string) (string, string, error) {
+	return s.repo.GetByPhone(ctx, phone)
 }
 
 func (s *tutorService) Update(ctx context.Context, id string, req models.UpdateTutorRequest) (models.Tutor, error) {

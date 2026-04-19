@@ -9,8 +9,9 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required"`
+	Email    string `json:"email"    validate:"omitempty,email"`
+	Password string `json:"password" validate:"omitempty, min=10"`
+	Phone    string `json:"phone"    validate:"required"`
 }
 
 type LoginResponse struct {
