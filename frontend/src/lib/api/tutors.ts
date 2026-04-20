@@ -1,0 +1,16 @@
+import { api } from './client'
+import { Tutor } from '@/types/api'
+
+export interface TutorUpdateInput {
+  email: string
+  first_name: string
+  last_name: string
+  phone?: string
+}
+
+export const tutorsApi = {
+  get: (id: string) => api.get<Tutor>(`/tutors/${id}`).then((r) => r.data),
+  update: (id: string, data: TutorUpdateInput) =>
+    api.put<Tutor>(`/tutors/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/tutors/${id}`).then(() => id),
+}
