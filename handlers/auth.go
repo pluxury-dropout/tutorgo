@@ -60,9 +60,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	id, passwordHash, err := h.service.GetByEmail(c.Request.Context(), req.Email)
+	var id, passwordHash string
+	var err error
+	if req.Phone != "" {
+		id, passwordHash, err = h.service.GetByPhone(c.Request.Context(), req.Phone)
+	} else {
+		id, passwordHash, err = h.service.GetByEmail(c.Request.Context(), req.Email)
+	}
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 

@@ -135,6 +135,42 @@ func TestAuthLogin_EmailNotFound(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
+func TestAuthLogin_ByPhone_Success(t *testing.T) {
+	svc := new(mockTutorService)
+	r := newAuthRouter(svc)
+
+	password := "password123"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+
+	svc.On("GetByPhone", mock.Anything, "+77001234567").Return(testTutorID, string(hash), nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
+		Phone:    "+77001234567",
+		Password: password,
+	})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.LoginResponse
+	decodeJSON(t, w, &got)
+	assert.NotEmpty(t, got.Token)
+	svc.AssertExpectations(t)
+}
+
+func TestAuthLogin_PhoneNotFound(t *testing.T) {
+	svc := new(mockTutorService)
+	r := newAuthRouter(svc)
+
+	svc.On("GetByPhone", mock.Anything, "+70000000000").Return("", "", errors.New("not found"))
+
+	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
+		Phone:    "+70000000000",
+		Password: "password123",
+	})
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	svc.AssertExpectations(t)
+}
+
 func TestAuthLogin_ValidationError(t *testing.T) {
 	svc := new(mockTutorService)
 	r := newAuthRouter(svc)
