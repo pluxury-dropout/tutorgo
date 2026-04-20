@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -42,9 +44,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		LastName:  req.LastName,
 		Phone:     req.Phone,
 	}
-
 	tutor, err := h.service.Create(c.Request.Context(), createReq, string(passwordHash))
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email or phone is already taken"})
+			return
+		}
 		h.log.Error("Failed to register tutor", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register tutor"})
 		return
