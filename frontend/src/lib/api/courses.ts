@@ -10,16 +10,16 @@ export interface CourseInput {
 }
 
 export const coursesApi = {
-  list: () => api.get<Course[]>('/courses').then((r) => r.data),
+  list: () => api.get<Course[]>('/courses').then((r) => r.data ?? []),
   create: (data: CourseInput) =>
     api.post<Course>('/courses', data).then((r) => r.data),
   update: (id: string, data: Omit<CourseInput, 'student_id'>) =>
     api.put<Course>(`/courses/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/courses/${id}`).then(() => id),
   getBalance: (id: string) =>
-    api.get<CourseBalance>(`/courses/${id}/balance`).then((r) => r.data),
+    api.get<CourseBalance>(`/payments/balance?course_id=${id}`).then((r) => r.data),
   getEnrollments: (id: string) =>
-    api.get<Enrollment[]>(`/courses/${id}/enrollments`).then((r) => r.data),
+    api.get<Enrollment[]>(`/courses/${id}/enrollments`).then((r) => r.data ?? []),
   addEnrollment: (courseId: string, studentId: string) =>
     api
       .post<Enrollment>(`/courses/${courseId}/enrollments`, {
