@@ -21,6 +21,10 @@ func NewLessonHandler(svc service.LessonService, log *slog.Logger) *LessonHandle
 
 func (h *LessonHandler) GetByCourse(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	courseID := c.Query("course_id")
 	if courseID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
@@ -38,6 +42,10 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 
 func (h *LessonHandler) Create(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	var req models.CreateLessonRequest
 	if !bindAndValidate(c, &req) {
 		return
@@ -54,6 +62,10 @@ func (h *LessonHandler) Create(c *gin.Context) {
 
 func (h *LessonHandler) GetByID(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id := c.Param("id")
 	lesson, err := h.service.GetByID(c.Request.Context(), id, tutorID)
 	if err != nil {
@@ -66,6 +78,10 @@ func (h *LessonHandler) GetByID(c *gin.Context) {
 
 func (h *LessonHandler) Update(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id := c.Param("id")
 	var req models.UpdateLessonRequest
 	if !bindAndValidate(c, &req) {
@@ -83,6 +99,10 @@ func (h *LessonHandler) Update(c *gin.Context) {
 
 func (h *LessonHandler) Delete(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id := c.Param("id")
 	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete lesson", slog.String("id", id), slog.String("error", err.Error()))

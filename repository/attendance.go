@@ -22,6 +22,12 @@ func NewAttendanceRepository(pool *pgxpool.Pool) AttendanceRepository {
 }
 
 func (r *attendanceRepository) Upsert(ctx context.Context, lessonID string, entries []models.AttendanceEntry) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
 	batch := &pgx.Batch{}
 	for _, e := range entries {
 		batch.Queue(
@@ -31,14 +37,17 @@ func (r *attendanceRepository) Upsert(ctx context.Context, lessonID string, entr
 			lessonID, e.StudentID, e.Status,
 		)
 	}
-	br := r.pool.SendBatch(ctx, batch)
-	defer br.Close()
+	br := tx.SendBatch(ctx, batch)
 	for range entries {
 		if _, err := br.Exec(); err != nil {
+			br.Close()
 			return err
 		}
 	}
-	return nil
+	if err := br.Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *attendanceRepository) GetByLesson(ctx context.Context, lessonID string) ([]models.LessonAttendance, error) {
