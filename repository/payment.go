@@ -10,7 +10,9 @@ import (
 type PaymentRepository interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string) ([]models.Payment, error)
+	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
+	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 }
 
 type paymentRepository struct {
@@ -51,6 +53,43 @@ func (r *paymentRepository) GetByCourse(ctx context.Context, courseID string) ([
 		payments = append(payments, payment)
 	}
 	return payments, rows.Err()
+}
+
+func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at
+		 FROM payments p
+		 JOIN courses c ON c.id = p.course_id
+		 WHERE c.tutor_id = $1
+		 ORDER BY p.paid_at DESC
+		 LIMIT $2`, tutorID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []models.Payment
+	for rows.Next() {
+		var p models.Payment
+		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+	return payments, rows.Err()
+}
+
+func (r *paymentRepository) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {
+	var total float64
+	err := r.conn.QueryRow(ctx,
+		`SELECT COALESCE(SUM(p.amount), 0)
+		 FROM payments p
+		 JOIN courses c ON c.id = p.course_id
+		 WHERE c.tutor_id = $1
+		   AND DATE_TRUNC('month', p.paid_at) = DATE_TRUNC('month', NOW())`,
+		tutorID,
+	).Scan(&total)
+	return total, err
 }
 
 func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error) {

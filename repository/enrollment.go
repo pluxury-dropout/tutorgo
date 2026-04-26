@@ -41,8 +41,10 @@ func (r *enrollmentRepository) Remove(ctx context.Context, courseID string, stud
 
 func (r *enrollmentRepository) GetByCourse(ctx context.Context, courseID string) ([]models.CourseEnrollment, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, student_id
-		 FROM course_enrollments WHERE course_id = $1`, courseID)
+		`SELECT ce.id, ce.course_id, ce.student_id, s.first_name, s.last_name
+		 FROM course_enrollments ce
+		 JOIN students s ON s.id = ce.student_id
+		 WHERE ce.course_id = $1`, courseID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +53,7 @@ func (r *enrollmentRepository) GetByCourse(ctx context.Context, courseID string)
 	var enrollments []models.CourseEnrollment
 	for rows.Next() {
 		var e models.CourseEnrollment
-		if err := rows.Scan(&e.ID, &e.CourseID, &e.StudentID); err != nil {
+		if err := rows.Scan(&e.ID, &e.CourseID, &e.StudentID, &e.StudentFirstName, &e.StudentLastName); err != nil {
 			return nil, err
 		}
 		enrollments = append(enrollments, e)

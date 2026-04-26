@@ -14,6 +14,8 @@ type TutorService interface {
 	GetByPhone(ctx context.Context, phone string) (string, string, error)
 	Update(ctx context.Context, id string, req models.UpdateTutorRequest) (models.Tutor, error)
 	Delete(ctx context.Context, id string) error
+	GetPasswordHash(ctx context.Context, id string) (string, error)
+	UpdatePassword(ctx context.Context, id string, hash string) error
 }
 
 type tutorService struct {
@@ -50,4 +52,12 @@ func (s *tutorService) Update(ctx context.Context, id string, req models.UpdateT
 
 func (s *tutorService) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *tutorService) GetPasswordHash(ctx context.Context, id string) (string, error) {
+	return s.repo.GetPasswordHash(ctx, id)
+}
+
+func (s *tutorService) UpdatePassword(ctx context.Context, id string, hash string) error {
+	return s.repo.UpdatePassword(ctx, id, hash)
 }

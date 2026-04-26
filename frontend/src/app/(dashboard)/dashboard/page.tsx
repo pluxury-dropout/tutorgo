@@ -6,7 +6,7 @@ import { CalendarDays, Users, BookOpen, Banknote } from 'lucide-react'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { useCourses } from '@/lib/hooks/useCourses'
 import { useCalendar } from '@/lib/hooks/useCalendar'
-import { useRecentPayments } from '@/lib/hooks/usePayments'
+import { useRecentPayments, useMonthlyIncome } from '@/lib/hooks/usePayments'
 import { FC_COLORS } from '@/lib/lessonStatus'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -85,6 +85,7 @@ export default function DashboardPage() {
   const { data: courses   = [] } = useCourses()
   const { data: todayLessons = [] } = useCalendar(todayFrom, todayTo)
   const { data: recentPayments = [] } = useRecentPayments()
+  const { data: monthlyIncome  = 0 } = useMonthlyIncome()
 
   const activeCourses = useMemo(
     () => courses.filter((c) => !c.ended_at),
@@ -110,8 +111,7 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Доход за месяц"
-          value="—"
-          note="в разработке"
+          value={formatAmount(monthlyIncome)}
           icon={<Banknote className="h-4 w-4" style={{ color: 'oklch(0.52 0.18 55)' }} />}
           iconBg="var(--accent-light)"
         />

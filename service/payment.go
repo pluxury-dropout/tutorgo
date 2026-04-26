@@ -10,7 +10,9 @@ import (
 type PaymentService interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error)
+	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
+	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 }
 
 type paymentService struct {
@@ -36,9 +38,17 @@ func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutor
 	return s.repo.GetByCourse(ctx, courseID)
 }
 
+func (s *paymentService) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
+	return s.repo.GetAllByTutor(ctx, tutorID, limit)
+}
+
 func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
 	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
 		return models.CourseBalance{}, errors.New("course not found or access denied")
 	}
 	return s.repo.GetBalance(ctx, courseID)
+}
+
+func (s *paymentService) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {
+	return s.repo.GetMonthlyIncome(ctx, tutorID)
 }

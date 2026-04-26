@@ -62,6 +62,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	{
 		auth.GET("/tutors/:id", tutorHandler.GetByID)
 		auth.PUT("/tutors/:id", tutorHandler.Update)
+		auth.PUT("/tutors/:id/password", tutorHandler.ChangePassword)
 		auth.DELETE("/tutors/:id", tutorHandler.Delete)
 
 		auth.GET("/students", studentHandler.GetAll)
@@ -77,7 +78,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 		auth.GET("/payments", paymentHandler.GetAll)
 		auth.POST("/payments", paymentHandler.Create)
+		auth.GET("/payments/recent", paymentHandler.GetRecent)
 		auth.GET("/payments/balance", paymentHandler.GetBalance)
+		auth.GET("/payments/monthly-income", paymentHandler.GetMonthlyIncome)
 
 		auth.GET("/lessons", lessonHandler.GetByCourse)
 		auth.POST("/lessons", lessonHandler.Create)

@@ -21,3 +21,8 @@ type UpdateTutorRequest struct {
 	LastName  string `json:"last_name"  validate:"required,min=2"`
 	Phone     string `json:"phone"      validate:"omitempty,min=10"`
 }
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required,min=6"`
+	NewPassword     string `json:"new_password"     validate:"required,min=6"`
+}

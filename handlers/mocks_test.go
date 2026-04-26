@@ -159,6 +159,15 @@ func (m *mockTutorService) Delete(ctx context.Context, id string) error {
 	return m.Called(ctx, id).Error(0)
 }
 
+func (m *mockTutorService) GetPasswordHash(ctx context.Context, id string) (string, error) {
+	args := m.Called(ctx, id)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockTutorService) UpdatePassword(ctx context.Context, id string, hash string) error {
+	return m.Called(ctx, id, hash).Error(0)
+}
+
 // --- Mock: CourseService ---
 
 type mockCourseService struct{ mock.Mock }
@@ -195,9 +204,18 @@ func (m *mockPaymentService) GetByCourse(ctx context.Context, courseID string, t
 	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).([]models.Payment), args.Error(1)
 }
+func (m *mockPaymentService) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
+	args := m.Called(ctx, tutorID, limit)
+	return args.Get(0).([]models.Payment), args.Error(1)
+}
 func (m *mockPaymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
 	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).(models.CourseBalance), args.Error(1)
+}
+
+func (m *mockPaymentService) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).(float64), args.Error(1)
 }
 
 // --- Mock: LessonService ---

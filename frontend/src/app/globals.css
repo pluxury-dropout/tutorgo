@@ -112,15 +112,15 @@
   --cal-scheduled-bg:      oklch(0.92 0.05 250);
   --cal-scheduled-border:  oklch(0.55 0.14 250);
   --cal-scheduled-text:    oklch(0.35 0.14 250);
-  --cal-completed-bg:      oklch(0.91 0.07 155);
-  --cal-completed-border:  oklch(0.48 0.12 155);
-  --cal-completed-text:    oklch(0.32 0.10 155);
-  --cal-cancelled-bg:      oklch(0.93 0.003 215);
-  --cal-cancelled-border:  oklch(0.60 0.01 215);
-  --cal-cancelled-text:    oklch(0.45 0.01 215);
-  --cal-missed-bg:         oklch(0.92 0.05 25);
-  --cal-missed-border:     oklch(0.58 0.20 25);
-  --cal-missed-text:       oklch(0.38 0.18 25);
+  --cal-completed-bg:      oklch(0.96 0.02 155);
+  --cal-completed-border:  oklch(0.74 0.04 155);
+  --cal-completed-text:    oklch(0.56 0.05 155);
+  --cal-cancelled-bg:      oklch(0.96 0.002 215);
+  --cal-cancelled-border:  oklch(0.78 0.004 215);
+  --cal-cancelled-text:    oklch(0.62 0.004 215);
+  --cal-missed-bg:         oklch(0.96 0.018 25);
+  --cal-missed-border:     oklch(0.74 0.07 25);
+  --cal-missed-text:       oklch(0.58 0.08 25);
 
   /* Charts */
   --chart-1: oklch(0.52 0.1 185);
@@ -180,11 +180,10 @@
 /* FullCalendar: now indicator */
 .fc-timegrid-now-indicator-line {
   border-color: rgba(239, 68, 68, 0.6) !important;
-  border-width: 2px !important;
+  border-width: 1px !important;
 }
 .fc-timegrid-now-indicator-arrow {
-  border-top-color: rgba(239, 68, 68, 0.6) !important;
-  border-bottom-color: rgba(239, 68, 68, 0.6) !important;
+  display: none !important;
 }
 
 /* Slot height — 64px per hour = 32px per 30min slot */

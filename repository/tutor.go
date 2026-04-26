@@ -15,6 +15,8 @@ type TutorRepository interface {
 	GetByPhone(ctx context.Context, phone string) (string, string, error)
 	Update(ctx context.Context, id string, req models.UpdateTutorRequest) (models.Tutor, error)
 	Delete(ctx context.Context, id string) error
+	GetPasswordHash(ctx context.Context, id string) (string, error)
+	UpdatePassword(ctx context.Context, id string, hash string) error
 }
 type tutorRepository struct {
 	conn *pgxpool.Pool
@@ -92,5 +94,19 @@ func (r *tutorRepository) Update(ctx context.Context, id string, req models.Upda
 func (r *tutorRepository) Delete(ctx context.Context, id string) error {
 	_, err := r.conn.Exec(ctx,
 		`DELETE FROM tutors WHERE id = $1`, id)
+	return err
+}
+
+func (r *tutorRepository) GetPasswordHash(ctx context.Context, id string) (string, error) {
+	var hash string
+	err := r.conn.QueryRow(ctx,
+		`SELECT password_hash FROM tutors WHERE id = $1`, id,
+	).Scan(&hash)
+	return hash, err
+}
+
+func (r *tutorRepository) UpdatePassword(ctx context.Context, id string, hash string) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE tutors SET password_hash = $1 WHERE id = $2`, hash, id)
 	return err
 }

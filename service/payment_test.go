@@ -26,9 +26,19 @@ func (m *mockPaymentRepo) GetByCourse(ctx context.Context, courseID string) ([]m
 	return args.Get(0).([]models.Payment), args.Error(1)
 }
 
+func (m *mockPaymentRepo) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
+	args := m.Called(ctx, tutorID, limit)
+	return args.Get(0).([]models.Payment), args.Error(1)
+}
+
 func (m *mockPaymentRepo) GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error) {
 	args := m.Called(ctx, courseID)
 	return args.Get(0).(models.CourseBalance), args.Error(1)
+}
+
+func (m *mockPaymentRepo) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).(float64), args.Error(1)
 }
 
 var (

@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TutorGo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Design Tokens ─────────────────────────────────────────────── */
+:root {
+  /* Base */
+  --background:           oklch(0.985 0.004 210);
+  --foreground:           oklch(0.18 0.02 215);
+  --primary:              oklch(0.52 0.1 185);
+  --primary-light:        oklch(0.94 0.04 185);
+  --primary-foreground:   oklch(0.985 0 0);
+  --secondary:            oklch(0.96 0.004 215);
+  --muted:                oklch(0.96 0.004 215);
+  --muted-foreground:     oklch(0.50 0.02 215);
+  --accent:               oklch(0.72 0.14 55);
+  --accent-light:         oklch(0.96 0.04 55);
+  --border:               oklch(0.91 0.006 215);
+  --radius:               0.5rem;
+  --radius-lg:            0.75rem;
+
+  /* Sidebar */
+  --sidebar-bg:           oklch(0.985 0.004 210);
+  --sidebar-width:        240px;
+  --sidebar-active-bg:    oklch(0.94 0.04 185);
+  --sidebar-active-text:  oklch(0.52 0.1 185);
+  --sidebar-hover-bg:     oklch(0.96 0.004 215);
+  --sidebar-text:         oklch(0.42 0.02 215);
+
+  /* Status chips */
+  --status-scheduled-bg:   oklch(0.94 0.04 250);
+  --status-scheduled-text: oklch(0.40 0.12 250);
+  --status-completed-bg:   oklch(0.93 0.06 155);
+  --status-completed-text: oklch(0.35 0.10 155);
+  --status-cancelled-bg:   oklch(0.94 0.004 215);
+  --status-cancelled-text: oklch(0.48 0.01 215);
+  --status-missed-bg:      oklch(0.94 0.04 25);
+  --status-missed-text:    oklch(0.42 0.18 25);
+
+  /* Calendar event chips */
+  --cal-scheduled-bg:     oklch(0.92 0.05 250);
+  --cal-scheduled-border: oklch(0.55 0.14 250);
+  --cal-completed-bg:     oklch(0.91 0.07 155);
+  --cal-completed-border: oklch(0.48 0.12 155);
+  --cal-cancelled-bg:     oklch(0.93 0.003 215);
+  --cal-cancelled-border: oklch(0.60 0.01 215);
+  --cal-missed-bg:        oklch(0.92 0.05 25);
+  --cal-missed-border:    oklch(0.58 0.20 25);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px oklch(0.18 0.02 215 / 0.06);
+  --shadow-card: 0 1px 3px oklch(0.18 0.02 215 / 0.08);
+
+  /* Spacing scale (tweakable via density) */
+  --space-page-v:     28px;
+  --space-page-h:     32px;
+  --space-content-gap: 24px;
+  --space-card-v:     18px;
+  --space-card-h:     20px;
+  --space-row-v:      13px;
+  --space-row-h:      20px;
+  --space-stat:       20px;
+  --space-stat-val:   26px;
+
+  /* Surface scale (tweakable) */
+  --surface-radius:   0.75rem;
+  --surface-shadow:   0 1px 3px oklch(0.18 0.02 215 / 0.08);
+  --surface-border:   1px solid var(--border);
+}
+
+/* ── Density variants ──────────────────────────────────────────── */
+body[data-density="compact"] {
+  --space-page-v:      16px;
+  --space-page-h:      24px;
+  --space-content-gap: 14px;
+  --space-card-v:      12px;
+  --space-card-h:      16px;
+  --space-row-v:       8px;
+  --space-row-h:       16px;
+  --space-stat:        14px;
+  --space-stat-val:    22px;
+}
+body[data-density="airy"] {
+  --space-page-v:      44px;
+  --space-page-h:      52px;
+  --space-content-gap: 36px;
+  --space-card-v:      26px;
+  --space-card-h:      28px;
+  --space-row-v:       18px;
+  --space-row-h:       28px;
+  --space-stat:        28px;
+  --space-stat-val:    30px;
+}
+
+/* ── Surface variants ──────────────────────────────────────────── */
+body[data-surface="flat"] {
+  --surface-radius: 0.375rem;
+  --surface-shadow: none;
+  --surface-border: 1.5px solid var(--border);
+  --radius-lg:      0.375rem;
+}
+body[data-surface="lifted"] {
+  --surface-radius: 1rem;
+  --surface-shadow: 0 6px 24px oklch(0.18 0.02 215 / 0.10), 0 1px 4px oklch(0.18 0.02 215 / 0.06);
+  --surface-border: 1px solid oklch(0.96 0.004 215);
+  --radius-lg:      1rem;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 10;
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 20px;
+}
+.sidebar-logo-mark {
+  width: 32px; height: 32px;
+  background: var(--primary);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.sidebar-logo-mark svg { width: 18px; height: 18px; }
+.sidebar-logo-text {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--foreground);
+  letter-spacing: -0.3px;
+}
+.sidebar-logo-text span { color: var(--primary); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--sidebar-text);
+  font-weight: 500;
+  font-size: 13.5px;
+  transition: background 0.12s, color 0.12s;
+  border: none; background: transparent; width: 100%; text-align: left;
+  text-decoration: none;
+}
+.nav-item:hover { background: var(--sidebar-hover-bg); color: var(--foreground); }
+.nav-item.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+  font-weight: 600;
+}
+.nav-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.75; }
+.nav-item.active svg { opacity: 1; }
+.sidebar-footer {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  padding-left: 4px;
+}
+.avatar {
+  width: 34px; height: 34px;
+  background: var(--primary-light);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.tutor-info { flex: 1; min-width: 0; }
+.tutor-name { font-weight: 600; font-size: 13px; color: var(--foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tutor-role { font-size: 11px; color: var(--muted-foreground); }
+
+/* ── Main layout ────────────────────────────────────────────────── */
+.main {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Page ────────────────────────────────────────────────────────── */
+.page { display: none; flex-direction: column; flex: 1; }
+.page.active { display: flex; }
+
+/* ── Page header ─────────────────────────────────────────────────── */
+.page-header {
+  padding: var(--space-page-v) var(--space-page-h) 0;
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; color: var(--foreground); }
+.page-subtitle { font-size: 13px; color: var(--muted-foreground); margin-top: 2px; }
+.page-content { padding: var(--space-content-gap) var(--space-page-h) 40px; display: flex; flex-direction: column; gap: var(--space-content-gap); }
+
+/* ── Stat cards ──────────────────────────────────────────────────── */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.stat-card {
+  background: white;
+  border: var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-stat);
+  display: flex; flex-direction: column; gap: 8px;
+  box-shadow: var(--surface-shadow);
+  transition: border-radius 0.3s, box-shadow 0.3s, padding 0.3s;
+}
+.stat-label { font-size: 12px; font-weight: 500; color: var(--muted-foreground); letter-spacing: 0.2px; }
+.stat-value { font-size: var(--space-stat-val); font-weight: 700; letter-spacing: -0.8px; color: var(--foreground); line-height: 1; transition: font-size 0.3s; }
+.stat-delta {
+  font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; gap: 4px;
+}
+.stat-delta.up { color: oklch(0.45 0.12 155); }
+.stat-delta.neutral { color: var(--muted-foreground); }
+.stat-icon {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 4px;
+}
+.stat-icon.teal { background: var(--primary-light); }
+.stat-icon.amber { background: var(--accent-light); }
+.stat-icon.purple { background: oklch(0.94 0.03 280); }
+.stat-icon.sage { background: oklch(0.92 0.05 155); }
+.stat-icon svg { width: 18px; height: 18px; }
+
+/* ── Two-column grid ─────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 380px; gap: 16px; }
+
+/* ── Cards ───────────────────────────────────────────────────────── */
+.card {
+  background: white;
+  border: var(--surface-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--surface-shadow);
+  overflow: hidden;
+  transition: border-radius 0.3s, box-shadow 0.3s;
+}
+.card-header {
+  padding: var(--space-card-v) var(--space-card-h) calc(var(--space-card-v) - 4px);
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.card-title { font-size: 14px; font-weight: 600; color: var(--foreground); }
+.card-body { padding: 0; }
+
+/* ── Status chip ─────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  white-space: nowrap;
+}
+.chip.scheduled { background: var(--status-scheduled-bg); color: var(--status-scheduled-text); }
+.chip.completed  { background: var(--status-completed-bg);  color: var(--status-completed-text); }
+.chip.cancelled  { background: var(--status-cancelled-bg);  color: var(--status-cancelled-text); }
+.chip.missed     { background: var(--status-missed-bg);     color: var(--status-missed-text); }
+
+/* ── Lesson row ──────────────────────────────────────────────────── */
+.lesson-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: var(--space-row-v) var(--space-row-h);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s, padding 0.3s;
+  cursor: pointer;
+}
+.lesson-row:last-child { border-bottom: none; }
+.lesson-row:hover { background: var(--secondary); }
+.lesson-time {
+  font-size: 13px; font-weight: 600;
+  color: var(--muted-foreground);
+  min-width: 46px;
+}
+.lesson-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.lesson-dot.scheduled { background: oklch(0.55 0.14 250); }
+.lesson-dot.completed  { background: oklch(0.48 0.12 155); }
+.lesson-dot.cancelled  { background: oklch(0.72 0.01 215); }
+.lesson-dot.missed     { background: oklch(0.58 0.20 25); }
+.lesson-info { flex: 1; min-width: 0; }
+.lesson-subject { font-weight: 600; font-size: 13.5px; color: var(--foreground); }
+.lesson-student { font-size: 12px; color: var(--muted-foreground); margin-top: 1px; }
+.lesson-action {
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 12px; font-weight: 500;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.lesson-action:hover { background: var(--primary-light); border-color: var(--primary); }
+
+/* ── Payment row ─────────────────────────────────────────────────── */
+.payment-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: var(--space-row-v) var(--space-row-h);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s, padding 0.3s;
+  cursor: pointer;
+}
+.payment-row:last-child { border-bottom: none; }
+.payment-row:hover { background: var(--secondary); }
+.payment-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.payment-info { flex: 1; min-width: 0; }
+.payment-name { font-weight: 600; font-size: 13px; color: var(--foreground); }
+.payment-course { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.payment-right { text-align: right; }
+.payment-amount { font-weight: 700; font-size: 14px; color: var(--foreground); }
+.payment-date { font-size: 11px; color: var(--muted-foreground); margin-top: 1px; }
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
+  cursor: pointer; border: none;
+  transition: opacity 0.12s, background 0.12s;
+}
+.btn:hover { opacity: 0.88; }
+.btn-primary { background: var(--primary); color: var(--primary-foreground); }
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+.btn-sm { padding: 5px 12px; font-size: 12.5px; }
+
+/* ── Design system page ──────────────────────────────────────────── */
+.ds-section { margin-bottom: 32px; }
+.ds-section-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted-foreground);
+  margin-bottom: 14px;
+}
+.ds-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.token-swatch {
+  width: 40px; height: 40px; border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.token-label { font-size: 11px; color: var(--muted-foreground); margin-top: 4px; text-align: center; font-family: monospace; }
+.token-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+
+.cal-nav-btn {
+  width: 32px; height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: white;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted-foreground);
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  flex-shrink: 0;
+}
+.cal-nav-btn:hover { background: var(--secondary); color: var(--foreground); border-color: oklch(0.85 0.006 215); }
+.cal-nav-btn svg { width: 14px; height: 14px; }
+.cal-nav-today {
+  padding: 0 14px; width: auto; font-size: 13px; font-weight: 600;
+  color: var(--primary); border-color: var(--primary);
+}
+.cal-nav-today:hover { background: var(--primary-light); }
+
+/* Month view */
+.cal-month-grid { width: 100%; border-collapse: collapse; }
+.cal-month-head th {
+  padding: 10px 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border); text-align: left;
+}
+.cal-month-cell {
+  min-height: 110px; padding: 8px 10px;
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.1s;
+}
+.cal-month-cell:hover { background: var(--secondary); }
+.cal-month-cell:nth-child(7n) { border-right: none; }
+.cal-month-row-last .cal-month-cell { border-bottom: none; }
+.cal-month-date {
+  font-size: 13px; font-weight: 600;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; margin: 0 auto 5px;
+}
+.cal-month-date.today { background: var(--primary); color: white; }
+.cal-month-date.other { color: var(--muted-foreground); font-weight: 400; }
+.cal-month-chip {
+  font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+  margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: block; cursor: pointer;
+}
+.cal-month-chip.completed  { background: var(--cal-completed-bg);  color: oklch(0.32 0.10 155); }
+.cal-month-chip.scheduled  { background: var(--cal-scheduled-bg);  color: oklch(0.35 0.14 250); }
+.cal-month-chip.missed     { background: var(--cal-missed-bg);     color: oklch(0.38 0.18 25); }
+.cal-month-chip.cancelled  { background: var(--cal-cancelled-bg);  color: oklch(0.45 0.01 215); }
+
+/* Day view single column */
+.cal-day-single-head {
+  padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.cal-day-single-date {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--primary); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; flex-shrink: 0;
+}
+.cal-day-single-label { font-size: 14px; font-weight: 600; color: var(--foreground); }
+.cal-day-single-sub { font-size: 12px; color: var(--muted-foreground); margin-top: 1px; }
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  border-left: 3px solid transparent;
+}
+.cal-chip.scheduled { background: var(--cal-scheduled-bg); border-color: var(--cal-scheduled-border); color: oklch(0.35 0.14 250); }
+.cal-chip.completed  { background: var(--cal-completed-bg);  border-color: var(--cal-completed-border);  color: oklch(0.32 0.10 155); }
+.cal-chip.cancelled  { background: var(--cal-cancelled-bg);  border-color: var(--cal-cancelled-border);  color: oklch(0.45 0.01 215); }
+.cal-chip.missed     { background: var(--cal-missed-bg);     border-color: var(--cal-missed-border);     color: oklch(0.38 0.18 25); }
+
+/* Nav sample */
+.nav-sample { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; width: 220px; }
+
+/* Lesson row sample */
+.sample-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+
+/* ── Table ───────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; padding: 10px 16px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.3px;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+}
+td { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: oklch(0.975 0.004 210); }
+tr { cursor: pointer; }
+td .font-medium { font-weight: 600; }
+td .text-muted { font-size: 12px; color: var(--muted-foreground); }
+
+/* ── Calendar mock ───────────────────────────────────────────────── */
+.cal-grid {
+  display: grid;
+  grid-template-columns: 52px repeat(7, 1fr);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: white;
+}
+.cal-header { grid-column: 1 / -1; display: grid; grid-template-columns: 52px repeat(7, 1fr); border-bottom: 1px solid var(--border); }
+.cal-time-col { border-right: 1px solid var(--border); background: white; }
+.cal-day-head {
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 12px; font-weight: 600;
+  border-left: 1px solid var(--border);
+}
+.cal-day-head.today { color: var(--primary); }
+.cal-day-head .day-num {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.5px; display: block;
+}
+.cal-day-head .day-name { font-size: 11px; color: var(--muted-foreground); font-weight: 500; }
+.cal-body { grid-column: 1 / -1; display: grid; grid-template-columns: 52px repeat(7, 1fr); }
+.cal-time-label { border-right: 1px solid var(--border); }
+.cal-time-slot {
+  height: 72px; padding: 4px 6px;
+  font-size: 11px; color: var(--muted-foreground);
+  font-weight: 500; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: flex-end;
+}
+.cal-slot {
+  height: 72px; border-left: 1px solid var(--border);
+  border-bottom: 1px solid oklch(0.95 0.004 210);
+  position: relative;
+  transition: background 0.1s;
+}
+.cal-slot:hover { background: oklch(0.95 0.04 185 / 0.3); cursor: pointer; }
+.cal-slot.today-col { background: oklch(0.97 0.015 185); }
+.cal-slot.day-view { background: white; }
+.cal-event {
+  position: absolute; left: 3px; right: 3px; top: 4px; bottom: 4px;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 11px; font-weight: 600;
+  overflow: hidden;
+  cursor: pointer;
+  border: none;
+}
+.cal-event.scheduled { background: var(--cal-scheduled-bg); color: oklch(0.35 0.14 250); }
+.cal-event.completed  { background: var(--cal-completed-bg);  color: oklch(0.32 0.10 155); }
+.cal-event.missed     { background: var(--cal-missed-bg);     color: oklch(0.38 0.18 25); }
+.cal-event .ev-time    { font-weight: 500; font-size: 10px; opacity: 0.8; display: block; }
+.cal-event .ev-subject { font-weight: 600; font-size: 11px; }
+.cal-event .ev-person  { font-weight: 400; font-size: 10px; opacity: 0.75; }
+.cal-event { cursor: grab; user-select: none; transition: opacity 0.1s, box-shadow 0.1s; }
+.cal-event:hover { box-shadow: 0 2px 8px oklch(0.18 0.02 215 / 0.15); }
+.cal-event.dragging { opacity: 0.72; cursor: grabbing; box-shadow: 0 6px 20px oklch(0.18 0.02 215 / 0.18); z-index: 20 !important; }
+.cal-event.snapping { transition: left 0.18s cubic-bezier(0.34,1.56,0.64,1), top 0.18s cubic-bezier(0.34,1.56,0.64,1), height 0.12s ease, opacity 0.12s ease; }
+.cal-resize-handle {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 12px;
+  cursor: ns-resize; display: flex; align-items: center; justify-content: center;
+  border-radius: 0 0 6px 6px;
+}
+.cal-resize-handle::after {
+  content: ''; width: 22px; height: 2px; border-radius: 1px;
+  background: currentColor; opacity: 0.35;
+}
+.cal-time-red {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: oklch(0.58 0.18 25);
+  z-index: 2;
+  top: 38px;
+}
+.cal-time-red::before {
+  content: '';
+  width: 8px; height: 8px;
+  background: oklch(0.58 0.18 25);
+  border-radius: 50%;
+  position: absolute; left: -4px; top: -3px;
+}
+
+/* ── Profile form ─────────────────────────────────────────────────── */
+.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+.form-label { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.form-input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px; font-family: inherit;
+  background: white; color: var(--foreground);
+  outline: none; transition: border-color 0.12s;
+}
+.form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px oklch(0.52 0.1 185 / 0.1); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+
+/* ── Badges ──────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11.5px; font-weight: 600;
+}
+.badge.individual { background: var(--primary-light); color: var(--primary); }
+.badge.group { background: var(--accent-light); color: oklch(0.48 0.18 55); }
+
+/* ── Misc ─────────────────────────────────────────────────────────── */
+.empty-state {
+  padding: 40px 20px; text-align: center;
+  color: var(--muted-foreground); font-size: 13px;
+}
+.section-link {
+  font-size: 13px; font-weight: 500;
+  color: var(--primary); text-decoration: none;
+  padding: 4px 0;
+  transition: opacity 0.1s;
+}
+.section-link:hover { opacity: 0.7; }
+.search-bar {
+  position: relative; width: 280px;
+}
+.search-bar input {
+  width: 100%; padding: 8px 12px 8px 36px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: white; font-size: 13.5px; font-family: inherit;
+  color: var(--foreground); outline: none;
+  transition: border-color 0.12s;
+}
+.search-bar input:focus { border-color: var(--primary); }
+.search-bar svg {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px; opacity: 0.4;
+}
+.filter-tabs { display: flex; gap: 2px; background: var(--muted); border-radius: var(--radius); padding: 3px; }
+.filter-tab {
+  padding: 5px 14px; border-radius: calc(var(--radius) - 2px);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none; background: transparent;
+  color: var(--muted-foreground); font-family: inherit;
+  transition: background 0.1s, color 0.1s;
+}
+.filter-tab.active { background: white; color: var(--foreground); box-shadow: var(--shadow-sm); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────── SIDEBAR ─────────────────── -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-mark">
+      <svg viewBox="0 0 18 18" fill="none">
+        <path d="M9 2L14.5 5.25V11.75L9 15L3.5 11.75V5.25L9 2Z" fill="white" fill-opacity="0.9"/>
+        <circle cx="9" cy="9" r="2.5" fill="white" fill-opacity="0.5"/>
+      </svg>
+    </div>
+    <span class="sidebar-logo-text">Tutor<span>Go</span></span>
+  </div>
+
+  <div class="sidebar-nav">
+    <button class="nav-item active" onclick="showPage('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Главная
+    </button>
+    <button class="nav-item" onclick="showPage('students')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Ученики
+    </button>
+    <button class="nav-item" onclick="showPage('courses')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Курсы
+    </button>
+    <button class="nav-item" onclick="showPage('calendar')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Расписание
+    </button>
+    <button class="nav-item" onclick="showPage('payments')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Платежи
+    </button>
+    <button class="nav-item" onclick="showPage('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Профиль
+    </button>
+
+    <div style="flex:1"></div>
+
+    <button class="nav-item" onclick="showPage('designsystem')" style="margin-top: 8px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Design System
+    </button>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="avatar">АС</div>
+    <div class="tutor-info">
+      <div class="tutor-name">Анна Сергеева</div>
+      <div class="tutor-role">Репетитор</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ─────────────────── MAIN ─────────────────── -->
+<div class="main">
+
+  <!-- ══════════ DASHBOARD ══════════ -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Добрый день, Анна 👋</div>
+        <div class="page-subtitle">Четверг, 24 апреля 2026 г.</div>
+      </div>
+    </div>
+    <div class="page-content">
+
+      <!-- Stat cards -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-icon teal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="oklch(0.52 0.1 185)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="stat-label">Уроков сегодня</div>
+          <div class="stat-value">4</div>
+          <div class="stat-delta neutral">2 завершены · 2 предстоят</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber">
+            <svg viewBox="0 0 24 24" fill="none" stroke="oklch(0.48 0.18 55)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="stat-label">Доход за апрель</div>
+          <div class="stat-value" style="font-size:22px;">₸142 500</div>
+          <div class="stat-delta up">↑ 18% к марту</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="oklch(0.45 0.12 280)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="stat-label">Активных учеников</div>
+          <div class="stat-value">11</div>
+          <div class="stat-delta neutral">+1 в этом месяце</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon sage">
+            <svg viewBox="0 0 24 24" fill="none" stroke="oklch(0.45 0.12 155)" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          </div>
+          <div class="stat-label">Активных курсов</div>
+          <div class="stat-value">8</div>
+          <div class="stat-delta neutral">3 групповых · 5 инд.</div>
+        </div>
+      </div>
+
+      <!-- Two-column: lessons + payments -->
+      <div class="two-col">
+
+        <!-- Today's lessons -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Уроки сегодня</span>
+            <a class="section-link" onclick="showPage('calendar')">Расписание →</a>
+          </div>
+          <div class="card-body">
+            <div class="lesson-row">
+              <span class="lesson-time">09:00</span>
+              <span class="lesson-dot completed"></span>
+              <div class="lesson-info">
+                <div class="lesson-subject">Математика</div>
+                <div class="lesson-student">Дмитрий Козлов · 60 мин</div>
+              </div>
+              <span class="chip completed">Завершён</span>
+            </div>
+            <div class="lesson-row">
+              <span class="lesson-time">11:00</span>
+              <span class="lesson-dot completed"></span>
+              <div class="lesson-info">
+                <div class="lesson-subject">Английский язык</div>
+                <div class="lesson-student">Группа A (3 чел.) · 90 мин</div>
+              </div>
+              <span class="chip completed">Завершён</span>
+            </div>
+            <div class="lesson-row">
+              <span class="lesson-time">14:00</span>
+              <span class="lesson-dot scheduled"></span>
+              <div class="lesson-info">
+                <div class="lesson-subject">Физика</div>
+                <div class="lesson-student">Арман Бекенов · 60 мин</div>
+              </div>
+              <span class="chip scheduled">Запланирован</span>
+              <button class="lesson-action">Детали</button>
+            </div>
+            <div class="lesson-row">
+              <span class="lesson-time">16:30</span>
+              <span class="lesson-dot missed"></span>
+              <div class="lesson-info">
+                <div class="lesson-subject">Математика</div>
+                <div class="lesson-student">Мария Иванова · 45 мин</div>
+              </div>
+              <span class="chip missed">Пропущен</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent payments -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Последние платежи</span>
+            <a class="section-link" onclick="showPage('payments')">Все →</a>
+          </div>
+          <div class="card-body">
+            <div class="payment-row">
+              <div class="payment-avatar">ДК</div>
+              <div class="payment-info">
+                <div class="payment-name">Дмитрий Козлов</div>
+                <div class="payment-course">Математика · 5 уроков</div>
+              </div>
+              <div class="payment-right">
+                <div class="payment-amount">₸15 000</div>
+                <div class="payment-date">24 апр</div>
+              </div>
+            </div>
+            <div class="payment-row">
+              <div class="payment-avatar" style="background:var(--accent-light);color:oklch(0.48 0.18 55);">ГА</div>
+              <div class="payment-info">
+                <div class="payment-name">Группа A</div>
+                <div class="payment-course">Английский язык · 8 уроков</div>
+              </div>
+              <div class="payment-right">
+                <div class="payment-amount">₸24 000</div>
+                <div class="payment-date">22 апр</div>
+              </div>
+            </div>
+            <div class="payment-row">
+              <div class="payment-avatar">АБ</div>
+              <div class="payment-info">
+                <div class="payment-name">Арман Бекенов</div>
+                <div class="payment-course">Физика · 4 урока</div>
+              </div>
+              <div class="payment-right">
+                <div class="payment-amount">₸12 000</div>
+                <div class="payment-date">20 апр</div>
+              </div>
+            </div>
+            <div class="payment-row">
+              <div class="payment-avatar" style="background:oklch(0.94 0.03 280);color:oklch(0.45 0.12 280);">МИ</div>
+              <div class="payment-info">
+                <div class="payment-name">Мария Иванова</div>
+                <div class="payment-course">Математика · 5 уроков</div>
+              </div>
+              <div class="payment-right">
+                <div class="payment-amount">₸15 000</div>
+                <div class="payment-date">18 апр</div>
+              </div>
+            </div>
+            <div class="payment-row">
+              <div class="payment-avatar">ЗН</div>
+              <div class="payment-info">
+                <div class="payment-name">Зарина Нурланова</div>
+                <div class="payment-course">Химия · 4 урока</div>
+              </div>
+              <div class="payment-right">
+                <div class="payment-amount">₸12 000</div>
+                <div class="payment-date">15 апр</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════ STUDENTS ══════════ -->
+  <div class="page" id="page-students">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Ученики</div>
+        <div class="page-subtitle">11 активных учеников</div>
+      </div>
+      <button class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Новый ученик
+      </button>
+    </div>
+    <div class="page-content">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div class="search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Поиск ученика…">
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Ученик</th>
+              <th>Телефон</th>
+              <th>Активные курсы</th>
+              <th>Остаток уроков</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar">ДК</div><div><div class="font-medium">Дмитрий Козлов</div><div class="text-muted">dmitry@gmail.com</div></div></div></td><td>+7 701 234 56 78</td><td>1</td><td><span style="font-weight:600;color:var(--primary);">3 урока</span></td><td><button class="btn btn-outline btn-sm">Детали</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="background:oklch(0.94 0.03 280);color:oklch(0.45 0.12 280);">МИ</div><div><div class="font-medium">Мария Иванова</div><div class="text-muted">masha@mail.ru</div></div></div></td><td>+7 702 345 67 89</td><td>1</td><td><span style="font-weight:600;color:oklch(0.58 0.20 25);">1 урок</span></td><td><button class="btn btn-outline btn-sm">Детали</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar">АБ</div><div><div class="font-medium">Арман Бекенов</div><div class="text-muted">arman@gmail.com</div></div></div></td><td>+7 705 456 78 90</td><td>1</td><td><span style="font-weight:600;color:var(--primary);">4 урока</span></td><td><button class="btn btn-outline btn-sm">Детали</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="background:var(--accent-light);color:oklch(0.48 0.18 55);">ЗН</div><div><div class="font-medium">Зарина Нурланова</div><div class="text-muted">zarina@gmail.com</div></div></div></td><td>+7 707 567 89 01</td><td>1</td><td><span style="font-weight:600;color:var(--primary);">2 урока</span></td><td><button class="btn btn-outline btn-sm">Детали</button></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="background:oklch(0.92 0.05 155);color:oklch(0.38 0.10 155);">АС</div><div><div class="font-medium">Алия Сейткали</div><div class="text-muted">aliya@mail.ru</div></div></div></td><td>+7 708 678 90 12</td><td>2</td><td><span style="font-weight:600;color:var(--primary);">6 уроков</span></td><td><button class="btn btn-outline btn-sm">Детали</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ COURSES ══════════ -->
+  <div class="page" id="page-courses">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Курсы</div>
+        <div class="page-subtitle">8 активных курсов</div>
+      </div>
+      <button class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Новый курс
+      </button>
+    </div>
+    <div class="page-content">
+      <div class="filter-tabs">
+        <button class="filter-tab active">Все</button>
+        <button class="filter-tab">Индивидуальные</button>
+        <button class="filter-tab">Групповые</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Предмет</th><th>Тип</th><th>Ученик / Группа</th><th>Цена за урок</th><th>Начало</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="font-medium">Математика</td><td><span class="badge individual">Индивид.</span></td><td>Дмитрий Козлов</td><td>₸3 000</td><td>15 янв 2026</td><td><button class="btn btn-outline btn-sm">Открыть</button></td></tr>
+            <tr><td class="font-medium">Английский язык</td><td><span class="badge group">Группа</span></td><td>Группа A · 3 чел.</td><td>₸2 500</td><td>1 фев 2026</td><td><button class="btn btn-outline btn-sm">Открыть</button></td></tr>
+            <tr><td class="font-medium">Физика</td><td><span class="badge individual">Индивид.</span></td><td>Арман Бекенов</td><td>₸3 000</td><td>3 фев 2026</td><td><button class="btn btn-outline btn-sm">Открыть</button></td></tr>
+            <tr><td class="font-medium">Математика</td><td><span class="badge individual">Индивид.</span></td><td>Мария Иванова</td><td>₸3 000</td><td>10 фев 2026</td><td><button class="btn btn-outline btn-sm">Открыть</button></td></tr>
+            <tr><td class="font-medium">Химия</td><td><span class="badge individual">Индивид.</span></td><td>Зарина Нурланова</td><td>₸3 000</td><td>1 мар 2026</td><td><button class="btn btn-outline btn-sm">Открыть</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ CALENDAR ══════════ -->
+  <div class="page" id="page-calendar">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Расписание</div>
+        <div class="page-subtitle">21–27 апреля 2026</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="cal-nav-btn" onclick="calNavigate(-1)" title="Назад">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 16 7 10 13 4"/></svg>
+        </button>
+        <button class="cal-nav-btn cal-nav-today" onclick="calNavigate(0)">Сегодня</button>
+        <button class="cal-nav-btn" onclick="calNavigate(1)" title="Вперёд">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 4 13 10 7 16"/></svg>
+        </button>
+        <div class="filter-tabs" style="margin-left:6px;">
+          <button class="filter-tab" onclick="calSwitchView('month',this)">Месяц</button>
+          <button class="filter-tab active" onclick="calSwitchView('week',this)">Неделя</button>
+          <button class="filter-tab" onclick="calSwitchView('day',this)">День</button>
+        </div>
+      </div>
+    </div>
+    <div class="page-content">
+      <div id="cal-wrapper" style="border:var(--surface-border);border-radius:var(--radius-lg);overflow:hidden;background:white;box-shadow:var(--surface-shadow);"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ PAYMENTS ══════════ -->
+  <div class="page" id="page-payments">
+    <div class="page-header">
+      <div class="page-title">Платежи</div>
+    </div>
+    <div class="page-content">
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat-card">
+          <div class="stat-label">За всё время</div>
+          <div class="stat-value" style="font-size:22px;">₸842 000</div>
+          <div class="stat-delta neutral">184 платежа</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Прошлый месяц</div>
+          <div class="stat-value" style="font-size:22px;">₸120 500</div>
+          <div class="stat-delta neutral">26 платежей</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Этот месяц</div>
+          <div class="stat-value" style="font-size:22px;">₸142 500</div>
+          <div class="stat-delta up">↑ 18% к прошлому</div>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Дата</th><th>Ученик</th><th>Курс</th><th>Уроков</th><th style="text-align:right;">Сумма</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>24 апр 2026</td><td>Дмитрий Козлов</td><td>Математика</td><td>5</td><td style="text-align:right;font-weight:700;">₸15 000</td></tr>
+            <tr><td>22 апр 2026</td><td>Группа A</td><td>Английский язык</td><td>8</td><td style="text-align:right;font-weight:700;">₸24 000</td></tr>
+            <tr><td>20 апр 2026</td><td>Арман Бекенов</td><td>Физика</td><td>4</td><td style="text-align:right;font-weight:700;">₸12 000</td></tr>
+            <tr><td>18 апр 2026</td><td>Мария Иванова</td><td>Математика</td><td>5</td><td style="text-align:right;font-weight:700;">₸15 000</td></tr>
+            <tr><td>15 апр 2026</td><td>Зарина Нурланова</td><td>Химия</td><td>4</td><td style="text-align:right;font-weight:700;">₸12 000</td></tr>
+            <tr><td>10 апр 2026</td><td>Алия Сейткали</td><td>Английский язык</td><td>8</td><td style="text-align:right;font-weight:700;">₸20 000</td></tr>
+            <tr><td>8 апр 2026</td><td>Дмитрий Козлов</td><td>Математика</td><td>5</td><td style="text-align:right;font-weight:700;">₸15 000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ PROFILE ══════════ -->
+  <div class="page" id="page-profile">
+    <div class="page-header">
+      <div class="page-title">Профиль</div>
+    </div>
+    <div class="page-content">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Личные данные</span>
+            <button class="btn btn-outline btn-sm">Редактировать</button>
+          </div>
+          <div style="padding:20px;">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+              <div class="avatar" style="width:56px;height:56px;font-size:20px;">АС</div>
+              <div>
+                <div style="font-weight:700;font-size:17px;">Анна Сергеева</div>
+                <div style="color:var(--muted-foreground);font-size:13px;">Репетитор · с января 2025</div>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Имя</label><input class="form-input" value="Анна" readonly></div>
+              <div class="form-group"><label class="form-label">Фамилия</label><input class="form-input" value="Сергеева" readonly></div>
+              <div class="form-group"><label class="form-label">Email</label><input class="form-input" value="anna@tutorgo.kz" readonly></div>
+              <div class="form-group"><label class="form-label">Телефон</label><input class="form-input" value="+7 701 000 11 22" readonly></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Смена пароля</span></div>
+          <div style="padding:20px;">
+            <div class="form-group"><label class="form-label">Текущий пароль</label><input class="form-input" type="password" placeholder="••••••••"></div>
+            <div class="form-group"><label class="form-label">Новый пароль</label><input class="form-input" type="password" placeholder="••••••••"></div>
+            <div class="form-group"><label class="form-label">Подтвердите пароль</label><input class="form-input" type="password" placeholder="••••••••"></div>
+            <button class="btn btn-primary" style="margin-top:4px;">Сохранить пароль</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ DESIGN SYSTEM ══════════ -->
+  <div class="page" id="page-designsystem">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Design System</div>
+        <div class="page-subtitle">TutorGo · токены, компоненты, паттерны</div>
+      </div>
+    </div>
+    <div class="page-content">
+
+      <!-- Color tokens -->
+      <div class="ds-section">
+        <div class="ds-section-title">Цветовые токены</div>
+        <div class="ds-row">
+          <div class="token-item"><div class="token-swatch" style="background:var(--primary);"></div><div class="token-label">--primary</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--primary-light);"></div><div class="token-label">--primary-light</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--accent);"></div><div class="token-label">--accent</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--accent-light);"></div><div class="token-label">--accent-light</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--background);"></div><div class="token-label">--background</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--muted);"></div><div class="token-label">--muted</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--border);"></div><div class="token-label">--border</div></div>
+          <div class="token-item"><div class="token-swatch" style="background:var(--foreground);"></div><div class="token-label">--foreground</div></div>
+        </div>
+      </div>
+
+      <!-- Status chips -->
+      <div class="ds-section">
+        <div class="ds-section-title">Статусы уроков</div>
+        <div class="ds-row">
+          <span class="chip scheduled">Запланирован</span>
+          <span class="chip completed">Завершён</span>
+          <span class="chip cancelled">Отменён</span>
+          <span class="chip missed">Пропущен</span>
+        </div>
+      </div>
+
+      <!-- Calendar event chips -->
+      <div class="ds-section">
+        <div class="ds-section-title">Событие в календаре</div>
+        <div class="ds-row">
+          <div class="cal-chip scheduled">Математика · 09:00</div>
+          <div class="cal-chip completed">Физика · 11:00</div>
+          <div class="cal-chip cancelled">Химия · 14:00</div>
+          <div class="cal-chip missed">Английский · 16:00</div>
+        </div>
+      </div>
+
+      <!-- Nav items -->
+      <div class="ds-section">
+        <div class="ds-section-title">Навигация (sidebar)</div>
+        <div class="nav-sample">
+          <button class="nav-item active" style="border-radius:0;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Главная (активный)
+          </button>
+          <button class="nav-item" style="border-radius:0;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Ученики (обычный)
+          </button>
+          <button class="nav-item" style="border-radius:0;background:var(--sidebar-hover-bg);">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            Курсы (hover)
+          </button>
+        </div>
+      </div>
+
+      <!-- Lesson row -->
+      <div class="ds-section">
+        <div class="ds-section-title">Строка урока</div>
+        <div class="sample-card" style="max-width:600px;">
+          <div class="lesson-row">
+            <span class="lesson-time">09:00</span>
+            <span class="lesson-dot completed"></span>
+            <div class="lesson-info"><div class="lesson-subject">Математика</div><div class="lesson-student">Дмитрий Козлов · 60 мин</div></div>
+            <span class="chip completed">Завершён</span>
+          </div>
+          <div class="lesson-row">
+            <span class="lesson-time">14:00</span>
+            <span class="lesson-dot scheduled"></span>
+            <div class="lesson-info"><div class="lesson-subject">Физика</div><div class="lesson-student">Арман Бекенов · 60 мин</div></div>
+            <span class="chip scheduled">Запланирован</span>
+            <button class="lesson-action">Детали</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Badges -->
+      <div class="ds-section">
+        <div class="ds-section-title">Типы курсов</div>
+        <div class="ds-row">
+          <span class="badge individual">Индивидуальный</span>
+          <span class="badge group">Групповой</span>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="ds-section">
+        <div class="ds-section-title">Кнопки</div>
+        <div class="ds-row">
+          <button class="btn btn-primary">Новый ученик</button>
+          <button class="btn btn-outline">Редактировать</button>
+          <button class="btn btn-primary btn-sm">Сохранить</button>
+          <button class="btn btn-outline btn-sm">Отменить</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<div id="tweaks-root"></div>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "mood": "Sage",
+  "density": "Default",
+  "surface": "Lifted"
+}/*EDITMODE-END*/;
+
+const MOODS = {
+  Teal:   { primary: "oklch(0.52 0.1 185)",  primaryLight: "oklch(0.94 0.04 185)", activeText: "oklch(0.52 0.1 185)",  accent: "oklch(0.72 0.14 55)",  accentLight: "oklch(0.96 0.04 55)"  },
+  Indigo: { primary: "oklch(0.48 0.14 270)", primaryLight: "oklch(0.94 0.05 270)", activeText: "oklch(0.48 0.14 270)", accent: "oklch(0.68 0.12 340)", accentLight: "oklch(0.95 0.04 340)" },
+  Sage:   { primary: "oklch(0.46 0.09 155)", primaryLight: "oklch(0.93 0.05 155)", activeText: "oklch(0.46 0.09 155)", accent: "oklch(0.65 0.12 85)",  accentLight: "oklch(0.95 0.04 85)"  },
+  Clay:   { primary: "oklch(0.50 0.10 42)",  primaryLight: "oklch(0.95 0.04 42)",  activeText: "oklch(0.50 0.10 42)",  accent: "oklch(0.55 0.10 200)", accentLight: "oklch(0.94 0.03 200)" },
+};
+
+function applyTweaks(t) {
+  const root = document.documentElement;
+  const mood = MOODS[t.mood] || MOODS.Teal;
+
+  // Mood — cascade primary & accent everywhere
+  root.style.setProperty("--primary",            mood.primary);
+  root.style.setProperty("--primary-light",      mood.primaryLight);
+  root.style.setProperty("--sidebar-active-bg",  mood.primaryLight);
+  root.style.setProperty("--sidebar-active-text",mood.activeText);
+  root.style.setProperty("--accent",             mood.accent);
+  root.style.setProperty("--accent-light",       mood.accentLight);
+
+  // Density — data attr drives CSS vars (lowercase)
+  document.body.dataset.density = t.density.toLowerCase();
+
+  // Surface — data attr drives CSS vars (lowercase)
+  document.body.dataset.surface = t.surface.toLowerCase();
+}
+
+function TutorGoTweaks() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  React.useEffect(() => { applyTweaks(t); }, [t]);
+
+  return (
+    <TweaksPanel>
+      <TweakSection label="Цветовое настроение" />
+      <TweakRadio
+        label="Акцент"
+        value={t.mood}
+        options={["Teal", "Indigo", "Sage", "Clay"]}
+        onChange={(v) => setTweak("mood", v)}
+      />
+
+      <TweakSection label="Плотность" />
+      <TweakRadio
+        label="Интервалы"
+        value={t.density}
+        options={["Compact", "Default", "Airy"]}
+        onChange={(v) => setTweak("density", v)}
+      />
+
+      <TweakSection label="Поверхность карточек" />
+      <TweakRadio
+        label="Стиль"
+        value={t.surface}
+        options={["Flat", "Soft", "Lifted"]}
+        onChange={(v) => setTweak("surface", v)}
+      />
+    </TweaksPanel>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("tweaks-root")).render(<TutorGoTweaks />);
+</script>
+
+<script>
+/* ── Calendar ───────────────────────────────────────────────────── */
+var CAL_SLOT_H  = 72;
+var CAL_START   = 8;
+var CAL_HOURS   = 11;
+var CAL_VIEW    = 'week';
+var CAL_WEEK_OFF = 0;
+var CAL_DAY_OFF  = 0;
+var CAL_BASE     = new Date(2026,3,21); // Mon Apr 21
+var CAL_TODAY    = new Date(2026,3,24); // Thu Apr 24
+var CAL_DAYS_S   = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'];
+var CAL_MON_GEN  = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+var CAL_MON_NOM  = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+var calEvents = [
+  {id:1, day:0,start:9,   dur:1,   status:'completed',subject:'Математика', person:'Д. Козлов'},
+  {id:2, day:0,start:11,  dur:1.5, status:'completed',subject:'Английский', person:'Группа A'},
+  {id:3, day:1,start:10,  dur:1,   status:'completed',subject:'Физика',     person:'А. Бекенов'},
+  {id:4, day:1,start:13,  dur:1,   status:'missed',   subject:'Математика', person:'М. Иванова'},
+  {id:5, day:2,start:9,   dur:0.75,status:'completed',subject:'Химия',      person:'З. Нурланова'},
+  {id:6, day:2,start:11,  dur:1.5, status:'completed',subject:'Английский', person:'Группа A'},
+  {id:7, day:2,start:14,  dur:1,   status:'completed',subject:'Математика', person:'Д. Козлов'},
+  {id:8, day:3,start:9,   dur:1,   status:'completed',subject:'Математика', person:'Д. Козлов'},
+  {id:9, day:3,start:11,  dur:1.5, status:'completed',subject:'Английский', person:'Группа A'},
+  {id:10,day:3,start:14,  dur:1,   status:'scheduled',subject:'Физика',     person:'А. Бекенов'},
+  {id:11,day:3,start:16.5,dur:0.75,status:'missed',   subject:'Математика', person:'М. Иванова'},
+  {id:12,day:4,start:9,   dur:1,   status:'scheduled',subject:'Математика', person:'Д. Козлов'},
+  {id:13,day:4,start:11,  dur:1.5, status:'scheduled',subject:'Английский', person:'Группа A'},
+  {id:14,day:4,start:14,  dur:0.75,status:'scheduled',subject:'Химия',      person:'З. Нурланова'},
+  {id:15,day:5,start:9,   dur:1.5, status:'scheduled',subject:'Физика',     person:'А. Бекенов'},
+];
+
+function calAdd(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function calIsToday(d){return d.toDateString()===CAL_TODAY.toDateString();}
+function calFmt(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
+function calSubtitle(t){var el=document.querySelector('#page-calendar .page-subtitle');if(el)el.textContent=t;}
+
+function calSwitchView(view,btn){
+  CAL_VIEW=view;
+  document.querySelectorAll('#page-calendar .filter-tab').forEach(function(t){t.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  calRebuild();
+}
+
+function calNavigate(dir){
+  if(dir===0){CAL_WEEK_OFF=0;CAL_DAY_OFF=0;}
+  else if(CAL_VIEW==='month')CAL_WEEK_OFF+=dir*4;
+  else if(CAL_VIEW==='week')CAL_WEEK_OFF+=dir;
+  else CAL_DAY_OFF+=dir;
+  calRebuild();
+}
+
+function calRebuild(){
+  var w=document.getElementById('cal-wrapper');
+  if(!w)return;
+  w.innerHTML='';
+  if(CAL_VIEW==='week')calBuildWeek(w);
+  else if(CAL_VIEW==='day')calBuildDay(w);
+  else calBuildMonth(w);
+}
+
+/* ── Time + slot helpers ─── */
+function calMakeTimeCol(){
+  var col=document.createElement('div');
+  col.style.cssText='width:52px;flex-shrink:0;border-right:1px solid var(--border);';
+  for(var h=CAL_START;h<CAL_START+CAL_HOURS;h++){
+    var l=document.createElement('div');l.className='cal-time-slot';l.textContent=calFmt(h);col.appendChild(l);
+  }
+  return col;
+}
+function calMakeOverlay(){
+  var ov=document.createElement('div');
+  ov.id='cal-overlay';
+  ov.style.cssText='position:absolute;inset:0;pointer-events:none;';
+  return ov;
+}
+function calMakeNowLine(left,width){
+  var nl=document.createElement('div');
+  var top=(14.5-CAL_START)*CAL_SLOT_H;
+  nl.style.cssText='position:absolute;'+left+';'+width+';top:'+top+'px;height:2px;background:oklch(0.58 0.18 25);z-index:3;pointer-events:none;';
+  nl.innerHTML='<div style="width:8px;height:8px;background:oklch(0.58 0.18 25);border-radius:50%;position:absolute;left:-4px;top:-3px;"></div>';
+  return nl;
+}
+
+/* ── WEEK VIEW ─── */
+function calBuildWeek(w){
+  var ws=calAdd(CAL_BASE,CAL_WEEK_OFF*7), we=calAdd(ws,6);
+  calSubtitle(ws.getDate()+'–'+we.getDate()+' '+CAL_MON_GEN[ws.getMonth()]+' '+ws.getFullYear());
+
+  // Day header
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:grid;grid-template-columns:52px repeat(7,1fr);border-bottom:1px solid var(--border);';
+  hdr.innerHTML='<div style="border-right:1px solid var(--border);"></div>';
+  for(var i=0;i<7;i++){
+    var d=calAdd(ws,i), it=calIsToday(d);
+    var c=document.createElement('div');c.className='cal-day-head'+(it?' today':'');
+    c.innerHTML='<span class="day-name">'+CAL_DAYS_S[i]+'</span>'+
+      (it?'<span class="day-num" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:var(--primary);color:white;border-radius:50%;margin:2px auto 0;">'+d.getDate()+'</span>'
+         :'<span class="day-num">'+d.getDate()+'</span>');
+    hdr.appendChild(c);
+  }
+  w.appendChild(hdr);
+
+  // Body
+  var body=document.createElement('div');body.style.cssText='display:flex;';
+  body.appendChild(calMakeTimeCol());
+  var gb=document.createElement('div');gb.id='cal-grid-body';gb.style.cssText='flex:1;position:relative;';
+
+  var bg=document.createElement('div');bg.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);';
+  for(var r=0;r<CAL_HOURS;r++){for(var c2=0;c2<7;c2++){
+    var d2=calAdd(ws,c2),s=document.createElement('div');
+    s.className='cal-slot'+(calIsToday(d2)?' today-col':'');s.style.height=CAL_SLOT_H+'px';bg.appendChild(s);
+  }}
+  gb.appendChild(bg);
+
+  var todayCol=-1;
+  for(var i=0;i<7;i++){if(calIsToday(calAdd(ws,i))){todayCol=i;break;}}
+  if(todayCol>=0)gb.appendChild(calMakeNowLine('left:calc(' + todayCol + ' * (100% / 7))','width:calc(100% / 7)'));
+
+  var ov=calMakeOverlay();gb.appendChild(ov);body.appendChild(gb);w.appendChild(body);
+
+  for(var i=0;i<7;i++){
+    var d3=calAdd(ws,i), diff=Math.round((d3-CAL_BASE)/86400000);
+    calEvents.filter(function(ev){return ev.day===diff;}).forEach(function(ev){calRenderEv(ev,ov,i,7);});
+  }
+}
+
+/* ── DAY VIEW ─── */
+function calBuildDay(w){
+  var day=calAdd(CAL_TODAY,CAL_DAY_OFF), dow=(day.getDay()+6)%7;
+  calSubtitle(day.getDate()+' '+CAL_MON_GEN[day.getMonth()]+' '+day.getFullYear());
+
+  var hdr=document.createElement('div');hdr.className='cal-day-single-head';
+  var dc=document.createElement('div');dc.className='cal-day-single-date';dc.textContent=day.getDate();
+  var inf=document.createElement('div');
+  inf.innerHTML='<div class="cal-day-single-label">'+CAL_DAYS_S[dow]+', '+day.getDate()+' '+CAL_MON_GEN[day.getMonth()]+'</div>'+
+    '<div class="cal-day-single-sub">'+(calIsToday(day)?'Сегодня':day.getFullYear()+' г.')+'</div>';
+  hdr.appendChild(dc);hdr.appendChild(inf);w.appendChild(hdr);
+
+  var body=document.createElement('div');body.style.cssText='display:flex;';
+  body.appendChild(calMakeTimeCol());
+  var gb=document.createElement('div');gb.id='cal-grid-body';gb.style.cssText='flex:1;position:relative;';
+  var bg=document.createElement('div');
+  for(var r=0;r<CAL_HOURS;r++){
+    var s=document.createElement('div');
+    s.className='cal-slot day-view';
+    s.style.cssText='height:'+CAL_SLOT_H+'px;border-bottom:1px solid oklch(0.95 0.004 210);';
+    bg.appendChild(s);
+  }
+  gb.appendChild(bg);
+  if(calIsToday(day))gb.appendChild(calMakeNowLine('left:0','right:0'));
+  var ov=calMakeOverlay();gb.appendChild(ov);body.appendChild(gb);w.appendChild(body);
+
+  var diff=Math.round((day-CAL_BASE)/86400000);
+  calEvents.filter(function(ev){return ev.day===diff;}).forEach(function(ev){calRenderEv(ev,ov,0,1);});
+}
+
+/* ── MONTH VIEW ─── */
+function calBuildMonth(w){
+  var ref=calAdd(CAL_BASE,CAL_WEEK_OFF*7), yr=ref.getFullYear(), mo=ref.getMonth();
+  calSubtitle(CAL_MON_NOM[mo]+' '+yr);
+
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:var(--muted);';
+  CAL_DAYS_S.forEach(function(n,i){
+    var th=document.createElement('div');
+    th.style.cssText='padding:9px 12px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted-foreground);text-align:center;'+(i<6?'border-right:1px solid var(--border);':'');
+    th.textContent=n;hdr.appendChild(th);
+  });
+  w.appendChild(hdr);
+
+  var first=new Date(yr,mo,1), fdow=(first.getDay()+6)%7, dim=new Date(yr,mo+1,0).getDate();
+  var gs=calAdd(first,-fdow), total=Math.ceil((fdow+dim)/7)*7;
+  var grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);';
+  for(var i=0;i<total;i++){
+    var cd=calAdd(gs,i), isCur=cd.getMonth()===mo, it=calIsToday(cd);
+    var cell=document.createElement('div');cell.className='cal-month-cell';
+    var dn=document.createElement('div');dn.className='cal-month-date'+(it?' today':'')+(!isCur?' other':'');
+    dn.textContent=cd.getDate();cell.appendChild(dn);
+    var diff=Math.round((cd-CAL_BASE)/86400000);
+    var evs=calEvents.filter(function(ev){return ev.day===diff;});
+    evs.slice(0,3).forEach(function(ev){
+      var chip=document.createElement('div');chip.className='cal-month-chip '+ev.status;chip.textContent=ev.subject;cell.appendChild(chip);
+    });
+    if(evs.length>3){var m=document.createElement('div');m.style.cssText='font-size:10px;color:var(--muted-foreground);padding:1px 7px;';m.textContent='+'+(evs.length-3)+' ещё';cell.appendChild(m);}
+    grid.appendChild(cell);
+  }
+  // Mark last row cells for border removal
+  var allCells = grid.querySelectorAll('.cal-month-cell');
+  var lastRowStart = allCells.length - 7;
+  for(var j=lastRowStart;j<allCells.length;j++){allCells[j].classList.add('cal-month-row-last');}
+  w.appendChild(grid);
+}
+
+/* ── Render event into overlay ─── */
+function calRenderEv(ev,overlay,colIdx,totalCols){
+  var top=Math.max(0,(ev.start-CAL_START)*CAL_SLOT_H), h=Math.max(26,ev.dur*CAL_SLOT_H-8);
+  var el=document.createElement('div');el.className='cal-event '+ev.status;el.dataset.id=ev.id;
+  var tc=totalCols||7;
+  el.style.cssText='left:calc('+colIdx+' * (100% / '+tc+') + 3px);width:calc(100% / '+tc+' - 6px);top:'+top+'px;height:'+h+'px;pointer-events:auto;z-index:2;';
+  el.innerHTML='<div class="ev-time">'+calFmt(ev.start)+' \u2013 '+calFmt(ev.start+ev.dur)+'</div>'+
+    '<div class="ev-subject">'+ev.subject+'</div><div class="ev-person">'+ev.person+'</div>'+
+    '<div class="cal-resize-handle"></div>';
+  el.addEventListener('mousedown',function(e){if(!e.target.closest('.cal-resize-handle'))calStartDrag(e,el,ev,tc);});
+  el.querySelector('.cal-resize-handle').addEventListener('mousedown',function(e){e.stopPropagation();calStartResize(e,el,ev);});
+  overlay.appendChild(el);
+}
+
+/* ── Drag ─── */
+var _drag=null;
+function calStartDrag(e,el,ev,tc){
+  e.preventDefault();
+  var rect=el.getBoundingClientRect(), oR=document.getElementById('cal-grid-body').getBoundingClientRect();
+  _drag={el:el,ev:ev,oR:oR,tc:tc,offX:e.clientX-rect.left,offY:e.clientY-rect.top};
+  el.classList.add('dragging');
+  document.addEventListener('mousemove',calDragMove);document.addEventListener('mouseup',calDragEnd);
+}
+function calDragMove(e){
+  if(!_drag)return;var d=_drag,oR=d.oR,tc=d.tc;
+  var col=Math.max(0,Math.min(tc-1,Math.floor((e.clientX-oR.left)/(oR.width/tc))));
+  var top=Math.max(0,Math.min((CAL_HOURS-d.ev.dur)*CAL_SLOT_H,e.clientY-oR.top-d.offY));
+  d.el.style.left='calc(' + col + ' * (100% / ' + tc + ') + 3px)';d.el.style.top=top+'px';
+}
+function calDragEnd(e){
+  if(!_drag)return;var d=_drag,oR=d.oR,tc=d.tc;
+  var col=Math.max(0,Math.min(tc-1,Math.floor((e.clientX-oR.left)/(oR.width/tc))));
+  var snap=CAL_SLOT_H/2, top=Math.max(0,Math.min((CAL_HOURS-d.ev.dur)*CAL_SLOT_H,Math.round((e.clientY-oR.top-d.offY)/snap)*snap));
+  if(tc===7){var ws=calAdd(CAL_BASE,CAL_WEEK_OFF*7);d.ev.day=Math.round((calAdd(ws,col)-CAL_BASE)/86400000);}
+  d.ev.start=CAL_START+top/CAL_SLOT_H;
+  d.el.classList.remove('dragging');d.el.classList.add('snapping');
+  d.el.style.left='calc(' + col + ' * (100% / ' + tc + ') + 3px)';d.el.style.top=top+'px';d.el.style.opacity='1';
+  d.el.querySelector('.ev-time').textContent=calFmt(d.ev.start)+' \u2013 '+calFmt(d.ev.start+d.ev.dur);
+  setTimeout(function(){if(d.el)d.el.classList.remove('snapping');},250);
+  _drag=null;document.removeEventListener('mousemove',calDragMove);document.removeEventListener('mouseup',calDragEnd);
+}
+
+/* ── Resize ─── */
+var _resize=null;
+function calStartResize(e,el,ev){
+  e.preventDefault();
+  _resize={el:el,ev:ev,startY:e.clientY,startH:parseFloat(el.style.height)};
+  document.body.style.cursor='ns-resize';
+  document.addEventListener('mousemove',calResizeMove);document.addEventListener('mouseup',calResizeEnd);
+}
+function calResizeMove(e){if(!_resize)return;_resize.el.style.height=Math.max(26,_resize.startH+(e.clientY-_resize.startY))+'px';}
+function calResizeEnd(e){
+  if(!_resize)return;var r=_resize,snap=CAL_SLOT_H/4;
+  var newH=Math.max(snap-8,Math.round((r.startH+(e.clientY-r.startY))/snap)*snap-8);
+  r.ev.dur=(newH+8)/CAL_SLOT_H;
+  r.el.classList.add('snapping');r.el.style.height=newH+'px';
+  r.el.querySelector('.ev-time').textContent=calFmt(r.ev.start)+' \u2013 '+calFmt(r.ev.start+r.ev.dur);
+  setTimeout(function(){if(r.el)r.el.classList.remove('snapping');},200);
+  document.body.style.cursor='';_resize=null;
+  document.removeEventListener('mousemove',calResizeMove);document.removeEventListener('mouseup',calResizeEnd);
+}
+
+// Hook showPage
+document.addEventListener('DOMContentLoaded',function(){
+  var _orig=window.showPage;
+  window.showPage=function(id){
+    _orig(id);
+    if(id==='calendar'){var w=document.getElementById('cal-wrapper');if(w&&!w.children.length)calRebuild();}
+  };
+});
+</script>
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const btns = document.querySelectorAll('.nav-item');
+  const map = {dashboard:0, students:1, courses:2, calendar:3, payments:4, profile:5, designsystem:6};
+  if (map[id] !== undefined) btns[map[id]].classList.add('active');
+}
+document.querySelectorAll('.filter-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    this.closest('.filter-tabs').querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

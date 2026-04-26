@@ -47,6 +47,15 @@ func (m *mockTutorRepo) Delete(ctx context.Context, id string) error {
 	return args.Error(0)
 }
 
+func (m *mockTutorRepo) GetPasswordHash(ctx context.Context, id string) (string, error) {
+	args := m.Called(ctx, id)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockTutorRepo) UpdatePassword(ctx context.Context, id string, hash string) error {
+	return m.Called(ctx, id, hash).Error(0)
+}
+
 func TestCreateTutor_Success(t *testing.T) {
 	repo := new(mockTutorRepo)
 	svc := service.NewTutorService(repo)

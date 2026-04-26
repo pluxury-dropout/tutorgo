@@ -3,8 +3,16 @@ import { paymentsApi } from '@/lib/api/payments'
 import { courseKeys } from '@/lib/hooks/useCourses'
 
 export const paymentKeys = {
-  byCourse: (courseId: string) => ['payments', 'course', courseId] as const,
-  recent:   ['payments', 'recent'] as const,
+  byCourse:      (courseId: string) => ['payments', 'course', courseId] as const,
+  recent:        ['payments', 'recent'] as const,
+  monthlyIncome: ['payments', 'monthly-income'] as const,
+}
+
+export function useMonthlyIncome() {
+  return useQuery({
+    queryKey: paymentKeys.monthlyIncome,
+    queryFn:  paymentsApi.monthlyIncome,
+  })
 }
 
 export function useRecentPayments() {

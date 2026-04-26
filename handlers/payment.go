@@ -60,6 +60,36 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, payment)
 }
 
+func (h *PaymentHandler) GetRecent(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	payments, err := h.service.GetAllByTutor(c.Request.Context(), tutorID, 5)
+	if err != nil {
+		h.log.Error("Failed to get recent payments", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve payments"})
+		return
+	}
+	c.JSON(http.StatusOK, payments)
+}
+
+func (h *PaymentHandler) GetMonthlyIncome(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	total, err := h.service.GetMonthlyIncome(c.Request.Context(), tutorID)
+	if err != nil {
+		h.log.Error("Failed to get monthly income", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get monthly income"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"total": total})
+}
+
 func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

@@ -133,7 +133,7 @@ func (r *lessonRepository) AutoComplete(ctx context.Context) (int64, error) {
 	result, err := r.pool.Exec(ctx,
 		`UPDATE lessons SET status = 'completed'
 		 WHERE status = 'scheduled'
-		   AND scheduled_at + (duration_minutes || ' minutes')::interval < NOW()`)
+		   AND scheduled_at + duration_minutes * interval '1 minute' < NOW()`)
 	if err != nil {
 		return 0, err
 	}

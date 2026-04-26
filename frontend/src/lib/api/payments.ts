@@ -17,4 +17,6 @@ export const paymentsApi = {
     api.post<Payment>('/payments', data).then((r) => r.data),
   getBalance: (courseId: string) =>
     api.get<PaymentBalance>('/payments/balance', { params: { course_id: courseId } }).then((r) => r.data),
+  monthlyIncome: () =>
+    api.get<{ total: number }>('/payments/monthly-income').then((r) => r.data.total),
 }
