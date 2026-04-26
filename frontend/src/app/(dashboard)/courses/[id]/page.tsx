@@ -329,7 +329,7 @@ export default function CourseDetailPage() {
               >
                 <option value="">Выберите ученика...</option>
                 {availableStudents.map((s) => (
-                  <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
+                  <option key={s.id} value={s.id}>{s.first_name}{s.last_name ? ` ${s.last_name}` : ''}</option>
                 ))}
               </select>
               <Button size="sm" onClick={handleAddEnrollment} disabled={!selectedStudent}>
@@ -343,7 +343,7 @@ export default function CourseDetailPage() {
             <ul className="space-y-1">
               {enrollments.map((e) => (
                 <li key={e.student_id} className="flex items-center justify-between py-1.5 border-b last:border-0 text-sm">
-                  <span>{e.student_first_name} {e.student_last_name}</span>
+                  <span>{e.student_first_name}{e.student_last_name ? ` ${e.student_last_name}` : ''}</span>
                   <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
                     onClick={() => handleRemoveEnrollment(e.student_id)}>
                     <X className="h-3.5 w-3.5" />

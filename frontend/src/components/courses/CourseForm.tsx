@@ -108,7 +108,7 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
                 <option value="">Выберите ученика</option>
                 {students.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.first_name} {s.last_name}
+                    {s.first_name}{s.last_name ? ` ${s.last_name}` : ''}
                   </option>
                 ))}
               </select>

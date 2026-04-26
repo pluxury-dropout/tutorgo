@@ -76,7 +76,7 @@ export default function CoursesPage() {
   function studentName(course: Course) {
     if (!course.student_id) return null
     const s = students.find((s) => s.id === course.student_id)
-    return s ? `${s.first_name} ${s.last_name}` : '—'
+    return s ? `${s.first_name}${s.last_name ? ` ${s.last_name}` : ''}` : '—'
   }
 
   return (

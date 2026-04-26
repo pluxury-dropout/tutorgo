@@ -9,7 +9,7 @@ export interface Tutor {
 export interface Student {
   id: string
   first_name: string
-  last_name: string
+  last_name: string | null
   email: string
   phone: string
   tutor_id: string
@@ -70,7 +70,7 @@ export interface Enrollment {
   course_id: string
   student_id: string
   student_first_name: string
-  student_last_name: string
+  student_last_name: string | null
 }
 
 export type AttendanceStatus = 'present' | 'absent'

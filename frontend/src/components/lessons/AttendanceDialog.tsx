@@ -73,7 +73,7 @@ export function AttendanceDialog({ lessonId, courseId, open, onClose }: Attendan
                   className="flex items-center justify-between py-1.5 border-b last:border-0"
                 >
                   <span className="text-sm">
-                    {e.student_first_name} {e.student_last_name}
+                    {e.student_first_name}{e.student_last_name ? ` ${e.student_last_name}` : ''}
                   </span>
                   <button
                     type="button"

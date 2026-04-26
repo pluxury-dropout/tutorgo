@@ -72,9 +72,12 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
 
   useEffect(() => {
     if (initial) {
-      const dt = new Date(initial.scheduled_at)
-      const d  = initial.scheduled_at.slice(0, 10)
-      const h  = dt.getHours()
+      const dt   = new Date(initial.scheduled_at)
+      const year = dt.getFullYear()
+      const mon  = String(dt.getMonth() + 1).padStart(2, '0')
+      const day  = String(dt.getDate()).padStart(2, '0')
+      const d    = `${year}-${mon}-${day}`
+      const h    = dt.getHours()
       const m  = Math.round(dt.getMinutes() / 5) * 5 % 60
       setDateVal(d)
       setHourVal(String(h))

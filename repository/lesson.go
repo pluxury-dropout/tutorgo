@@ -100,7 +100,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
 		        c.subject,
 		        CASE WHEN c.student_id IS NOT NULL
-		             THEN s.first_name || ' ' || s.last_name
+		             THEN CASE WHEN s.last_name = '' THEN s.first_name ELSE s.first_name || ' ' || s.last_name END
 		             ELSE NULL
 		        END AS student_name,
 		        (c.student_id IS NULL) AS is_group

@@ -28,11 +28,14 @@ export default function StudentsPage() {
   const deleteStudent = useDeleteStudent()
 
   
-  const filtered: Student[]=students.filter((student)=>
-    student.first_name.toLowerCase().includes(search.toLowerCase())||
-    student.last_name.toLowerCase().includes(search.toLowerCase())||
-    student.email.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered: Student[] = students.filter((student) => {
+    const q = search.toLowerCase()
+    return (
+      student.first_name.toLowerCase().includes(q) ||
+      (student.last_name?.toLowerCase().includes(q) ?? false) ||
+      student.email.toLowerCase().includes(q)
+    )
+  })
 
   function openCreate() {
     setEditing(undefined)
@@ -55,7 +58,7 @@ export default function StudentsPage() {
   }
 
   async function handleDelete(student: Student) {
-    if (!confirm(`Удалить ${student.first_name} ${student.last_name}?`)) return
+    if (!confirm(`Удалить ${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}?`)) return
     await deleteStudent.mutateAsync(student.id)
     toast.success('Ученик удалён')
   }
@@ -113,7 +116,7 @@ export default function StudentsPage() {
                   onClick={() => router.push(`/students/${student.id}`)}
                 >
                   <td className="px-4 py-3 font-medium">
-                    {student.first_name} {student.last_name}
+                    {student.first_name}{student.last_name ? ` ${student.last_name}` : ''}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{student.email}</td>
                   <td className="px-4 py-3 text-muted-foreground">{student.phone || '—'}</td>

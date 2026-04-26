@@ -32,7 +32,7 @@ export default function StudentDetailPage() {
 
   async function handleDelete() {
     if (!student) return
-    if (!confirm(`Удалить ${student.first_name} ${student.last_name}?`)) return
+    if (!confirm(`Удалить ${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}?`)) return
     await deleteStudent.mutateAsync(student.id)
     toast.success('Ученик удалён')
     router.push('/students')
@@ -56,7 +56,7 @@ export default function StudentDetailPage() {
       </button>
 
       <PageHeader
-        title={`${student.first_name} ${student.last_name}`}
+        title={`${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}`}
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
