@@ -11,6 +11,7 @@ export interface CourseInput {
 
 export const coursesApi = {
   list: () => api.get<Course[]>('/courses').then((r) => r.data ?? []),
+  get: (id: string) => api.get<Course>(`/courses/${id}`).then((r) => r.data),
   create: (data: CourseInput) =>
     api.post<Course>('/courses', data).then((r) => r.data),
   update: (id: string, data: Omit<CourseInput, 'student_id'>) =>

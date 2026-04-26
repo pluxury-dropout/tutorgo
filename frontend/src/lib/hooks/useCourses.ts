@@ -14,7 +14,7 @@ export function useCourses() {
 }
 
 export function useCourse(id: string) {
-  return useQuery({ queryKey: courseKeys.detail(id), queryFn: () => coursesApi.list().then(l => l.find(c => c.id === id)!) })
+  return useQuery({ queryKey: courseKeys.detail(id), queryFn: () => coursesApi.get(id) })
 }
 
 export function useCourseBalance(id: string) {
