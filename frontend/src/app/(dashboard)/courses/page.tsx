@@ -15,7 +15,7 @@ import { Course } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 
 export default function CoursesPage() {
   const router = useRouter()
@@ -135,9 +135,7 @@ export default function CoursesPage() {
                 >
                   <td className="px-4 py-3 font-medium">{course.subject}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={course.student_id ? 'default' : 'secondary'}>
-                      {course.student_id ? 'Индивидуальный' : 'Групповой'}
-                    </Badge>
+                    <CourseTypeBadge isGroup={!course.student_id} />
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {studentName(course) ?? '—'}

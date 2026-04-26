@@ -33,7 +33,7 @@ import { PaymentFormValues } from '@/schemas/payment'
 import { Lesson } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 
 function generateDates(baseISO: string, opts: RecurrenceOptions, courseEndAt?: string | null): string[] {
   const base    = new Date(baseISO)
@@ -259,11 +259,7 @@ export default function CourseDetailPage() {
         <div className="border rounded-lg p-4">
           <h2 className="text-sm font-semibold mb-2">Информация</h2>
           <Row label="Предмет" value={course.subject} />
-          <Row label="Тип" value={
-            <Badge variant={isGroup ? 'secondary' : 'default'}>
-              {isGroup ? 'Групповой' : 'Индивидуальный'}
-            </Badge>
-          } />
+          <Row label="Тип" value={<CourseTypeBadge isGroup={isGroup} />} />
           <Row label="Цена за урок" value={`${course.price_per_lesson.toLocaleString()} ₸`} />
           <Row label="Начало" value={new Date(course.started_at).toLocaleDateString('ru-RU')} />
           {course.ended_at && (
