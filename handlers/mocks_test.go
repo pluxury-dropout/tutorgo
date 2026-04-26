@@ -188,6 +188,10 @@ func (m *mockCourseService) Update(ctx context.Context, id string, tutorID strin
 	args := m.Called(ctx, id, tutorID, req)
 	return args.Get(0).(models.Course), args.Error(1)
 }
+func (m *mockCourseService) GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error) {
+	args := m.Called(ctx, studentID, tutorID)
+	return args.Get(0).([]models.Course), args.Error(1)
+}
 func (m *mockCourseService) Delete(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }

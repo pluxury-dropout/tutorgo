@@ -11,6 +11,7 @@ type CourseRepository interface {
 	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
 	GetAll(ctx context.Context, tutorID string) ([]models.Course, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
+	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
 	Delete(ctx context.Context, id string, tutorID string) error
 }
@@ -62,6 +63,35 @@ func (r *courseRepository) GetByID(ctx context.Context, id string, tutorID strin
 		 FROM courses WHERE id = $1 AND tutor_id = $2`, id, tutorID,
 	).Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt)
 	return course, err
+}
+
+func (r *courseRepository) GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at
+		 FROM courses
+		 WHERE tutor_id = $2 AND student_id = $1
+		 UNION
+		 SELECT c.id, c.student_id, c.tutor_id, c.subject, c.price_per_lesson, c.started_at, c.ended_at
+		 FROM courses c
+		 JOIN course_enrollments ce ON ce.course_id = c.id
+		 WHERE c.tutor_id = $2 AND ce.student_id = $1
+		 ORDER BY started_at DESC`,
+		studentID, tutorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var courses []models.Course
+	for rows.Next() {
+		var course models.Course
+		if err := rows.Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt); err != nil {
+			return nil, err
+		}
+		courses = append(courses, course)
+	}
+	return courses, rows.Err()
 }
 
 func (r *courseRepository) Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {

@@ -13,7 +13,7 @@ type Student struct {
 
 type CreateStudentRequest struct {
 	FirstName string `json:"first_name" validate:"required,min=2"`
-	LastName  string `json:"last_name"  validate:"required,min=2"`
+	LastName  string `json:"last_name"  validate:"omitempty,min=2"`
 	Phone     string `json:"phone"      validate:"omitempty,min=10"`
 	Email     string `json:"email"      validate:"omitempty,email"`
 	Notes     string `json:"notes"      validate:"omitempty,max=500"`
@@ -21,7 +21,7 @@ type CreateStudentRequest struct {
 
 type UpdateStudentRequest struct {
 	FirstName string `json:"first_name" validate:"required,min=2"`
-	LastName  string `json:"last_name"  validate:"required,min=2"`
+	LastName  string `json:"last_name"  validate:"omitempty,min=2"`
 	Phone     string `json:"phone"      validate:"omitempty,min=10"`
 	Email     string `json:"email"      validate:"omitempty,email"`
 	Notes     string `json:"notes"      validate:"omitempty,max=500"`

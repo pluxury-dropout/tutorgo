@@ -6,6 +6,7 @@ export const courseKeys = {
   detail:      (id: string) => ['courses', id] as const,
   balance:     (id: string) => ['courses', id, 'balance'] as const,
   enrollments: (id: string) => ['courses', id, 'enrollments'] as const,
+  byStudent:   (studentId: string) => ['courses', 'student', studentId] as const,
 }
 
 export function useCourses() {
@@ -22,6 +23,14 @@ export function useCourseBalance(id: string) {
 
 export function useCourseEnrollments(id: string) {
   return useQuery({ queryKey: courseKeys.enrollments(id), queryFn: () => coursesApi.getEnrollments(id) })
+}
+
+export function useStudentCourses(studentId: string) {
+  return useQuery({
+    queryKey: courseKeys.byStudent(studentId),
+    queryFn:  () => coursesApi.listByStudent(studentId),
+    enabled:  !!studentId,
+  })
 }
 
 export function useCreateCourse() {

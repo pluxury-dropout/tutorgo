@@ -70,6 +70,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.GET("/students/:id", studentHandler.GetByID)
 		auth.PUT("/students/:id", studentHandler.Update)
 		auth.DELETE("/students/:id", studentHandler.Delete)
+		auth.GET("/students/:id/courses", courseHandler.GetByStudent)
 
 		auth.GET("/courses", courseHandler.GetAll)
 		auth.POST("/courses", courseHandler.Create)

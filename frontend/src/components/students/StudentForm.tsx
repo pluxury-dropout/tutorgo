@@ -64,7 +64,7 @@ export function StudentForm({ open, onClose, onSubmit, initial }: StudentFormPro
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="last_name">Фамилия</Label>
+              <Label htmlFor="last_name">Фамилия <span className="text-muted-foreground font-normal">(необязательно)</span></Label>
               <Input id="last_name" placeholder="Бекова" {...register('last_name')} />
               {errors.last_name && (
                 <p className="text-xs text-destructive">{errors.last_name.message}</p>

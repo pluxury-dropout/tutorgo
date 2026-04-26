@@ -11,6 +11,7 @@ type CourseService interface {
 	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
 	GetAll(ctx context.Context, tutorID string) ([]models.Course, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
+	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
 	Delete(ctx context.Context, id string, tutorID string) error
 }
@@ -41,6 +42,13 @@ func (s *courseService) GetAll(ctx context.Context, tutorID string) ([]models.Co
 
 func (s *courseService) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
 	return s.repo.GetByID(ctx, id, tutorID)
+}
+
+func (s *courseService) GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error) {
+	if _, err := s.studentRepo.GetByID(ctx, studentID, tutorID); err != nil {
+		return nil, errors.New("student not found or access denied")
+	}
+	return s.repo.GetByStudent(ctx, studentID, tutorID)
 }
 
 func (s *courseService) Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error) {

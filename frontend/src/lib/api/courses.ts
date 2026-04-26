@@ -28,4 +28,6 @@ export const coursesApi = {
       .then((r) => r.data),
   removeEnrollment: (courseId: string, studentId: string) =>
     api.delete(`/courses/${courseId}/enrollments/${studentId}`).then(() => studentId),
+  listByStudent: (studentId: string) =>
+    api.get<Course[]>(`/students/${studentId}/courses`).then((r) => r.data ?? []),
 }

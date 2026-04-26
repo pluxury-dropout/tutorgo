@@ -71,6 +71,22 @@ func (h *CourseHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, course)
 }
 
+func (h *CourseHandler) GetByStudent(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	studentID := c.Param("id")
+	courses, err := h.service.GetByStudent(c.Request.Context(), studentID, tutorID)
+	if err != nil {
+		h.log.Error("Failed to get courses by student", slog.String("studentID", studentID), slog.String("error", err.Error()))
+		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
+		return
+	}
+	c.JSON(http.StatusOK, courses)
+}
+
 func (h *CourseHandler) Update(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {
