@@ -57,7 +57,7 @@ export default function CoursesPage() {
     } else {
       await createCourse.mutateAsync({
         ...payload,
-        student_id: type === 'individual' ? student_id : undefined,
+        student_id: type === 'individual' && student_id ? student_id : undefined,
       })
       toast.success('Курс добавлен')
     }

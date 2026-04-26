@@ -73,7 +73,7 @@ export function StudentForm({ open, onClose, onSubmit, initial }: StudentFormPro
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Email <span className="text-muted-foreground font-normal">(необязательно)</span></Label>
             <Input id="email" type="email" placeholder="student@example.com" {...register('email')} />
             {errors.email && (
               <p className="text-xs text-destructive">{errors.email.message}</p>

@@ -31,7 +31,10 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<CourseFormValues>({ resolver: zodResolver(courseSchema) })
+  } = useForm<CourseFormValues>({
+    resolver: zodResolver(courseSchema),
+    defaultValues: { type: 'individual', subject: '', price_per_lesson: 0, started_at: '', ended_at: '' },
+  })
 
   const courseType = watch('type')
 

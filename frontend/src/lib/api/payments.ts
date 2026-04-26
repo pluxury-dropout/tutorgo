@@ -9,9 +9,12 @@ export interface PaymentInput {
 }
 
 export const paymentsApi = {
-  list: () => api.get<Payment[]>('/payments').then((r) => r.data),
+  list: (courseId: string) =>
+    api.get<Payment[]>('/payments', { params: { course_id: courseId } }).then((r) => r.data ?? []),
+  listRecent: () =>
+    api.get<Payment[]>('/payments/recent').then((r) => r.data ?? []),
   create: (data: PaymentInput) =>
     api.post<Payment>('/payments', data).then((r) => r.data),
-  getBalance: () =>
-    api.get<PaymentBalance>('/payments/balance').then((r) => r.data),
+  getBalance: (courseId: string) =>
+    api.get<PaymentBalance>('/payments/balance', { params: { course_id: courseId } }).then((r) => r.data),
 }

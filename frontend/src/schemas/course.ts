@@ -6,7 +6,7 @@ export const courseSchema = z
     student_id:       z.string().optional(),
     subject:          z.string().min(2, 'Минимум 2 символа'),
     price_per_lesson: z
-      .number({ invalid_type_error: 'Введите число' })
+      .number({ error: 'Введите число' })
       .positive('Должно быть больше 0'),
     started_at: z.string().min(1, 'Выберите дату начала'),
     ended_at:   z.string().optional(),

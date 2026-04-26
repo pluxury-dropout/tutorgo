@@ -29,74 +29,105 @@
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-sidebar-active-bg: var(--sidebar-active-bg);
+  --color-sidebar-active-text: var(--sidebar-active-text);
+  --color-sidebar-hover-bg: var(--sidebar-hover-bg);
+  --color-sidebar-text: var(--sidebar-text);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
+  --radius-lg: var(--radius-lg);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-card: var(--shadow-card);
 }
 
 :root {
-  --background: oklch(0.985 0.004 210);
-  --foreground: oklch(0.18 0.02 215);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 215);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 215);
-  --primary: oklch(0.52 0.1 185);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.004 215);
+  /* Base */
+  --background:          oklch(0.985 0.004 210);
+  --foreground:          oklch(0.18 0.02 215);
+  --card:                oklch(1 0 0);
+  --card-foreground:     oklch(0.18 0.02 215);
+  --popover:             oklch(1 0 0);
+  --popover-foreground:  oklch(0.18 0.02 215);
+  --primary:             oklch(0.52 0.1 185);
+  --primary-light:       oklch(0.94 0.04 185);
+  --primary-foreground:  oklch(0.985 0 0);
+  --secondary:           oklch(0.96 0.004 215);
   --secondary-foreground: oklch(0.18 0.02 215);
-  --muted: oklch(0.96 0.004 215);
-  --muted-foreground: oklch(0.50 0.02 215);
-  --accent: oklch(0.72 0.14 55);
-  --accent-foreground: oklch(0.28 0.06 35);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.006 215);
-  --input: oklch(0.91 0.006 215);
-  --ring: oklch(0.52 0.1 185);
-  --radius: 0.5rem;
+  --muted:               oklch(0.96 0.004 215);
+  --muted-foreground:    oklch(0.50 0.02 215);
+  --accent:              oklch(0.72 0.14 55);
+  --accent-light:        oklch(0.96 0.04 55);
+  --accent-foreground:   oklch(0.28 0.06 35);
+  --destructive:         oklch(0.577 0.245 27.325);
+  --border:              oklch(0.91 0.006 215);
+  --input:               oklch(0.91 0.006 215);
+  --ring:                oklch(0.52 0.1 185);
+  --radius:              0.5rem;
+  --radius-lg:           0.75rem;
 
-  /* Lesson status tokens */
-  --status-scheduled-bg: oklch(0.94 0.04 250);
+  /* Shadows */
+  --shadow-sm:           0 1px 2px oklch(0.18 0.02 215 / 0.06);
+  --shadow-card:         0 1px 3px oklch(0.18 0.02 215 / 0.08);
+
+  /* Sidebar */
+  --sidebar:             oklch(0.985 0.004 210);
+  --sidebar-foreground:  oklch(0.18 0.02 215);
+  --sidebar-primary:     oklch(0.52 0.1 185);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent:      oklch(0.96 0.004 215);
+  --sidebar-accent-foreground: oklch(0.18 0.02 215);
+  --sidebar-border:      oklch(0.91 0.006 215);
+  --sidebar-ring:        oklch(0.52 0.1 185);
+  --sidebar-active-bg:   oklch(0.94 0.04 185);
+  --sidebar-active-text: oklch(0.52 0.1 185);
+  --sidebar-hover-bg:    oklch(0.96 0.004 215);
+  --sidebar-text:        oklch(0.42 0.02 215);
+
+  /* Lesson status chips */
+  --status-scheduled-bg:   oklch(0.94 0.04 250);
   --status-scheduled-text: oklch(0.40 0.12 250);
-  --status-scheduled-ring: oklch(0.82 0.08 250);
-  --status-completed-bg: oklch(0.94 0.06 155);
-  --status-completed-text: oklch(0.38 0.10 155);
-  --status-completed-ring: oklch(0.80 0.09 155);
-  --status-cancelled-bg: oklch(0.95 0.002 215);
-  --status-cancelled-text: oklch(0.50 0.01 215);
-  --status-cancelled-ring: oklch(0.85 0.005 215);
-  --status-missed-bg: oklch(0.95 0.04 25);
-  --status-missed-text: oklch(0.45 0.18 25);
-  --status-missed-ring: oklch(0.82 0.10 25);
+  --status-completed-bg:   oklch(0.93 0.06 155);
+  --status-completed-text: oklch(0.35 0.10 155);
+  --status-cancelled-bg:   oklch(0.94 0.004 215);
+  --status-cancelled-text: oklch(0.48 0.01 215);
+  --status-missed-bg:      oklch(0.94 0.04 25);
+  --status-missed-text:    oklch(0.42 0.18 25);
 
+  /* Calendar event chips */
+  --cal-scheduled-bg:      oklch(0.92 0.05 250);
+  --cal-scheduled-border:  oklch(0.55 0.14 250);
+  --cal-scheduled-text:    oklch(0.35 0.14 250);
+  --cal-completed-bg:      oklch(0.91 0.07 155);
+  --cal-completed-border:  oklch(0.48 0.12 155);
+  --cal-completed-text:    oklch(0.32 0.10 155);
+  --cal-cancelled-bg:      oklch(0.93 0.003 215);
+  --cal-cancelled-border:  oklch(0.60 0.01 215);
+  --cal-cancelled-text:    oklch(0.45 0.01 215);
+  --cal-missed-bg:         oklch(0.92 0.05 25);
+  --cal-missed-border:     oklch(0.58 0.20 25);
+  --cal-missed-text:       oklch(0.38 0.18 25);
+
+  /* Charts */
   --chart-1: oklch(0.52 0.1 185);
   --chart-2: oklch(0.72 0.14 55);
   --chart-3: oklch(0.65 0.18 145);
   --chart-4: oklch(0.60 0.20 295);
   --chart-5: oklch(0.55 0.22 25);
-
-  --sidebar: oklch(0.985 0.004 210);
-  --sidebar-foreground: oklch(0.18 0.02 215);
-  --sidebar-primary: oklch(0.52 0.1 185);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0.004 215);
-  --sidebar-accent-foreground: oklch(0.18 0.02 215);
-  --sidebar-border: oklch(0.91 0.006 215);
-  --sidebar-ring: oklch(0.52 0.1 185);
 }
 
 .dark {
@@ -139,8 +170,172 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 14px;
   }
   html {
     @apply font-sans;
   }
+}
+
+/* FullCalendar: now indicator */
+.fc-timegrid-now-indicator-line {
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  border-width: 2px !important;
+}
+.fc-timegrid-now-indicator-arrow {
+  border-top-color: rgba(239, 68, 68, 0.6) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+/* Slot height — 64px per hour = 32px per 30min slot */
+.fc-timegrid-slot {
+  height: 32px !important;
+  min-height: 0 !important;
+}
+
+/* Today column tint */
+.fc .fc-timegrid-col.fc-day-today {
+  background: oklch(0.97 0.015 185) !important;
+}
+.fc .fc-daygrid-day.fc-day-today {
+  background: oklch(0.97 0.015 185) !important;
+}
+
+/* Today date circle in month view */
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Empty slot hover */
+.fc-timegrid-slot:hover,
+.fc-timegrid-slot-lane:hover {
+  background: oklch(0.95 0.04 185 / 0.3) !important;
+  cursor: pointer;
+}
+
+/* Event chip styling — flat pastel, no left border accent */
+.fc-event {
+  border-radius: 6px !important;
+  border-width: 0 !important;
+  padding: 2px 6px !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+}
+.fc-event .fc-event-title {
+  font-weight: 600;
+}
+.fc-event .fc-event-time {
+  font-size: 10px;
+  opacity: 0.85;
+}
+/* During drag — cursor follows with zero lag */
+.fc-event-dragging {
+  transition: none !important;
+  opacity: 0.75 !important;
+  box-shadow: 0 4px 12px oklch(0.18 0.02 215 / 0.15) !important;
+}
+
+
+/* Time column width */
+.fc-timegrid-axis {
+  width: 52px !important;
+}
+.fc .fc-timegrid-slot-label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  text-align: right;
+  padding-right: 8px;
+}
+
+/* Toolbar button styling */
+.fc .fc-button {
+  background: transparent !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 5px 10px !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+  transition: background 0.15s !important;
+}
+.fc .fc-button:hover {
+  background: var(--secondary) !important;
+}
+.fc .fc-button-active,
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
+  border-color: var(--primary-light) !important;
+  font-weight: 600 !important;
+}
+.fc .fc-today-button {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.fc .fc-today-button:disabled {
+  opacity: 0.4 !important;
+}
+
+/* Toolbar title */
+.fc .fc-toolbar-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: var(--foreground) !important;
+}
+
+/* Day column headers */
+.fc .fc-col-header-cell-cushion {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--muted-foreground) !important;
+  text-decoration: none !important;
+  padding: 6px 4px !important;
+}
+.fc .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
+  color: var(--primary) !important;
+  font-weight: 600 !important;
+}
+
+/* Grid lines — thin and muted */
+.fc .fc-timegrid-slot-minor {
+  border-top-style: none !important;
+}
+.fc-theme-standard td,
+.fc-theme-standard th {
+  border-color: var(--border) !important;
+}
+.fc-theme-standard .fc-scrollgrid {
+  border-color: var(--border) !important;
+}
+
+/* Remove inner shadow on scroll area */
+.fc .fc-scroller-harness {
+  overflow: visible;
+}
+
+/* Daygrid month view */
+.fc .fc-daygrid-day-number {
+  font-size: 12px !important;
+  color: var(--muted-foreground) !important;
+  text-decoration: none !important;
+  padding: 4px 6px !important;
+}
+.fc .fc-daygrid-day.fc-day-other .fc-daygrid-day-number {
+  color: oklch(0.72 0.006 215) !important;
+}
+.fc .fc-daygrid-event {
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  padding: 1px 4px !important;
+  border-width: 0 !important;
 }

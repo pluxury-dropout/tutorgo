@@ -5,5 +5,5 @@ export const calendarApi = {
   list: (from: string, to: string) =>
     api
       .get<CalendarLesson[]>('/calendar', { params: { from, to } })
-      .then((r) => r.data),
+      .then((r) => r.data ?? []),
 }
