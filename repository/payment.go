@@ -86,7 +86,8 @@ func (r *paymentRepository) GetMonthlyIncome(ctx context.Context, tutorID string
 		 FROM payments p
 		 JOIN courses c ON c.id = p.course_id
 		 WHERE c.tutor_id = $1
-		   AND DATE_TRUNC('month', p.paid_at) = DATE_TRUNC('month', NOW())`,
+		   AND p.paid_at >= date_trunc('month', NOW())
+		   AND p.paid_at <  date_trunc('month', NOW()) + interval '1 month'`,
 		tutorID,
 	).Scan(&total)
 	return total, err
