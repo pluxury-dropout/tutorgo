@@ -8,7 +8,7 @@ COPY . .
 RUN go build -o main .
 
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates netcat-openbsd
 WORKDIR /app
 COPY --from=builder /app/main .
 COPY --from=builder /go/bin/goose .
