@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+echo "=== ENV VARS ==="
+env | grep -v PASSWORD | grep -v SECRET || true
+echo "================"
+
 if [ -z "$DB_URL" ]; then
   echo "ERROR: DB_URL is not set"
   exit 1
