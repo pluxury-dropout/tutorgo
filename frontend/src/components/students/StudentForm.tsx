@@ -34,7 +34,9 @@ export function StudentForm({ open, onClose, onSubmit, initial }: StudentFormPro
   } = useForm<StudentFormValues>({ resolver: zodResolver(studentSchema) })
 
   useEffect(() => {
-    reset(initial ?? { first_name: '', last_name: '', email: '', phone: '' })
+    reset(initial
+      ? { ...initial, last_name: initial.last_name ?? undefined, email: initial.email ?? undefined, phone: initial.phone ?? undefined }
+      : { first_name: '', last_name: '', email: '', phone: '' })
   }, [initial, open, reset])
 
   async function submit(values: StudentFormValues) {
