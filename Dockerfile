@@ -13,5 +13,7 @@ WORKDIR /app
 COPY --from=builder /app/main .
 COPY --from=builder /go/bin/goose .
 COPY migrations/ ./migrations/
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 EXPOSE 8080
-CMD sh -c "./goose -dir migrations postgres \"$DB_URL\" up && ./main"
+CMD ["./entrypoint.sh"]
