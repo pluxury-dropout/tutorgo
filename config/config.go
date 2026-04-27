@@ -16,9 +16,14 @@ type Config struct {
 func Load() Config {
 	godotenv.Load() // optional: ignored in production where env vars are already set
 
+	port := os.Getenv("SERVER_PORT")
+	if port != "" && port[0] != ':' {
+		port = ":" + port
+	}
+
 	cfg := Config{
 		DBUrl:      os.Getenv("DB_URL"),
-		ServerPort: os.Getenv("SERVER_PORT"),
+		ServerPort: port,
 		JWTSecret:  os.Getenv("JWT_SECRET"),
 	}
 
