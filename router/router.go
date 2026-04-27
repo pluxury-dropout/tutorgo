@@ -45,8 +45,12 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	origins := []string{"http://localhost:3000"}
+	if cfg.AllowedOrigin != "" {
+		origins = append(origins, cfg.AllowedOrigin)
+	}
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,

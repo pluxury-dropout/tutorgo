@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	DBUrl      string
-	ServerPort string
-	JWTSecret  string
+	DBUrl         string
+	ServerPort    string
+	JWTSecret     string
+	AllowedOrigin string
 }
 
 func Load() Config {
@@ -25,6 +26,7 @@ func Load() Config {
 		DBUrl:      os.Getenv("DB_URL"),
 		ServerPort: port,
 		JWTSecret:  os.Getenv("JWT_SECRET"),
+		AllowedOrigin: os.Getenv("ALLOWED_ORIGIN"),
 	}
 
 	if cfg.DBUrl == "" {
