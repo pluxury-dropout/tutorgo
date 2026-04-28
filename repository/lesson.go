@@ -4,11 +4,13 @@ import (
 	"context"
 	"tutorgo/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type LessonRepository interface {
 	Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error)
+	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error)
 	GetByID(ctx context.Context, id string) (models.Lesson, error)
 	GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error)
@@ -35,6 +37,30 @@ func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRe
 		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
 	return lesson, err
+}
+
+func (r *lessonRepository) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error) {
+	batch := &pgx.Batch{}
+	for _, sa := range req.ScheduledAts {
+		batch.Queue(
+			`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
+			req.CourseID, sa, req.DurationMinutes, req.Notes,
+		)
+	}
+	br := r.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	var lessons []models.Lesson
+	for range req.ScheduledAts {
+		var l models.Lesson
+		if err := br.QueryRow().Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, l)
+	}
+	return lessons, nil
 }
 
 func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error) {

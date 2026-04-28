@@ -17,6 +17,7 @@ import {
 import {
   useLessons,
   useCreateLesson,
+  useCreateLessons,
   useUpdateLesson,
   useDeleteLesson,
 } from '@/lib/hooks/useLessons'
@@ -125,6 +126,7 @@ export default function CourseDetailPage() {
   const addEnrollment     = useAddEnrollment(id)
   const removeEnrollment  = useRemoveEnrollment(id)
   const createLesson      = useCreateLesson(id)
+  const createLessons     = useCreateLessons(id)
   const updateLesson      = useUpdateLesson(editingLesson?.id ?? '', id)
   const deleteLesson      = useDeleteLesson(id)
   const createPayment     = useCreatePayment(id)
@@ -172,11 +174,12 @@ export default function CourseDetailPage() {
       toast.success('Урок обновлён')
     } else if (recurrence) {
       const dates = generateDates(baseISO, recurrence, course?.ended_at)
-      await Promise.all(
-        dates.map((scheduled_at) =>
-          createLesson.mutateAsync({ ...values, scheduled_at, course_id: id })
-        )
-      )
+      await createLessons.mutateAsync({
+        course_id:        id,
+        scheduled_ats:    dates,
+        duration_minutes: values.duration_minutes,
+        notes:            values.notes,
+      })
       toast.success(`Создано ${dates.length} уроков`)
     } else {
       await createLesson.mutateAsync({ ...values, scheduled_at: baseISO, course_id: id })

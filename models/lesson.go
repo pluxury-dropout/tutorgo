@@ -2,6 +2,13 @@ package models
 
 import "time"
 
+type CreateBulkLessonRequest struct {
+	CourseID        string    `json:"course_id"         validate:"required,uuid"`
+	ScheduledAts    []string  `json:"scheduled_ats"     validate:"required,min=1"`
+	DurationMinutes int       `json:"duration_minutes"  validate:"required,gt=0"`
+	Notes           string    `json:"notes"             validate:"omitempty,max=500"`
+}
+
 type Lesson struct {
 	ID              string    `json:"id"`
 	CourseID        string    `json:"course_id"`

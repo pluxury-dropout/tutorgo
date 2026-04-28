@@ -40,6 +40,26 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 	c.JSON(http.StatusOK, lessons)
 }
 
+func (h *LessonHandler) CreateBulk(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req models.CreateBulkLessonRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	lessons, err := h.service.CreateBulk(c.Request.Context(), req, tutorID)
+	if err != nil {
+		h.log.Error("Failed to create lessons", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lessons"})
+		return
+	}
+	h.log.Info("Lessons created", slog.Int("count", len(lessons)))
+	c.JSON(http.StatusCreated, lessons)
+}
+
 func (h *LessonHandler) Create(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

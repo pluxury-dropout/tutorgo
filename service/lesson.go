@@ -9,6 +9,7 @@ import (
 
 type LessonService interface {
 	Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error)
+	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error)
@@ -31,6 +32,14 @@ func (s *lessonService) Create(ctx context.Context, req models.CreateLessonReque
 		return models.Lesson{}, errors.New("course not found or access denied")
 	}
 	return s.repo.Create(ctx, req)
+}
+
+func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {
+	_, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
+	if err != nil {
+		return nil, errors.New("course not found or access denied")
+	}
+	return s.repo.CreateBulk(ctx, req)
 }
 
 func (s *lessonService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error) {

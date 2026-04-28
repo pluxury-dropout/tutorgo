@@ -53,6 +53,11 @@ func (m *mockLessonRepo) GetCalendar(ctx context.Context, tutorID string, from s
 	return args.Get(0).([]models.CalendarLesson), args.Error(1)
 }
 
+func (m *mockLessonRepo) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error) {
+	args := m.Called(ctx, req)
+	return args.Get(0).([]models.Lesson), args.Error(1)
+}
+
 func (m *mockLessonRepo) AutoComplete(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)

@@ -230,6 +230,10 @@ func (m *mockLessonService) Create(ctx context.Context, req models.CreateLessonR
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Lesson), args.Error(1)
 }
+func (m *mockLessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {
+	args := m.Called(ctx, req, tutorID)
+	return args.Get(0).([]models.Lesson), args.Error(1)
+}
 func (m *mockLessonService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error) {
 	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).([]models.Lesson), args.Error(1)

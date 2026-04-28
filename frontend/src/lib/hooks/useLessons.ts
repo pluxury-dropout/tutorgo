@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { lessonsApi, LessonInput, LessonUpdateInput } from '@/lib/api/lessons'
+import { lessonsApi, LessonInput, LessonBulkInput, LessonUpdateInput } from '@/lib/api/lessons'
 
 export const lessonKeys = {
   byCourse:   (courseId: string) => ['lessons', 'course', courseId] as const,
@@ -35,6 +35,14 @@ export function useCreateLesson(courseId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: LessonInput) => lessonsApi.create(data),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
+  })
+}
+
+export function useCreateLessons(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: LessonBulkInput) => lessonsApi.createBulk(data),
     onSuccess:  () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
   })
 }
