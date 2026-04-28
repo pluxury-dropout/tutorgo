@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX } from 'lucide-react'
 
 import {
   useCourse,
@@ -20,16 +20,21 @@ import {
   useCreateLessons,
   useUpdateLesson,
   useDeleteLesson,
+  useDeleteLessonsByCourse,
+  useDeleteSeries,
+  useUpdateSeries,
 } from '@/lib/hooks/useLessons'
 import { usePayments, useCreatePayment } from '@/lib/hooks/usePayments'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { LessonForm, RecurrenceOptions } from '@/components/lessons/LessonForm'
 import { AttendanceDialog } from '@/components/lessons/AttendanceDialog'
+import { SeriesDialog } from '@/components/lessons/SeriesDialog'
 import { PaymentForm } from '@/components/payments/PaymentForm'
 import { PageHeader } from '@/components/common/PageHeader'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
+import { SeriesUpdateInput } from '@/lib/api/lessons'
 import { PaymentFormValues } from '@/schemas/payment'
 import { Lesson } from '@/types/api'
 
@@ -114,22 +119,26 @@ export default function CourseDetailPage() {
   const { data: lessons = [] }      = useLessons(id)
   const { data: payments = [] }     = usePayments(id)
 
-  const [courseFormOpen, setCourseFormOpen]   = useState(false)
-  const [lessonFormOpen, setLessonFormOpen]   = useState(false)
-  const [editingLesson, setEditingLesson]     = useState<Lesson | undefined>()
+  const [courseFormOpen, setCourseFormOpen]     = useState(false)
+  const [lessonFormOpen, setLessonFormOpen]     = useState(false)
+  const [editingLesson, setEditingLesson]       = useState<Lesson | undefined>()
+  const [seriesLesson, setSeriesLesson]         = useState<Lesson | undefined>()
   const [attendanceLesson, setAttendanceLesson] = useState<string | null>(null)
   const [paymentFormOpen, setPaymentFormOpen]   = useState(false)
-  const [selectedStudent, setSelected]        = useState('')
+  const [selectedStudent, setSelected]          = useState('')
 
-  const updateCourse      = useUpdateCourse(id)
-  const deleteCourse      = useDeleteCourse()
-  const addEnrollment     = useAddEnrollment(id)
-  const removeEnrollment  = useRemoveEnrollment(id)
-  const createLesson      = useCreateLesson(id)
-  const createLessons     = useCreateLessons(id)
-  const updateLesson      = useUpdateLesson(editingLesson?.id ?? '', id)
-  const deleteLesson      = useDeleteLesson(id)
-  const createPayment     = useCreatePayment(id)
+  const updateCourse         = useUpdateCourse(id)
+  const deleteCourse         = useDeleteCourse()
+  const addEnrollment        = useAddEnrollment(id)
+  const removeEnrollment     = useRemoveEnrollment(id)
+  const createLesson         = useCreateLesson(id)
+  const createLessons        = useCreateLessons(id)
+  const updateLesson         = useUpdateLesson(editingLesson?.id ?? '', id)
+  const deleteLesson         = useDeleteLesson(id)
+  const deleteLessonsByCourse = useDeleteLessonsByCourse(id)
+  const deleteSeries         = useDeleteSeries(id)
+  const updateSeries         = useUpdateSeries(id)
+  const createPayment        = useCreatePayment(id)
 
   async function handleUpdateCourse(values: CourseFormValues) {
     const { type: _type, student_id: _sid, started_at, ended_at, ...rest } = values
@@ -191,6 +200,20 @@ export default function CourseDetailPage() {
     if (!confirm('Удалить этот урок?')) return
     await deleteLesson.mutateAsync(lesson.id)
     toast.success('Урок удалён')
+  }
+
+  async function handleDeleteAllLessons() {
+    if (!confirm(`Удалить все ${lessons.length} уроков курса?`)) return
+    await deleteLessonsByCourse.mutateAsync()
+    toast.success('Все уроки удалены')
+  }
+
+  async function handleSeriesDelete(seriesId: string, fromDate?: string) {
+    await deleteSeries.mutateAsync({ seriesId, fromDate })
+  }
+
+  async function handleSeriesUpdate(seriesId: string, data: SeriesUpdateInput) {
+    await updateSeries.mutateAsync({ seriesId, data })
   }
 
   async function handlePaymentSubmit(values: PaymentFormValues) {
@@ -362,9 +385,19 @@ export default function CourseDetailPage() {
       <div className="border rounded-lg p-4 mt-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold">Уроки ({lessons.length})</h2>
-          <Button size="sm" variant="outline" onClick={openCreateLesson}>
-            <Plus className="h-4 w-4 mr-1.5" /> Добавить урок
-          </Button>
+          <div className="flex gap-2">
+            {lessons.length > 0 && (
+              <Button size="sm" variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={handleDeleteAllLessons}
+              >
+                <ListX className="h-4 w-4 mr-1.5" /> Удалить все
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={openCreateLesson}>
+              <Plus className="h-4 w-4 mr-1.5" /> Добавить урок
+            </Button>
+          </div>
         </div>
 
         {lessons.length === 0 ? (
@@ -396,6 +429,14 @@ export default function CourseDetailPage() {
                       title="Посещаемость"
                     >
                       <ClipboardList className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {lesson.series_id && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8"
+                      onClick={() => setSeriesLesson(lesson)}
+                      title="Управление серией"
+                    >
+                      <Layers className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   <Button size="icon" variant="ghost" className="h-8 w-8"
@@ -441,6 +482,16 @@ export default function CourseDetailPage() {
           courseId={id}
           open={!!attendanceLesson}
           onClose={() => setAttendanceLesson(null)}
+        />
+      )}
+
+      {seriesLesson && (
+        <SeriesDialog
+          lesson={seriesLesson}
+          open={!!seriesLesson}
+          onClose={() => setSeriesLesson(undefined)}
+          onDelete={handleSeriesDelete}
+          onUpdate={handleSeriesUpdate}
         />
       )}
     </>

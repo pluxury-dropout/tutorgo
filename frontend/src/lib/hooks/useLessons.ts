@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { lessonsApi, LessonInput, LessonBulkInput, LessonUpdateInput } from '@/lib/api/lessons'
+import { lessonsApi, LessonInput, LessonBulkInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
 
 export const lessonKeys = {
   byCourse:   (courseId: string) => ['lessons', 'course', courseId] as const,
@@ -63,6 +63,32 @@ export function useDeleteLesson(courseId: string) {
   return useMutation({
     mutationFn: lessonsApi.delete,
     onSuccess:  () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
+  })
+}
+
+export function useDeleteLessonsByCourse(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => lessonsApi.deleteByCourse(courseId),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
+  })
+}
+
+export function useDeleteSeries(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ seriesId, fromDate }: { seriesId: string; fromDate?: string }) =>
+      lessonsApi.deleteSeries(seriesId, fromDate),
+    onSuccess: () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
+  })
+}
+
+export function useUpdateSeries(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ seriesId, data }: { seriesId: string; data: SeriesUpdateInput }) =>
+      lessonsApi.updateSeries(seriesId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
   })
 }
 

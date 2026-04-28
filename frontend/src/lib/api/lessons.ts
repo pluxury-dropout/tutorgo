@@ -22,6 +22,13 @@ export interface LessonUpdateInput {
   notes?:           string
 }
 
+export interface SeriesUpdateInput {
+  from_date?:       string
+  new_time?:        string
+  duration_minutes?: number
+  notes?:           string
+}
+
 export const lessonsApi = {
   list:   (courseId: string) =>
     api.get<Lesson[]>('/lessons', { params: { course_id: courseId } }).then((r) => r.data ?? []),
@@ -35,6 +42,12 @@ export const lessonsApi = {
     api.put<Lesson>(`/lessons/${id}`, data).then((r) => r.data),
   delete: (id: string) =>
     api.delete(`/lessons/${id}`).then(() => id),
+  deleteByCourse: (courseId: string) =>
+    api.delete('/lessons', { params: { course_id: courseId } }).then(() => undefined),
+  deleteSeries: (seriesId: string, fromDate?: string) =>
+    api.delete(`/lessons/series/${seriesId}`, { params: fromDate ? { from: fromDate } : {} }).then(() => undefined),
+  updateSeries: (seriesId: string, data: SeriesUpdateInput) =>
+    api.patch(`/lessons/series/${seriesId}`, data).then(() => undefined),
   getAttendance: (lessonId: string) =>
     api.get<AttendanceRecord[]>(`/lessons/${lessonId}/attendance`).then((r) => r.data ?? []),
   updateAttendance: (lessonId: string, attendances: { student_id: string; status: string }[]) =>

@@ -19,6 +19,7 @@ type LessonRepository interface {
 	GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
 	Delete(ctx context.Context, id string) error
+	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
@@ -123,6 +124,17 @@ func (r *lessonRepository) Update(ctx context.Context, id string, req models.Upd
 
 func (r *lessonRepository) Delete(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM lessons WHERE id = $1`, id)
+	return err
+}
+
+func (r *lessonRepository) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM lessons
+		 USING courses
+		 WHERE lessons.course_id = $1
+		   AND lessons.course_id = courses.id
+		   AND courses.tutor_id = $2`,
+		courseID, tutorID)
 	return err
 }
 

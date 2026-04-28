@@ -14,6 +14,7 @@ type LessonService interface {
 	GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
@@ -74,6 +75,14 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID string) e
 		return errors.New("lesson not found or access denied")
 	}
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
+	_, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+	if err != nil {
+		return errors.New("course not found or access denied")
+	}
+	return s.repo.DeleteByCourse(ctx, courseID, tutorID)
 }
 
 func (s *lessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {

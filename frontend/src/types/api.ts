@@ -40,6 +40,7 @@ export interface Lesson {
   duration_minutes: number
   status: LessonStatus
   notes: string
+  series_id?: string
 }
 
 export interface CalendarLesson {

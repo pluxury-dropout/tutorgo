@@ -133,6 +133,26 @@ func (h *LessonHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *LessonHandler) DeleteByCourse(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	courseID := c.Query("course_id")
+	if courseID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
+		return
+	}
+	if err := h.service.DeleteByCourse(c.Request.Context(), courseID, tutorID); err != nil {
+		h.log.Error("Failed to delete lessons by course", slog.String("courseId", courseID), slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete lessons"})
+		return
+	}
+	h.log.Info("Lessons deleted by course", slog.String("courseId", courseID))
+	c.Status(http.StatusNoContent)
+}
+
 func (h *LessonHandler) DeleteSeries(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {
