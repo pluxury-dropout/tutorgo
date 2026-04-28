@@ -133,6 +133,51 @@ func (h *LessonHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *LessonHandler) DeleteSeries(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	seriesID := c.Param("seriesId")
+	fromDate := c.Query("from")
+	var fromDatePtr *string
+	if fromDate != "" {
+		fromDatePtr = &fromDate
+	}
+	if err := h.service.DeleteSeries(c.Request.Context(), seriesID, tutorID, fromDatePtr); err != nil {
+		h.log.Error("Failed to delete series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete series"})
+		return
+	}
+	h.log.Info("Series deleted", slog.String("seriesId", seriesID))
+	c.Status(http.StatusNoContent)
+}
+
+func (h *LessonHandler) UpdateSeries(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	seriesID := c.Param("seriesId")
+	var req models.UpdateSeriesRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	if err := h.service.UpdateSeries(c.Request.Context(), seriesID, tutorID, req); err != nil {
+		h.log.Error("Failed to update series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
+		if err.Error() == "at least one field must be provided" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update series"})
+		return
+	}
+	h.log.Info("Series updated", slog.String("seriesId", seriesID))
+	c.Status(http.StatusNoContent)
+}
+
 func (h *LessonHandler) GetCalendar(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

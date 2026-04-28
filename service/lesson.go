@@ -14,6 +14,8 @@ type LessonService interface {
 	GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
+	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 }
 
@@ -72,6 +74,17 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID string) e
 		return errors.New("lesson not found or access denied")
 	}
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *lessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
+	return s.repo.DeleteSeries(ctx, seriesID, tutorID, fromDate)
+}
+
+func (s *lessonService) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
+	if req.NewTime == nil && req.DurationMinutes == nil && req.Notes == nil {
+		return errors.New("at least one field must be provided")
+	}
+	return s.repo.UpdateSeries(ctx, seriesID, tutorID, req)
 }
 
 func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {

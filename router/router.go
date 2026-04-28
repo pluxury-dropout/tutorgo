@@ -94,6 +94,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.GET("/lessons/:id", lessonHandler.GetByID)
 		auth.PUT("/lessons/:id", lessonHandler.Update)
 		auth.DELETE("/lessons/:id", lessonHandler.Delete)
+		auth.DELETE("/lessons/series/:seriesId", lessonHandler.DeleteSeries)
+		auth.PATCH("/lessons/series/:seriesId", lessonHandler.UpdateSeries)
 
 		auth.GET("/calendar", lessonHandler.GetCalendar)
 

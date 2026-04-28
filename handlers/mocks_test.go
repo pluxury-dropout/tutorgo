@@ -254,3 +254,11 @@ func (m *mockLessonService) GetCalendar(ctx context.Context, tutorID string, fro
 	args := m.Called(ctx, tutorID, from, to)
 	return args.Get(0).([]models.CalendarLesson), args.Error(1)
 }
+
+func (m *mockLessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
+	return m.Called(ctx, seriesID, tutorID, fromDate).Error(0)
+}
+
+func (m *mockLessonService) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
+	return m.Called(ctx, seriesID, tutorID, req).Error(0)
+}
