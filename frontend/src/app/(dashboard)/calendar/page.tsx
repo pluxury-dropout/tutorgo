@@ -8,12 +8,13 @@ import interactionPlugin from '@fullcalendar/interaction'
 import type { DatesSetArg, EventClickArg, EventDropArg } from '@fullcalendar/core'
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import ruLocale from '@fullcalendar/core/locales/ru'
-import { useRouter } from 'next/navigation'
 
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { FC_COLORS } from '@/lib/lessonStatus'
 import { PageHeader } from '@/components/common/PageHeader'
+import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import type { LessonStatus } from '@/types/api'
+import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
 
 function roundToNearest30(date: Date): Date {
   const ms = 30 * 60 * 1000
@@ -25,8 +26,8 @@ function roundToNearest15(n: number): number {
 }
 
 export default function CalendarPage() {
-  const router = useRouter()
   const { mutate: reschedule } = useRescheduleLesson()
+  const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
 
   const now = new Date()
   const [range, setRange] = useState({
@@ -44,7 +45,14 @@ export default function CalendarPage() {
     backgroundColor: FC_COLORS[l.status].bg,
     borderColor:     FC_COLORS[l.status].border,
     textColor:       FC_COLORS[l.status].text,
-    extendedProps:   { courseId: l.course_id, status: l.status, notes: l.notes },
+    extendedProps:   {
+      courseId:        l.course_id,
+      status:          l.status,
+      notes:           l.notes,
+      isGroup:         l.is_group,
+      scheduledAt:     l.scheduled_at,
+      durationMinutes: l.duration_minutes,
+    },
   }))
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
@@ -52,7 +60,17 @@ export default function CalendarPage() {
   }, [])
 
   function handleEventClick(arg: EventClickArg) {
-    router.push(`/courses/${arg.event.extendedProps.courseId}`)
+    const p = arg.event.extendedProps
+    setSelectedLesson({
+      id:              arg.event.id,
+      courseId:        p.courseId,
+      title:           arg.event.title,
+      status:          p.status as LessonStatus,
+      notes:           p.notes ?? '',
+      isGroup:         p.isGroup,
+      scheduledAt:     p.scheduledAt,
+      durationMinutes: p.durationMinutes,
+    })
   }
 
   function handleEventDrop(arg: EventDropArg) {
@@ -98,6 +116,7 @@ export default function CalendarPage() {
   return (
     <>
       <PageHeader title="Расписание" />
+      <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
       <div className="mt-4 rounded-lg border p-4">
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}

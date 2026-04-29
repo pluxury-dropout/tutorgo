@@ -2,6 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { calendarApi } from '@/lib/api/calendar'
 import { lessonsApi, LessonUpdateInput } from '@/lib/api/lessons'
 
+export function useUpdateLessonStatus(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: LessonUpdateInput) => lessonsApi.update(id, data),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['calendar'] }),
+  })
+}
+
 export function useCalendar(from: string, to: string) {
   return useQuery({
     queryKey: ['calendar', from, to],
