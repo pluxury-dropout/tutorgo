@@ -164,7 +164,7 @@ func (r *lessonRepository) UpdateSeries(ctx context.Context, seriesID string, tu
 
 	if req.NewTime != nil {
 		idx := len(args) + 1
-		setParts = append(setParts, fmt.Sprintf("scheduled_at = date_trunc('day', lessons.scheduled_at) + $%d::time", idx))
+		setParts = append(setParts, fmt.Sprintf("scheduled_at = date_trunc('day', lessons.scheduled_at) + $%d::interval", idx))
 		args = append(args, *req.NewTime)
 	}
 	if req.DurationMinutes != nil {
