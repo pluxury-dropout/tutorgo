@@ -117,7 +117,13 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
             <div className="space-y-1.5">
               <Label htmlFor="series-time">Новое время</Label>
               <Input id="series-time" type="time" step={300}
-                value={newTime} onChange={(e) => setNewTime(e.target.value)} />
+                value={newTime} onChange={(e) => {
+                  const [h, m] = e.target.value.split(':').map(Number)
+                  const rounded = Math.round(m / 5) * 5
+                  const rh = rounded === 60 ? (h + 1) % 24 : h
+                  const rm = rounded === 60 ? 0 : rounded
+                  setNewTime(`${String(rh).padStart(2, '0')}:${String(rm).padStart(2, '0')}`)
+                }} />
             </div>
 
             <div className="space-y-1.5">
