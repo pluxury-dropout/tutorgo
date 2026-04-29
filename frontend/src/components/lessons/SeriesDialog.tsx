@@ -40,9 +40,16 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
     day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
   })
 
+  function localTimeToUTC(hhmm: string): string {
+    const [h, m] = hhmm.split(':').map(Number)
+    const d = new Date()
+    d.setHours(h, m, 0, 0)
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+  }
+
   async function handleUpdate() {
     const data: SeriesUpdateInput = {}
-    if (newTime)    data.new_time         = newTime
+    if (newTime)    data.new_time         = localTimeToUTC(newTime)
     if (duration)   data.duration_minutes = Number(duration)
     if (notes)      data.notes            = notes
     if (fromDate)   data.from_date        = fromDate
