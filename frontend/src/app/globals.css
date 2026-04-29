@@ -203,7 +203,7 @@
 /* Today date circle in month view */
 .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
   background: var(--primary);
-  color: var(--primary-foreground);
+  color: var(--primary-foreground) !important;
   border-radius: 50%;
   width: 24px;
   height: 24px;
