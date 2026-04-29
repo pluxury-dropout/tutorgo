@@ -11,6 +11,7 @@ import { Lesson, ApiError } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TimePicker } from '@/components/ui/time-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,9 +48,6 @@ interface LessonFormProps {
   courseEndAt?: string   // ISO date — upper bound for open-ended recurrence
 }
 
-const HOURS   = Array.from({ length: 24 }, (_, i) => i)
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
-const pad     = (n: number) => n.toString().padStart(2, '0')
 
 export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: LessonFormProps) {
   const {
@@ -83,7 +81,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
       setHourVal(String(h))
       setMinVal(String(m))
       reset({
-        scheduled_at:     `${d}T${pad(h)}:${pad(m)}`,
+        scheduled_at:     `${d}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`,
         duration_minutes: initial.duration_minutes,
         status:           initial.status,
         notes:            initial.notes ?? '',
@@ -102,7 +100,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
   }, [initial, open, reset])
 
   useEffect(() => {
-    if (dateVal) setValue('scheduled_at', `${dateVal}T${pad(Number(hourVal))}:${pad(Number(minVal))}`)
+    if (dateVal) setValue('scheduled_at', `${dateVal}T${String(Number(hourVal)).padStart(2,'0')}:${String(Number(minVal)).padStart(2,'0')}`)
   }, [dateVal, hourVal, minVal, setValue])
 
   function toggleDay(iso: number) {
@@ -147,24 +145,12 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                 value={dateVal}
                 onChange={(e) => setDateVal(e.target.value)}
               />
-              <select
-                value={hourVal}
-                onChange={(e) => setHourVal(e.target.value)}
-                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>{pad(h)}</option>
-                ))}
-              </select>
-              <select
-                value={minVal}
-                onChange={(e) => setMinVal(e.target.value)}
-                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {MINUTES.map((m) => (
-                  <option key={m} value={m}>{pad(m)}</option>
-                ))}
-              </select>
+              <TimePicker
+                hour={hourVal}
+                minute={minVal}
+                onHourChange={setHourVal}
+                onMinuteChange={setMinVal}
+              />
             </div>
             {/* hidden field keeps scheduled_at registered */}
             <input type="hidden" {...register('scheduled_at')} />

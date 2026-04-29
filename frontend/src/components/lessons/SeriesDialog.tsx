@@ -7,6 +7,7 @@ import { SeriesUpdateInput } from '@/lib/api/lessons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TimePicker } from '@/components/ui/time-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface SeriesDialogProps {
@@ -17,10 +18,6 @@ interface SeriesDialogProps {
   onUpdate: (seriesId: string, data: SeriesUpdateInput) => Promise<void>
 }
 
-const HOURS   = Array.from({ length: 24 }, (_, i) => i)
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
-const pad     = (n: number) => String(n).padStart(2, '0')
-const selectCls = 'h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: SeriesDialogProps) {
   const [scope, setScope]         = useState<'all' | 'from'>('all')
@@ -56,7 +53,7 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
 
   async function handleUpdate() {
     const data: SeriesUpdateInput = {}
-    if (timeHour !== '') data.new_time = localTimeToUTC(`${pad(Number(timeHour))}:${pad(Number(timeMin))}`)
+    if (timeHour !== '') data.new_time = localTimeToUTC(`${String(Number(timeHour)).padStart(2,'0')}:${String(Number(timeMin)).padStart(2,'0')}`)
     if (duration)   data.duration_minutes = Number(duration)
     if (notes)      data.notes            = notes
     if (fromDate)   data.from_date        = fromDate
@@ -123,15 +120,13 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
 
             <div className="space-y-1.5">
               <Label>Новое время</Label>
-              <div className="flex gap-2">
-                <select value={timeHour} onChange={(e) => setTimeHour(e.target.value)} className={selectCls}>
-                  <option value="">— ч —</option>
-                  {HOURS.map((h) => <option key={h} value={h}>{pad(h)}</option>)}
-                </select>
-                <select value={timeMin} onChange={(e) => setTimeMin(e.target.value)} className={selectCls} disabled={timeHour === ''}>
-                  {MINUTES.map((m) => <option key={m} value={m}>{pad(m)}</option>)}
-                </select>
-              </div>
+              <TimePicker
+                hour={timeHour}
+                minute={timeMin}
+                onHourChange={setTimeHour}
+                onMinuteChange={setTimeMin}
+                hourPlaceholder="— ч —"
+              />
             </div>
 
             <div className="space-y-1.5">
