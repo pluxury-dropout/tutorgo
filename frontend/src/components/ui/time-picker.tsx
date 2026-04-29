@@ -14,28 +14,26 @@ interface TimePickerProps {
   hourPlaceholder?: string
 }
 
-const triggerCls = 'bg-primary text-primary-foreground border-primary hover:bg-primary/90 [&_svg]:text-primary-foreground'
-
 export function TimePicker({ hour, minute, onHourChange, onMinuteChange, hourPlaceholder }: TimePickerProps) {
   return (
     <div className="flex gap-2">
       <Select value={hour === '' ? null : hour} onValueChange={(v) => onHourChange(v ?? '')}>
-        <SelectTrigger className={`w-20 ${triggerCls}`}>
+        <SelectTrigger className="w-20">
           <SelectValue placeholder={hourPlaceholder ?? '—'} />
         </SelectTrigger>
         <SelectContent className="max-h-48" alignItemWithTrigger={false}>
           {HOURS.map((h) => (
-            <SelectItem key={h} value={String(h)}>{pad(h)}</SelectItem>
+            <SelectItem key={h} value={String(h)} className="focus:bg-primary-light focus:text-primary">{pad(h)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
       <Select value={minute} onValueChange={(v) => onMinuteChange(v ?? '0')}>
-        <SelectTrigger className={`w-16 ${triggerCls}`}>
+        <SelectTrigger className="w-16">
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="max-h-48" alignItemWithTrigger={false}>
           {MINUTES.map((m) => (
-            <SelectItem key={m} value={String(m)}>{pad(m)}</SelectItem>
+            <SelectItem key={m} value={String(m)} className="focus:bg-primary-light focus:text-primary">{pad(m)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
