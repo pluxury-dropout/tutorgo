@@ -17,9 +17,15 @@ interface SeriesDialogProps {
   onUpdate: (seriesId: string, data: SeriesUpdateInput) => Promise<void>
 }
 
+const HOURS   = Array.from({ length: 24 }, (_, i) => i)
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+const pad     = (n: number) => String(n).padStart(2, '0')
+const selectCls = 'h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
 export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: SeriesDialogProps) {
   const [scope, setScope]         = useState<'all' | 'from'>('all')
-  const [newTime, setNewTime]     = useState('')
+  const [timeHour, setTimeHour]   = useState('')
+  const [timeMin, setTimeMin]     = useState('0')
   const [duration, setDuration]   = useState('')
   const [notes, setNotes]         = useState('')
   const [saving, setSaving]       = useState(false)
@@ -28,7 +34,8 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
   useEffect(() => {
     if (open) {
       setScope('all')
-      setNewTime('')
+      setTimeHour('')
+      setTimeMin('0')
       setDuration('')
       setNotes('')
     }
@@ -49,7 +56,7 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
 
   async function handleUpdate() {
     const data: SeriesUpdateInput = {}
-    if (newTime)    data.new_time         = localTimeToUTC(newTime)
+    if (timeHour !== '') data.new_time = localTimeToUTC(`${pad(Number(timeHour))}:${pad(Number(timeMin))}`)
     if (duration)   data.duration_minutes = Number(duration)
     if (notes)      data.notes            = notes
     if (fromDate)   data.from_date        = fromDate
@@ -115,15 +122,16 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
             <p className="text-xs text-muted-foreground">Оставьте поля пустыми, чтобы не менять их</p>
 
             <div className="space-y-1.5">
-              <Label htmlFor="series-time">Новое время</Label>
-              <Input id="series-time" type="time" step={300}
-                value={newTime} onChange={(e) => {
-                  const [h, m] = e.target.value.split(':').map(Number)
-                  const rounded = Math.round(m / 5) * 5
-                  const rh = rounded === 60 ? (h + 1) % 24 : h
-                  const rm = rounded === 60 ? 0 : rounded
-                  setNewTime(`${String(rh).padStart(2, '0')}:${String(rm).padStart(2, '0')}`)
-                }} />
+              <Label>Новое время</Label>
+              <div className="flex gap-2">
+                <select value={timeHour} onChange={(e) => setTimeHour(e.target.value)} className={selectCls}>
+                  <option value="">— ч —</option>
+                  {HOURS.map((h) => <option key={h} value={h}>{pad(h)}</option>)}
+                </select>
+                <select value={timeMin} onChange={(e) => setTimeMin(e.target.value)} className={selectCls} disabled={timeHour === ''}>
+                  {MINUTES.map((m) => <option key={m} value={m}>{pad(m)}</option>)}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-1.5">
