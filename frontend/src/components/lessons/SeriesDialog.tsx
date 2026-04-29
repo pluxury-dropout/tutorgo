@@ -116,7 +116,7 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
 
             <div className="space-y-1.5">
               <Label htmlFor="series-time">Новое время</Label>
-              <Input id="series-time" type="time"
+              <Input id="series-time" type="time" step={300}
                 value={newTime} onChange={(e) => setNewTime(e.target.value)} />
             </div>
 
