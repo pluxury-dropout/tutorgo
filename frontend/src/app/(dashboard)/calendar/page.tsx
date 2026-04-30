@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
@@ -28,6 +28,11 @@ function roundToNearest15(n: number): number {
 export default function CalendarPage() {
   const { mutate: reschedule } = useRescheduleLesson()
   const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
+  const [isTouch, setIsTouch] = useState(false)
+
+  useEffect(() => {
+    setIsTouch(window.matchMedia('(pointer: coarse)').matches)
+  }, [])
 
   const now = new Date()
   const [range, setRange] = useState({
@@ -132,6 +137,7 @@ export default function CalendarPage() {
           datesSet={handleDatesSet}
           eventClick={handleEventClick}
           editable={true}
+          eventDurationEditable={!isTouch}
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           snapDuration="00:15:00"
