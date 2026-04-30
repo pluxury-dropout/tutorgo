@@ -135,7 +135,8 @@ export default function CalendarPage() {
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           snapDuration="00:15:00"
-          height="70vh"
+          height="77vh"
+          eventLongPressDelay={300}
           allDaySlot={false}
           slotDuration="00:30:00"
           slotLabelInterval="01:00:00"
