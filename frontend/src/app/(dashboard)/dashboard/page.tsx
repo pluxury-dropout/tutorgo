@@ -102,7 +102,7 @@ export default function DashboardPage() {
     <>
       <PageHeader title="Главная" />
 
-      <div className="mt-6 grid grid-cols-4 gap-[14px]">
+      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-[14px]">
         <StatCard
           label="Уроков сегодня"
           value={todayLessons.length}
@@ -129,7 +129,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-[1fr_380px] gap-6">
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6">
         {/* Today's lessons */}
         <div className="bg-card rounded-[var(--radius-lg)] border border-border shadow-[var(--shadow-card)] overflow-hidden">
           <div className="flex items-center justify-between px-5 py-[18px] border-b border-border">

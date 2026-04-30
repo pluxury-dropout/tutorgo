@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 
 const NAV = [
   { href: '/dashboard',  label: 'Главная',    icon: LayoutDashboard },
@@ -27,12 +29,12 @@ function initials(firstName?: string, lastName?: string) {
   return `${(firstName?.[0] ?? '').toUpperCase()}${(lastName?.[0] ?? '').toUpperCase()}`
 }
 
-export function Sidebar() {
-  const pathname  = usePathname()
+function SidebarInner() {
+  const pathname = usePathname()
   const { user, clearAuth } = useAuthStore()
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col border-r bg-sidebar h-full">
+    <>
       <div className="flex items-center gap-2 px-5 py-5 border-b border-border">
         <GraduationCap className="h-[17px] w-[17px] text-primary" strokeWidth={2} />
         <span className="font-semibold text-sm tracking-tight">TutorGo</span>
@@ -80,6 +82,35 @@ export function Sidebar() {
           </div>
         </div>
       )}
-    </aside>
+    </>
+  )
+}
+
+interface SidebarProps {
+  mobileOpen:    boolean
+  setMobileOpen: (open: boolean) => void
+}
+
+export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
+  const pathname = usePathname()
+
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname, setMobileOpen])
+
+  return (
+    <>
+      {/* Desktop: всегда виден */}
+      <aside className="hidden md:flex flex-col w-60 shrink-0 border-r bg-sidebar h-full">
+        <SidebarInner />
+      </aside>
+
+      {/* Mobile: Sheet-drawer */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-60 p-0 bg-sidebar flex flex-col" showCloseButton={false}>
+          <SidebarInner />
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }
