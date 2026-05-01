@@ -82,6 +82,16 @@ export interface AttendanceRecord {
   status: AttendanceStatus
 }
 
+export interface Task {
+  id: string
+  tutor_id: string
+  title: string
+  scheduled_at: string
+  duration_minutes: number
+  done: boolean
+  created_at: string
+}
+
 export type ApiValidationError = Record<string, string>
 export interface ApiError {
   message: string

@@ -23,6 +23,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	lessonRepo := repository.NewLessonRepository(pool)
 	enrollmentRepo := repository.NewEnrollmentRepository(pool)
 	attendanceRepo := repository.NewAttendanceRepository(pool)
+	taskRepo := repository.NewTaskRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo)
@@ -32,6 +33,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	lessonService := service.NewLessonService(lessonRepo, courseRepo)
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
+	taskService := service.NewTaskService(taskRepo)
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, log)
@@ -42,6 +44,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	lessonHandler := handlers.NewLessonHandler(lessonService, log)
 	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
+	taskHandler := handlers.NewTaskHandler(taskService, log)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -106,6 +109,12 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 		auth.GET("/lessons/:id/attendance", attendanceHandler.Get)
 		auth.PUT("/lessons/:id/attendance", attendanceHandler.Update)
+
+		auth.GET("/tasks", taskHandler.GetByRange)
+		auth.POST("/tasks", taskHandler.Create)
+		auth.PUT("/tasks/:id", taskHandler.Update)
+		auth.DELETE("/tasks/:id", taskHandler.Delete)
+		auth.PATCH("/tasks/:id/done", taskHandler.ToggleDone)
 	}
 
 	return r

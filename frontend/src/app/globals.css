@@ -57,7 +57,7 @@
 
 :root {
   /* Base */
-  --background:          oklch(0.985 0.004 210);
+  --background:          oklch(96% 0.00011 271.152);
   --foreground:          oklch(0.18 0.02 215);
   --card:                oklch(1 0 0);
   --card-foreground:     oklch(0.18 0.02 215);
@@ -76,7 +76,7 @@
   --destructive:         oklch(0.577 0.245 27.325);
   --border:              oklch(0.91 0.006 215);
   --input:               oklch(0.91 0.006 215);
-  --ring:                oklch(0.52 0.1 185);
+  --ring:                oklch(52.412% 0.09238 185.012);
   --radius:              0.5rem;
   --radius-lg:           0.75rem;
 
@@ -85,7 +85,7 @@
   --shadow-card:         0 1px 3px oklch(0.18 0.02 215 / 0.08);
 
   /* Sidebar */
-  --sidebar:             oklch(0.985 0.004 210);
+  --sidebar:             oklch(96% 0.00011 271.152);
   --sidebar-foreground:  oklch(0.18 0.02 215);
   --sidebar-primary:     oklch(0.52 0.1 185);
   --sidebar-primary-foreground: oklch(0.985 0 0);
