@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
@@ -25,10 +25,18 @@ function roundToNearest15(n: number): number {
   return Math.max(15, Math.round(n / 15) * 15)
 }
 
+const EDGE_ZONE = 50
+
 export default function CalendarPage() {
   const { mutate: reschedule } = useRescheduleLesson()
   const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
   const [isTouch, setIsTouch] = useState(false)
+
+  const calendarRef      = useRef<FullCalendar>(null)
+  const edgeTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dragSideRef      = useRef<'left' | 'right' | null>(null)
+  const calendarRectRef  = useRef<DOMRect | null>(null)
+  const pointerHandlerRef = useRef<((e: PointerEvent) => void) | null>(null)
 
   useEffect(() => {
     setIsTouch(window.matchMedia('(pointer: coarse)').matches)
@@ -59,6 +67,64 @@ export default function CalendarPage() {
       durationMinutes: l.duration_minutes,
     },
   }))
+
+  function refreshCalendarRect() {
+    const el = document.querySelector('.fc-view-harness')
+    if (el) calendarRectRef.current = el.getBoundingClientRect()
+  }
+
+  function clearEdgeTimer() {
+    if (edgeTimerRef.current) {
+      clearTimeout(edgeTimerRef.current)
+      edgeTimerRef.current = null
+    }
+    dragSideRef.current = null
+  }
+
+  function armEdgeTimer(side: 'left' | 'right') {
+    dragSideRef.current = side
+    edgeTimerRef.current = setTimeout(() => {
+      const api = calendarRef.current?.getApi()
+      if (api) {
+        side === 'left' ? api.prev() : api.next()
+        dragSideRef.current = null
+        requestAnimationFrame(() => refreshCalendarRect())
+      }
+    }, 1000)
+  }
+
+  function handleEventDragStart() {
+    refreshCalendarRect()
+
+    const handler = (e: PointerEvent) => {
+      const rect = calendarRectRef.current
+      if (!rect) return
+
+      const inLeft  = e.clientX < rect.left + EDGE_ZONE
+      const inRight = e.clientX > rect.right - EDGE_ZONE
+
+      if (inLeft && dragSideRef.current !== 'left') {
+        clearEdgeTimer()
+        armEdgeTimer('left')
+      } else if (inRight && dragSideRef.current !== 'right') {
+        clearEdgeTimer()
+        armEdgeTimer('right')
+      } else if (!inLeft && !inRight && dragSideRef.current !== null) {
+        clearEdgeTimer()
+      }
+    }
+
+    pointerHandlerRef.current = handler
+    document.addEventListener('pointermove', handler)
+  }
+
+  function handleEventDragStop() {
+    clearEdgeTimer()
+    if (pointerHandlerRef.current) {
+      document.removeEventListener('pointermove', pointerHandlerRef.current)
+      pointerHandlerRef.current = null
+    }
+  }
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
     setRange({ from: arg.start.toISOString(), to: arg.end.toISOString() })
@@ -124,6 +190,7 @@ export default function CalendarPage() {
       <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
       <div className="mt-4 rounded-lg border p-4">
         <FullCalendar
+          ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="timeGridWeek"
           headerToolbar={{
@@ -140,6 +207,8 @@ export default function CalendarPage() {
           eventDurationEditable={!isTouch}
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
+          eventDragStart={handleEventDragStart}
+          eventDragStop={handleEventDragStop}
           snapDuration="00:15:00"
           height="77vh"
           eventLongPressDelay={300}
