@@ -16,7 +16,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (error: AxiosError<{ error: string } | Record<string, string>>) => {
-    if (error.response?.status === 401) {
+    const isAuthRoute = error.config?.url?.startsWith('/auth/')
+    if (error.response?.status === 401 && !isAuthRoute) {
       localStorage.removeItem('tg_token')
       localStorage.removeItem('tg_user')
       if (typeof window !== 'undefined') window.location.href = '/login'

@@ -11,7 +11,6 @@ import ruLocale from '@fullcalendar/core/locales/ru'
 
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { FC_COLORS } from '@/lib/lessonStatus'
-import { PageHeader } from '@/components/common/PageHeader'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import type { LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
@@ -90,7 +89,7 @@ export default function CalendarPage() {
         dragSideRef.current = null
         requestAnimationFrame(() => refreshCalendarRect())
       }
-    }, 1000)
+    }, 500)
   }
 
   function handleEventDragStart() {
@@ -186,9 +185,8 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader title="Расписание" />
       <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
-      <div className="mt-4 rounded-lg border p-4">
+      <div className="rounded-lg border p-4">
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -210,7 +208,7 @@ export default function CalendarPage() {
           eventDragStart={handleEventDragStart}
           eventDragStop={handleEventDragStop}
           snapDuration="00:15:00"
-          height="77vh"
+          height="90vh"
           eventLongPressDelay={300}
           allDaySlot={false}
           slotDuration="00:30:00"
