@@ -2,6 +2,7 @@
 
 import { useQueries } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
+import { ChevronRight, CreditCard } from 'lucide-react'
 
 import { useCourses } from '@/lib/hooks/useCourses'
 import { paymentKeys } from '@/lib/hooks/usePayments'
@@ -20,11 +21,22 @@ function total(payments: Payment[]) {
   return payments.reduce((sum, p) => sum + p.amount, 0)
 }
 
-function StatCard({ title, amount, count }: { title: string; amount: number; count: number }) {
+function StatCard({ title, amount, count, highlight }: {
+  title: string
+  amount: number
+  count: number
+  highlight?: boolean
+}) {
   return (
-    <div className="border rounded-lg p-4">
-      <p className="text-sm text-muted-foreground mb-1">{title}</p>
-      <p className="text-2xl font-bold">{amount.toLocaleString()} ₸</p>
+    <div className="bg-card border border-border rounded-[var(--radius-lg)] p-5 shadow-[var(--shadow-card)]">
+      <p className="text-xs font-medium text-muted-foreground mb-1">{title}</p>
+      {highlight ? (
+        <p className="text-[28px] font-bold leading-none bg-gradient-to-r from-amber-500 to-yellow-400 bg-clip-text text-transparent">
+          {amount.toLocaleString()} ₸
+        </p>
+      ) : (
+        <p className="text-[26px] font-bold leading-none text-foreground">{amount.toLocaleString()} ₸</p>
+      )}
       <p className="text-xs text-muted-foreground mt-1">{count} оплат</p>
     </div>
   )
@@ -54,12 +66,18 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <PageHeader title="Платежи" description={`${allPayments.length} записей`} />
+      <PageHeader
+        title="Платежи"
+        description={`${allPayments.length} записей`}
+        icon={CreditCard}
+        iconBg="var(--accent-light)"
+        iconColor="oklch(0.52 0.18 55)"
+      />
 
       <div className="grid grid-cols-3 gap-4 mt-4">
-        <StatCard title="За всё время"    amount={total(allPayments)} count={allPayments.length} />
-        <StatCard title="Прошлый месяц"   amount={total(lastMonth)}   count={lastMonth.length} />
-        <StatCard title="Этот месяц"      amount={total(thisMonth)}   count={thisMonth.length} />
+        <StatCard title="За всё время"  amount={total(allPayments)} count={allPayments.length} />
+        <StatCard title="Прошлый месяц" amount={total(lastMonth)}   count={lastMonth.length} />
+        <StatCard title="Этот месяц"    amount={total(thisMonth)}   count={thisMonth.length}  highlight />
       </div>
 
       <div className="border rounded-lg mt-4 overflow-hidden">
@@ -70,6 +88,7 @@ export default function PaymentsPage() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Курс</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">Сумма</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">Уроков</th>
+              <th className="w-4" />
             </tr>
           </thead>
           <tbody>
@@ -91,7 +110,7 @@ export default function PaymentsPage() {
               allPayments.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer group"
                   onClick={() => router.push(`/courses/${p.course_id}`)}
                 >
                   <td className="px-4 py-3 text-muted-foreground">
@@ -105,6 +124,9 @@ export default function PaymentsPage() {
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground">
                     {p.lessons_count} ур.
+                  </td>
+                  <td className="pr-3 py-3 w-4">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                   </td>
                 </tr>
               ))

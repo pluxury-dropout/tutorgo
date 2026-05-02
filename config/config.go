@@ -8,10 +8,13 @@ import (
 )
 
 type Config struct {
-	DBUrl         string
-	ServerPort    string
-	JWTSecret     string
-	AllowedOrigin string
+	DBUrl           string
+	ServerPort      string
+	JWTSecret       string
+	AllowedOrigin   string
+	LiveKitURL      string
+	LiveKitAPIKey   string
+	LiveKitAPISecret string
 }
 
 func Load() Config {
@@ -23,10 +26,13 @@ func Load() Config {
 	}
 
 	cfg := Config{
-		DBUrl:      os.Getenv("DB_URL"),
-		ServerPort: port,
-		JWTSecret:  os.Getenv("JWT_SECRET"),
-		AllowedOrigin: os.Getenv("ALLOWED_ORIGIN"),
+		DBUrl:            os.Getenv("DB_URL"),
+		ServerPort:       port,
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		AllowedOrigin:    os.Getenv("ALLOWED_ORIGIN"),
+		LiveKitURL:       os.Getenv("LIVEKIT_URL"),
+		LiveKitAPIKey:    os.Getenv("LIVEKIT_API_KEY"),
+		LiveKitAPISecret: os.Getenv("LIVEKIT_API_SECRET"),
 	}
 
 	if cfg.DBUrl == "" {

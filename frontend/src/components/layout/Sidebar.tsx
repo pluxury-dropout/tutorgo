@@ -35,9 +35,11 @@ function SidebarInner() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-5 py-5 border-b border-border">
-        <GraduationCap className="h-[17px] w-[17px] text-primary" strokeWidth={2} />
-        <span className="font-semibold text-sm tracking-tight">TutorGo</span>
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border">
+        <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+          <GraduationCap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
+        </div>
+        <span className="font-heading text-[15px] font-bold tracking-tight">TutorGo</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">

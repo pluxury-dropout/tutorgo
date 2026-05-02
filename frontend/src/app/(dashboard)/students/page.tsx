@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Users, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, ChevronRight } from 'lucide-react'
 
 import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
 import { StudentForm } from '@/components/students/StudentForm'
@@ -68,6 +68,9 @@ export default function StudentsPage() {
       <PageHeader
         title="Ученики"
         description={`${students.length} учеников`}
+        icon={Users}
+        iconBg="oklch(0.94 0.03 280)"
+        iconColor="oklch(0.42 0.14 280)"
         actions={
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" /> Добавить
@@ -105,6 +108,7 @@ export default function StudentsPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Имя</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Телефон</th>
+                <th className="w-4" />
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -112,7 +116,7 @@ export default function StudentsPage() {
               {filtered.map((student) => (
                 <tr
                   key={student.id}
-                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer group"
                   onClick={() => router.push(`/students/${student.id}`)}
                 >
                   <td className="px-4 py-3 font-medium">
@@ -120,6 +124,9 @@ export default function StudentsPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{student.email}</td>
                   <td className="px-4 py-3 text-muted-foreground">{student.phone || '—'}</td>
+                  <td className="pr-1 py-3 w-4">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                  </td>
                   <td className="px-4 py-3">
                     <div
                       className="flex items-center justify-end gap-1"

@@ -45,6 +45,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
+	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -62,6 +63,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	// Public routes
 	r.POST("/auth/register", authHandler.Register)
 	r.POST("/auth/login", authHandler.Login)
+	r.GET("/public/lessons/:id/guest-token", callHandler.GetGuestToken)
 
 	// Protected routes
 	auth := r.Group("/")
@@ -115,6 +117,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.PUT("/tasks/:id", taskHandler.Update)
 		auth.DELETE("/tasks/:id", taskHandler.Delete)
 		auth.PATCH("/tasks/:id/done", taskHandler.ToggleDone)
+
+		auth.POST("/lessons/:id/room-token", callHandler.GetToken)
 	}
 
 	return r

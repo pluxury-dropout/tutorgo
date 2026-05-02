@@ -12,6 +12,7 @@ import { STATUS_LABELS } from '@/lib/lessonStatus'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { LessonStatus } from '@/types/api'
+import { Video, Link2 } from 'lucide-react'
 
 export interface QuickLesson {
   id:              string
@@ -54,7 +55,8 @@ export function LessonQuickDialog({ lesson, onClose }: Props) {
     )
     existing.forEach((a) => map.set(a.student_id, a.status as 'present' | 'absent'))
     setAttendance(map)
-  }, [enrollments, existing, lesson])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson?.id, enrollments.length, existing.length])
 
   function toggle(studentId: string) {
     setAttendance((prev) => {
@@ -159,6 +161,33 @@ export function LessonQuickDialog({ lesson, onClose }: Props) {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="flex-1 gap-1.5"
+            onClick={() => { router.push(`/lessons/${lesson?.id}/call`); onClose() }}
+          >
+            <Video size={14} />
+            Начать звонок
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="flex-1 gap-1.5"
+            onClick={() => {
+              const link = `${window.location.origin}/join/${lesson?.id}`
+              navigator.clipboard.writeText(link)
+              toast.success('Ссылка скопирована')
+            }}
+          >
+            <Link2 size={14} />
+            Ссылка ученику
+          </Button>
         </div>
 
         <div className="flex items-center justify-between pt-2">

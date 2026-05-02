@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Menu, GraduationCap } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -10,6 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { token } = useAuthStore()
   const isAuthenticated = !!token
   const router = useRouter()
+  const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -32,14 +33,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         >
           <Menu className="h-5 w-5" />
         </button>
-        <GraduationCap className="h-[16px] w-[16px] text-primary" strokeWidth={2} />
-        <span className="font-semibold text-sm tracking-tight">TutorGo</span>
+        <div className="h-6 w-6 rounded-md bg-primary flex items-center justify-center shrink-0">
+          <GraduationCap className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />
+        </div>
+        <span className="font-heading text-sm font-bold tracking-tight">TutorGo</span>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar mobileOpen={sidebarOpen} setMobileOpen={setSidebarOpen} />
         <main className="flex-1 overflow-y-auto bg-muted/20">
-          <div className="px-4 md:px-8 py-4 md:py-3">{children}</div>
+          <div key={pathname} className="px-4 md:px-8 py-4 md:py-3 animate-in fade-in-0 duration-200">
+            {children}
+          </div>
         </main>
       </div>
     </div>

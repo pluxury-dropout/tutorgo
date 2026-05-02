@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { BookOpen, Plus, Pencil, Trash2 } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, ChevronRight } from 'lucide-react'
 
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from '@/lib/hooks/useCourses'
 import { useStudents } from '@/lib/hooks/useStudents'
@@ -84,6 +84,9 @@ export default function CoursesPage() {
       <PageHeader
         title="Курсы"
         description={`${courses.length} курсов`}
+        icon={BookOpen}
+        iconBg="oklch(0.92 0.05 155)"
+        iconColor="oklch(0.36 0.10 155)"
         actions={
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" /> Добавить
@@ -123,6 +126,7 @@ export default function CoursesPage() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ученик</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Цена / урок</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Начало</th>
+                <th className="w-4" />
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -130,7 +134,7 @@ export default function CoursesPage() {
               {filtered.map((course) => (
                 <tr
                   key={course.id}
-                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer group"
                   onClick={() => router.push(`/courses/${course.id}`)}
                 >
                   <td className="px-4 py-3 font-medium">{course.subject}</td>
@@ -145,6 +149,9 @@ export default function CoursesPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {new Date(course.started_at).toLocaleDateString('ru-RU')}
+                  </td>
+                  <td className="pr-1 py-3 w-4">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                   </td>
                   <td className="px-4 py-3">
                     <div

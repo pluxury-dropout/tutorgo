@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { CalendarDays, Users, BookOpen, Banknote } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Users, BookOpen, Banknote } from 'lucide-react'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { useCourses } from '@/lib/hooks/useCourses'
 import { useCalendar } from '@/lib/hooks/useCalendar'
@@ -29,14 +29,15 @@ function formatDate(iso: string) {
 }
 
 interface StatCardProps {
-  label:   string
-  value:   string | number
-  note?:   string
-  icon:    React.ReactNode
-  iconBg:  string
+  label:      string
+  value:      string | number
+  note?:      string
+  icon:       React.ReactNode
+  iconBg:     string
+  highlight?: boolean
 }
 
-function StatCard({ label, value, note, icon, iconBg }: StatCardProps) {
+function StatCard({ label, value, note, icon, iconBg, highlight }: StatCardProps) {
   return (
     <div className="bg-card rounded-[var(--radius-lg)] border border-border p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-start justify-between mb-3">
@@ -48,7 +49,13 @@ function StatCard({ label, value, note, icon, iconBg }: StatCardProps) {
         </div>
       </div>
       <p className="text-xs font-medium text-muted-foreground mb-1">{label}</p>
-      <p className="text-[26px] font-bold leading-none text-foreground">{value}</p>
+      {highlight ? (
+        <p className="text-[28px] font-bold leading-none bg-gradient-to-r from-amber-500 to-yellow-400 bg-clip-text text-transparent">
+          {value}
+        </p>
+      ) : (
+        <p className="text-[26px] font-bold leading-none text-foreground">{value}</p>
+      )}
       {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
     </div>
   )
@@ -100,7 +107,12 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Главная" />
+      <PageHeader
+        title="Главная"
+        icon={LayoutDashboard}
+        iconBg="var(--primary-light)"
+        iconColor="var(--primary)"
+      />
 
       <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-[14px]">
         <StatCard
@@ -114,6 +126,7 @@ export default function DashboardPage() {
           value={formatAmount(monthlyIncome)}
           icon={<Banknote className="h-4 w-4" style={{ color: 'oklch(0.52 0.18 55)' }} />}
           iconBg="var(--accent-light)"
+          highlight
         />
         <StatCard
           label="Активных учеников"
