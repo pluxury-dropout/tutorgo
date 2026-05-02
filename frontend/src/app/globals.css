@@ -108,19 +108,19 @@
   --status-missed-bg:      oklch(0.94 0.04 25);
   --status-missed-text:    oklch(0.42 0.18 25);
 
-  /* Calendar event chips */
-  --cal-scheduled-bg:      oklch(0.92 0.05 250);
-  --cal-scheduled-border:  oklch(0.55 0.14 250);
-  --cal-scheduled-text:    oklch(81.406% 0.00009 271.152);
-  --cal-completed-bg:      oklch(0.96 0.02 155);
-  --cal-completed-border:  oklch(0.74 0.04 155);
-  --cal-completed-text:    oklch(0.56 0.05 155);
-  --cal-cancelled-bg:      oklch(0.96 0.002 215);
-  --cal-cancelled-border:  oklch(0.78 0.004 215);
-  --cal-cancelled-text:    oklch(0.62 0.004 215);
-  --cal-missed-bg:         oklch(0.96 0.018 25);
-  --cal-missed-border:     oklch(0.74 0.07 25);
-  --cal-missed-text:       oklch(0.58 0.08 25);
+  /* Calendar event chips — Google Calendar palette */
+  --cal-scheduled-bg:      oklch(0.85 0.06 270);   /* Lavender */
+  --cal-scheduled-border:  oklch(0.58 0.12 270);
+  --cal-scheduled-text:    oklch(0.28 0.15 270);
+  --cal-completed-bg:      oklch(0.88 0.07 148);   /* Basil */
+  --cal-completed-border:  oklch(0.47 0.13 152);
+  --cal-completed-text:    oklch(0.25 0.10 152);
+  --cal-cancelled-bg:      oklch(0.90 0.00 0);     /* Graphite */
+  --cal-cancelled-border:  oklch(0.60 0.00 0);
+  --cal-cancelled-text:    oklch(0.35 0.00 0);
+  --cal-missed-bg:         oklch(0.88 0.06 25);    /* Tomato */
+  --cal-missed-border:     oklch(0.49 0.21 27);
+  --cal-missed-text:       oklch(0.33 0.18 27);
 
   /* Charts */
   --chart-1: oklch(0.52 0.1 185);
@@ -212,8 +212,8 @@
   background: var(--primary);
   color: var(--primary-foreground) !important;
   border-radius: 40%;
-  width: 20px;
-  height: 20px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;

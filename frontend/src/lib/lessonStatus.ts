@@ -15,8 +15,8 @@ export const STATUS_COLORS: Record<LessonStatus, string> = {
 }
 
 export const FC_COLORS: Record<LessonStatus, { bg: string; border: string; text: string }> = {
-  scheduled: { bg: 'oklch(0.92 0.05 250)', border: 'oklch(0.55 0.14 250)', text: 'oklch(0.1 0.14 250)' },
-  completed: { bg: 'oklch(0.85 0.09 155)', border: 'oklch(0.74 0.04 155)', text: 'oklch(0.1 0.05 155)' },
-  cancelled: { bg: 'oklch(0.8 0.002 215)', border: 'oklch(0.78 0.004 215)', text: 'oklch(0.1 0.004 215)' },
-  missed:    { bg: 'oklch(0.96 0.018 25)',  border: 'oklch(0.74 0.07 25)',  text: 'oklch(0.58 0.08 25)'  },
+  scheduled: { bg: 'var(--cal-scheduled-bg)', border: 'var(--cal-scheduled-border)', text: 'var(--cal-scheduled-text)' },
+  completed: { bg: 'var(--cal-completed-bg)', border: 'var(--cal-completed-border)', text: 'var(--cal-completed-text)' },
+  cancelled: { bg: 'var(--cal-cancelled-bg)', border: 'var(--cal-cancelled-border)', text: 'var(--cal-cancelled-text)' },
+  missed:    { bg: 'var(--cal-missed-bg)',     border: 'var(--cal-missed-border)',     text: 'var(--cal-missed-text)'     },
 }

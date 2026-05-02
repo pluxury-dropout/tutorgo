@@ -19,8 +19,8 @@ import type { LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
 
 const TASK_COLORS = {
-  active: { bg: 'oklch(0.93 0.05 295)', border: 'oklch(0.58 0.16 295)', text: 'oklch(0.32 0.16 295)' },
-  done:   { bg: 'oklch(0.96 0.015 295)', border: 'oklch(0.75 0.06 295)', text: 'oklch(0.55 0.06 295)' },
+  active: { bg: 'oklch(0.86 0.06 305)', border: 'oklch(0.41 0.22 305)', text: 'oklch(0.26 0.18 305)' }, /* Grape */
+  done:   { bg: 'oklch(0.92 0.03 305)', border: 'oklch(0.65 0.08 305)', text: 'oklch(0.50 0.10 305)' },
 }
 
 function roundToNearest30(date: Date): Date {
