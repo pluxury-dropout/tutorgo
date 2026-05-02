@@ -11,7 +11,10 @@ import {
   CreditCard,
   User,
   GraduationCap,
+  Sun,
+  Moon,
 } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -32,6 +35,7 @@ function initials(firstName?: string, lastName?: string) {
 function SidebarInner() {
   const pathname = usePathname()
   const { user, clearAuth } = useAuthStore()
+  const { resolvedTheme, setTheme } = useTheme()
 
   return (
     <>
@@ -82,6 +86,12 @@ function SidebarInner() {
               Выйти
             </button>
           </div>
+          <button
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            className="h-7 w-7 flex items-center justify-center rounded-md text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-foreground transition-colors shrink-0"
+          >
+            {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
         </div>
       )}
     </>

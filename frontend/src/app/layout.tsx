@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ru" className={`${plusJakartaSans.variable} ${dmSerif.variable} h-full antialiased`}>
+    <html lang="ru" className={`${plusJakartaSans.variable} ${dmSerif.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full bg-background text-foreground">
         <Providers>{children}</Providers>
       </body>
