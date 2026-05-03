@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -26,7 +27,7 @@ func runAutoCompleteLoop(ctx context.Context, interval time.Duration, autoComple
 		select {
 		case <-ticker.C:
 			count, err := autoComplete(ctx)
-			if err != nil {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				log.Error("Auto-complete failed", slog.String("error", err.Error()))
 			} else if count > 0 {
 				log.Info("Auto-completed lessons", slog.Int64("count", count))
