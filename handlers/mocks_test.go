@@ -106,9 +106,9 @@ func withTutorID(tutorID string) gin.HandlerFunc {
 
 type mockStudentService struct{ mock.Mock }
 
-func (m *mockStudentService) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
-	args := m.Called(ctx, tutorID)
-	return args.Get(0).([]models.Student), args.Error(1)
+func (m *mockStudentService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Student), args.Int(1), args.Error(2)
 }
 func (m *mockStudentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
 	args := m.Called(ctx, req, tutorID)
@@ -176,9 +176,9 @@ func (m *mockCourseService) Create(ctx context.Context, req models.CreateCourseR
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseService) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
-	args := m.Called(ctx, tutorID)
-	return args.Get(0).([]models.Course), args.Error(1)
+func (m *mockCourseService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)
 }
 func (m *mockCourseService) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
 	args := m.Called(ctx, id, tutorID)
@@ -204,9 +204,9 @@ func (m *mockPaymentService) Create(ctx context.Context, req models.CreatePaymen
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Payment), args.Error(1)
 }
-func (m *mockPaymentService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error) {
-	args := m.Called(ctx, courseID, tutorID)
-	return args.Get(0).([]models.Payment), args.Error(1)
+func (m *mockPaymentService) GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
+	args := m.Called(ctx, courseID, tutorID, p)
+	return args.Get(0).([]models.Payment), args.Int(1), args.Error(2)
 }
 func (m *mockPaymentService) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
 	args := m.Called(ctx, tutorID, limit)

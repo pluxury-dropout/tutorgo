@@ -9,7 +9,7 @@ import (
 
 type CourseService interface {
 	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
-	GetAll(ctx context.Context, tutorID string) ([]models.Course, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
 	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
@@ -36,12 +36,16 @@ func (s *courseService) Create(ctx context.Context, req models.CreateCourseReque
 	return s.repo.Create(ctx, req, tutorID)
 }
 
-func (s *courseService) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
-	return s.repo.GetAll(ctx, tutorID)
+func (s *courseService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	return s.repo.GetAll(ctx, tutorID, p)
 }
 
 func (s *courseService) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
-	return s.repo.GetByID(ctx, id, tutorID)
+	course, err := s.repo.GetByID(ctx, id, tutorID)
+	if err != nil {
+		return models.Course{}, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	return course, nil
 }
 
 func (s *courseService) GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error) {

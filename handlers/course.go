@@ -25,14 +25,18 @@ func (h *CourseHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	courses, err := h.service.GetAll(c.Request.Context(), tutorID)
+	var p models.Pagination
+	_ = c.ShouldBindQuery(&p)
+	p.Normalize()
+
+	courses, total, err := h.service.GetAll(c.Request.Context(), tutorID, p)
 	if err != nil {
-		h.log.Error("Failed to get courses", slog.String("error", err.Error()))
 		handleServiceError(c, err)
 		return
 	}
-	h.log.Info("Courses retrieved", slog.Int("count", len(courses)))
-	c.JSON(http.StatusOK, courses)
+	c.JSON(http.StatusOK, models.PagedResponse[models.Course]{
+		Data: courses, Total: total, Page: p.Page, Limit: p.Limit,
+	})
 }
 
 func (h *CourseHandler) Create(c *gin.Context) {

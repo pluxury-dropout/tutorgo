@@ -9,7 +9,7 @@ import (
 
 type CourseRepository interface {
 	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
-	GetAll(ctx context.Context, tutorID string) ([]models.Course, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
 	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
@@ -35,25 +35,34 @@ func (r *courseRepository) Create(ctx context.Context, req models.CreateCourseRe
 	return course, err
 }
 
-func (r *courseRepository) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
+func (r *courseRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	var total int
+	if err := r.conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM courses WHERE tutor_id = $1`, tutorID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	rows, err := r.conn.Query(ctx,
 		`SELECT id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at
-		 FROM courses WHERE tutor_id = $1`, tutorID)
+		 FROM courses WHERE tutor_id = $1
+		 ORDER BY started_at DESC
+		 LIMIT $2 OFFSET $3`,
+		tutorID, p.Limit, p.Offset())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	var courses []models.Course
 	for rows.Next() {
 		var course models.Course
-		err := rows.Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt)
-		if err != nil {
-			return nil, err
+		if err := rows.Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt); err != nil {
+			return nil, 0, err
 		}
 		courses = append(courses, course)
 	}
-	return courses, rows.Err()
+	return courses, total, rows.Err()
 }
 
 func (r *courseRepository) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {

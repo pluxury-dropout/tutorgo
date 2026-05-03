@@ -9,7 +9,7 @@ import (
 
 type StudentService interface {
 	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(ctx context.Context, tutorID string) ([]models.Student, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
 	Delete(ctx context.Context, id string, tutorID string) error
@@ -27,8 +27,8 @@ func (s *studentService) Create(ctx context.Context, req models.CreateStudentReq
 	return s.repo.Create(ctx, req, tutorID)
 }
 
-func (s *studentService) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
-	return s.repo.GetAll(ctx, tutorID)
+func (s *studentService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
+	return s.repo.GetAll(ctx, tutorID, p)
 }
 
 func (s *studentService) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {

@@ -39,11 +39,16 @@ func TestPaymentGetAll_Success(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Payment{testPayment}, nil)
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID, p).Return([]models.Payment{testPayment}, 1, nil)
 
-	w := makeRequest(t, r, http.MethodGet, "/payments?course_id="+testCourseID, nil)
+	w := makeRequest(t, r, http.MethodGet, "/payments?course_id="+testCourseID+"&page=1&limit=20", nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.PagedResponse[models.Payment]
+	decodeJSON(t, w, &got)
+	assert.Len(t, got.Data, 1)
+	assert.Equal(t, 1, got.Total)
 	svc.AssertExpectations(t)
 }
 
@@ -71,9 +76,10 @@ func TestPaymentGetAll_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Payment{}, errors.New("db error"))
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID, p).Return([]models.Payment{}, 0, errors.New("db error"))
 
-	w := makeRequest(t, r, http.MethodGet, "/payments?course_id="+testCourseID, nil)
+	w := makeRequest(t, r, http.MethodGet, "/payments?course_id="+testCourseID+"&page=1&limit=20", nil)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)

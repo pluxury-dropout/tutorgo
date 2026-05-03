@@ -19,9 +19,9 @@ func (m *mockCourseRepo) Create(ctx context.Context, req models.CreateCourseRequ
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
-func (m *mockCourseRepo) GetAll(ctx context.Context, tutorID string) ([]models.Course, error) {
-	args := m.Called(ctx, tutorID)
-	return args.Get(0).([]models.Course), args.Error(1)
+func (m *mockCourseRepo) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)
 }
 func (m *mockCourseRepo) GetByID(ctx context.Context, id string, tutorID string) (models.Course, error) {
 	args := m.Called(ctx, id, tutorID)
@@ -126,13 +126,15 @@ func TestCourseGetAll_Success(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
+	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Course{expectedCourse}
-	courseRepo.On("GetAll", mock.Anything, tutorID).Return(expected, nil)
+	courseRepo.On("GetAll", mock.Anything, tutorID, p).Return(expected, 1, nil)
 
-	courses, err := svc.GetAll(context.Background(), tutorID)
+	courses, total, err := svc.GetAll(context.Background(), tutorID, p)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, courses)
+	assert.Equal(t, 1, total)
 	courseRepo.AssertExpectations(t)
 }
 
@@ -142,12 +144,14 @@ func TestCourseGetAll_Error(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
 
-	courseRepo.On("GetAll", mock.Anything, tutorID).Return([]models.Course{}, errors.New("db error"))
+	p := models.Pagination{Page: 1, Limit: 20}
+	courseRepo.On("GetAll", mock.Anything, tutorID, p).Return([]models.Course{}, 0, errors.New("db error"))
 
-	courses, err := svc.GetAll(context.Background(), tutorID)
+	courses, total, err := svc.GetAll(context.Background(), tutorID, p)
 
 	assert.Error(t, err)
 	assert.Empty(t, courses)
+	assert.Equal(t, 0, total)
 	courseRepo.AssertExpectations(t)
 }
 

@@ -9,7 +9,7 @@ import (
 
 type PaymentService interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
-	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error)
+	GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
@@ -31,11 +31,11 @@ func (s *paymentService) Create(ctx context.Context, req models.CreatePaymentReq
 	return s.repo.Create(ctx, req)
 }
 
-func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error) {
+func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
 	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
-		return nil, fmt.Errorf("course: %w", ErrNotFound)
+		return nil, 0, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.GetByCourse(ctx, courseID)
+	return s.repo.GetByCourse(ctx, courseID, p)
 }
 
 func (s *paymentService) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {

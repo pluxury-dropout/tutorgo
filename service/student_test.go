@@ -21,9 +21,9 @@ func (m *mockStudentRepo) Create(ctx context.Context, req models.CreateStudentRe
 	return args.Get(0).(models.Student), args.Error(1)
 }
 
-func (m *mockStudentRepo) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
-	args := m.Called(ctx, tutorID)
-	return args.Get(0).([]models.Student), args.Error(1)
+func (m *mockStudentRepo) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Student), args.Int(1), args.Error(2)
 }
 
 func (m *mockStudentRepo) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {
@@ -46,17 +46,19 @@ func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
 	svc := service.NewStudentService(repo)
 
+	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Student{
 		{ID: "1", FirstName: "Aiya", LastName: "Bekova", TutorID: "tutor-1"},
 		{ID: "2", FirstName: "Zhanibek", LastName: "Gabitov", TutorID: "tutor-1"},
 	}
 
-	repo.On("GetAll", mock.Anything, "tutor-1").Return(expected, nil)
+	repo.On("GetAll", mock.Anything, "tutor-1", p).Return(expected, 2, nil)
 
-	students, err := svc.GetAll(context.Background(), "tutor-1")
+	students, total, err := svc.GetAll(context.Background(), "tutor-1", p)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, students)
+	assert.Equal(t, 2, total)
 	repo.AssertExpectations(t)
 }
 
@@ -64,12 +66,14 @@ func TestGetAllStudents_Error(t *testing.T) {
 	repo := new(mockStudentRepo)
 	svc := service.NewStudentService(repo)
 
-	repo.On("GetAll", mock.Anything, "tutor-1").Return([]models.Student{}, errors.New("db error"))
+	p := models.Pagination{Page: 1, Limit: 20}
+	repo.On("GetAll", mock.Anything, "tutor-1", p).Return([]models.Student{}, 0, errors.New("db error"))
 
-	students, err := svc.GetAll(context.Background(), "tutor-1")
+	students, total, err := svc.GetAll(context.Background(), "tutor-1", p)
 
 	assert.Error(t, err)
 	assert.Empty(t, students)
+	assert.Equal(t, 0, total)
 	repo.AssertExpectations(t)
 }
 

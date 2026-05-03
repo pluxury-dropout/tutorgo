@@ -45,11 +45,16 @@ func TestCourseGetAll_Success(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetAll", mock.Anything, testTutorID).Return([]models.Course{testCourse}, nil)
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetAll", mock.Anything, testTutorID, p).Return([]models.Course{testCourse}, 1, nil)
 
-	w := makeRequest(t, r, http.MethodGet, "/courses", nil)
+	w := makeRequest(t, r, http.MethodGet, "/courses?page=1&limit=20", nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.PagedResponse[models.Course]
+	decodeJSON(t, w, &got)
+	assert.Len(t, got.Data, 1)
+	assert.Equal(t, 1, got.Total)
 	svc.AssertExpectations(t)
 }
 
@@ -67,9 +72,10 @@ func TestCourseGetAll_ServiceError(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetAll", mock.Anything, testTutorID).Return([]models.Course{}, errors.New("db error"))
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetAll", mock.Anything, testTutorID, p).Return([]models.Course{}, 0, errors.New("db error"))
 
-	w := makeRequest(t, r, http.MethodGet, "/courses", nil)
+	w := makeRequest(t, r, http.MethodGet, "/courses?page=1&limit=20", nil)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)

@@ -30,14 +30,18 @@ func (h *PaymentHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
 		return
 	}
-	payments, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
+	var p models.Pagination
+	_ = c.ShouldBindQuery(&p)
+	p.Normalize()
+
+	payments, total, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID, p)
 	if err != nil {
-		h.log.Error("Failed to get payments", slog.String("error", err.Error()))
 		handleServiceError(c, err)
 		return
 	}
-	h.log.Info("Payments retrieved", slog.Int("count", len(payments)))
-	c.JSON(http.StatusOK, payments)
+	c.JSON(http.StatusOK, models.PagedResponse[models.Payment]{
+		Data: payments, Total: total, Page: p.Page, Limit: p.Limit,
+	})
 }
 
 func (h *PaymentHandler) Create(c *gin.Context) {

@@ -21,9 +21,9 @@ func (m *mockPaymentRepo) Create(ctx context.Context, req models.CreatePaymentRe
 	return args.Get(0).(models.Payment), args.Error(1)
 }
 
-func (m *mockPaymentRepo) GetByCourse(ctx context.Context, courseID string) ([]models.Payment, error) {
-	args := m.Called(ctx, courseID)
-	return args.Get(0).([]models.Payment), args.Error(1)
+func (m *mockPaymentRepo) GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error) {
+	args := m.Called(ctx, courseID, p)
+	return args.Get(0).([]models.Payment), args.Int(1), args.Error(2)
 }
 
 func (m *mockPaymentRepo) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
@@ -126,14 +126,16 @@ func TestPaymentGetByCourse_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	svc := newPaymentSvc(payRepo, courseRepo)
 
+	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Payment{expectedPayment}
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
-	payRepo.On("GetByCourse", mock.Anything, courseID).Return(expected, nil)
+	payRepo.On("GetByCourse", mock.Anything, courseID, p).Return(expected, 1, nil)
 
-	payments, err := svc.GetByCourse(context.Background(), courseID, tutorID)
+	payments, total, err := svc.GetByCourse(context.Background(), courseID, tutorID, p)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, payments)
+	assert.Equal(t, 1, total)
 	courseRepo.AssertExpectations(t)
 	payRepo.AssertExpectations(t)
 }
@@ -143,12 +145,14 @@ func TestPaymentGetByCourse_CourseNotFound(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	svc := newPaymentSvc(payRepo, courseRepo)
 
+	p := models.Pagination{Page: 1, Limit: 20}
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
-	payments, err := svc.GetByCourse(context.Background(), courseID, tutorID)
+	payments, total, err := svc.GetByCourse(context.Background(), courseID, tutorID, p)
 
 	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Nil(t, payments)
+	assert.Equal(t, 0, total)
 	payRepo.AssertNotCalled(t, "GetByCourse")
 	courseRepo.AssertExpectations(t)
 }
