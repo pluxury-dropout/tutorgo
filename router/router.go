@@ -2,6 +2,7 @@ package router
 
 import (
 	"log/slog"
+	"time"
 
 	"tutorgo/config"
 	"tutorgo/handlers"
@@ -12,6 +13,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 )
 
 func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine {
@@ -61,9 +63,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	}))
 
 	// Public routes
-	r.POST("/auth/register", authHandler.Register)
-	r.POST("/auth/login", authHandler.Login)
-	r.GET("/public/lessons/:id/guest-token", callHandler.GetGuestToken)
+	r.POST("/auth/register", middleware.RateLimit(rate.Every(12*time.Second), 3), authHandler.Register)
+	r.POST("/auth/login", middleware.RateLimit(rate.Every(12*time.Second), 3), authHandler.Login)
+	r.GET("/public/lessons/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetGuestToken)
 
 	// Protected routes
 	auth := r.Group("/")
