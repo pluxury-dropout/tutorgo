@@ -52,6 +52,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(middleware.Logger(log))
 	r.Use(func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1 MB
 		c.Next()
