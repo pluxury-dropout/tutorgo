@@ -40,7 +40,7 @@ func (s *attendanceService) Update(ctx context.Context, lessonID string, req mod
 
 func (s *attendanceService) GetByLesson(ctx context.Context, lessonID string, tutorID string) ([]models.LessonAttendance, error) {
 	if _, err := s.lessonRepo.GetByIDForTutor(ctx, lessonID, tutorID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("lesson: %w", ErrNotFound)
 	}
 	return s.repo.GetByLesson(ctx, lessonID)
 }
