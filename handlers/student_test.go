@@ -224,5 +224,6 @@ func TestStudentCreate_BodyTooLarge(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "error", "response should contain error field")
 	svc.AssertNotCalled(t, "Create")
 }
