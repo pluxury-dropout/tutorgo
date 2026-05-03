@@ -2,6 +2,7 @@ package router
 
 import (
 	"log/slog"
+	"net/http"
 	"time"
 
 	"tutorgo/config"
@@ -51,6 +52,10 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1 MB
+		c.Next()
+	})
 	origins := []string{"http://localhost:3000"}
 	if cfg.AllowedOrigin != "" {
 		origins = append(origins, cfg.AllowedOrigin)

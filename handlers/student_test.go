@@ -3,6 +3,8 @@ package handlers_test
 import (
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"tutorgo/handlers"
 	"tutorgo/models"
@@ -200,4 +202,27 @@ func TestStudentDelete_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)
+}
+
+// Body Size Limit
+
+func TestStudentCreate_BodyTooLarge(t *testing.T) {
+	svc := new(mockStudentService)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10)
+		c.Next()
+	})
+	h := handlers.NewStudentHandler(svc, slog.Default())
+	r.Use(withTutorID(testTutorID))
+	r.POST("/students", h.Create)
+
+	body := strings.NewReader(`{"first_name":"Aiya","last_name":"Bekova"}`)
+	req := httptest.NewRequest(http.MethodPost, "/students", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	svc.AssertNotCalled(t, "Create")
 }
