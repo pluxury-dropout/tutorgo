@@ -63,8 +63,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	}))
 
 	// Public routes
-	r.POST("/auth/register", middleware.RateLimit(rate.Every(12*time.Second), 3), authHandler.Register)
-	r.POST("/auth/login", middleware.RateLimit(rate.Every(12*time.Second), 3), authHandler.Login)
+	authLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
+	r.POST("/auth/register", authLimiter, authHandler.Register)
+	r.POST("/auth/login", authLimiter, authHandler.Login)
 	r.GET("/public/lessons/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetGuestToken)
 
 	// Protected routes
