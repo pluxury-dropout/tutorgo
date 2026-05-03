@@ -22,7 +22,11 @@ export function useCourseBalance(id: string) {
 }
 
 export function useCourseEnrollments(id: string) {
-  return useQuery({ queryKey: courseKeys.enrollments(id), queryFn: () => coursesApi.getEnrollments(id) })
+  return useQuery({
+    queryKey: courseKeys.enrollments(id),
+    queryFn:  () => coursesApi.getEnrollments(id),
+    enabled:  !!id,
+  })
 }
 
 export function useStudentCourses(studentId: string) {

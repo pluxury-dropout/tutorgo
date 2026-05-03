@@ -66,7 +66,7 @@ func (h *EnrollmentHandler) GetByCourse(c *gin.Context) {
 	courseID := c.Param("id")
 	enrollments, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
-		h.log.Error("Failed to get enrollments", slog.String("error", err.Error()))
+		h.log.Error("Failed to get enrollments", slog.String("courseID", courseID), slog.String("error", err.Error()))
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}

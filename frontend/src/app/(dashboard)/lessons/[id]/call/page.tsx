@@ -1,12 +1,33 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Component, useEffect, useState, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
 
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
 import { Button } from '@/components/ui/button'
+
+// Catches the transient "Element not part of the array" error from LiveKit when
+// a placeholder track is swapped for the real track, then remounts to recover.
+class VideoConferenceBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch() {
+    setTimeout(() => this.setState({ hasError: false }), 0)
+  }
+
+  render() {
+    return this.state.hasError ? null : this.props.children
+  }
+}
 
 export default function CallPage() {
   const { id } = useParams<{ id: string }>()
@@ -41,15 +62,16 @@ export default function CallPage() {
   return (
     <div style={{ height: 'calc(100vh - 64px)' }}>
       <LiveKitRoom
+        key={room.token}
         serverUrl={room.server_url}
         token={room.token}
-        video={true}
-        audio={true}
         onDisconnected={() => router.back()}
         data-lk-theme="default"
         style={{ height: '100%' }}
       >
-        <VideoConference />
+        <VideoConferenceBoundary>
+          <VideoConference />
+        </VideoConferenceBoundary>
       </LiveKitRoom>
     </div>
   )
