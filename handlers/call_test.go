@@ -16,8 +16,6 @@ func newCallRouter(svc *mockLessonService) *gin.Engine {
 	r := gin.New()
 	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret")
 	r.GET("/public/lessons/:id/guest-token", h.GetGuestToken)
-	r.Use(withTutorID(testTutorID))
-	r.POST("/lessons/:id/room-token", h.GetToken)
 	return r
 }
 

@@ -332,3 +332,31 @@ func TestLessonDelete_RepoError(t *testing.T) {
 	assert.Error(t, err)
 	lessonRepo.AssertExpectations(t)
 }
+
+// ExistsPublic
+
+func TestLessonExistsPublic_Success(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(nil)
+
+	err := svc.ExistsPublic(context.Background(), lessonID)
+
+	assert.NoError(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestLessonExistsPublic_Error(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(errors.New("not found"))
+
+	err := svc.ExistsPublic(context.Background(), lessonID)
+
+	assert.Error(t, err)
+	lessonRepo.AssertExpectations(t)
+}
