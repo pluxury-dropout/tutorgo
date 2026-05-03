@@ -29,15 +29,21 @@ func main() {
 
 	// Auto-complete: mark expired lessons as completed every minute
 	lessonRepo := repository.NewLessonRepository(pool)
+	bgCtx, bgCancel := context.WithCancel(context.Background())
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			count, err := lessonRepo.AutoComplete(context.Background())
-			if err != nil {
-				log.Error("Auto-complete failed", slog.String("error", err.Error()))
-			} else if count > 0 {
-				log.Info("Auto-completed lessons", slog.Int64("count", count))
+		for {
+			select {
+			case <-ticker.C:
+				count, err := lessonRepo.AutoComplete(bgCtx)
+				if err != nil {
+					log.Error("Auto-complete failed", slog.String("error", err.Error()))
+				} else if count > 0 {
+					log.Info("Auto-completed lessons", slog.Int64("count", count))
+				}
+			case <-bgCtx.Done():
+				return
 			}
 		}
 	}()
@@ -67,11 +73,12 @@ func main() {
 	<-quit
 
 	log.Info("Shutting down server...")
+	bgCancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("Server forced to shutdown", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
