@@ -271,10 +271,10 @@ export default function CalendarPage() {
           eventResize={handleEventResize}
           eventDragStart={handleEventDragStart}
           eventDragStop={handleEventDragStop}
+          eventClassNames={(arg) =>
+            arg.event.end && arg.event.end < new Date() ? ['fc-event-past'] : []
+          }
           eventDidMount={(arg) => {
-            if (arg.event.end && arg.event.end < new Date()) {
-              arg.el.style.opacity = '0.45'
-            }
             if (arg.event.extendedProps.type === 'task') {
               arg.el.style.height    = 'auto'
               arg.el.style.minHeight = '24px'
