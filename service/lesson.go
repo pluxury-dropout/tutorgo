@@ -18,6 +18,7 @@ type LessonService interface {
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
+	ExistsPublic(ctx context.Context, id string) error
 }
 
 type lessonService struct {
@@ -98,4 +99,8 @@ func (s *lessonService) UpdateSeries(ctx context.Context, seriesID string, tutor
 
 func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
 	return s.repo.GetCalendar(ctx, tutorID, from, to)
+}
+
+func (s *lessonService) ExistsPublic(ctx context.Context, id string) error {
+	return s.repo.ExistsPublic(ctx, id)
 }

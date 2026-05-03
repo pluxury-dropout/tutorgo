@@ -266,3 +266,7 @@ func (m *mockLessonService) DeleteSeries(ctx context.Context, seriesID string, t
 func (m *mockLessonService) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
 	return m.Called(ctx, seriesID, tutorID, req).Error(0)
 }
+
+func (m *mockLessonService) ExistsPublic(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
+}

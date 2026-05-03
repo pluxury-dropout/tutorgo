@@ -75,6 +75,10 @@ func (m *mockLessonRepo) UpdateSeries(ctx context.Context, seriesID string, tuto
 	return m.Called(ctx, seriesID, tutorID, req).Error(0)
 }
 
+func (m *mockLessonRepo) ExistsPublic(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 // fixtures
 
 var (
