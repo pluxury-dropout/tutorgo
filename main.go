@@ -50,11 +50,9 @@ func main() {
 	lessonRepo := repository.NewLessonRepository(pool)
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	var bgWg sync.WaitGroup
-	bgWg.Add(1)
-	go func() {
-		defer bgWg.Done()
+	bgWg.Go(func() {
 		runAutoCompleteLoop(bgCtx, 1*time.Minute, lessonRepo.AutoComplete, log)
-	}()
+	})
 
 	r.GET("/health", func(c *gin.Context) {
 		if err := pool.Ping(c.Request.Context()); err != nil {
