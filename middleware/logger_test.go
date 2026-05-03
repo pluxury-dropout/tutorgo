@@ -31,6 +31,16 @@ func TestLogger_LogsRequest(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, capture.called, "Logger should have logged the request")
 	assert.Equal(t, "http", capture.msg)
+
+	attrMap := make(map[string]any)
+	for _, a := range capture.attrs {
+		attrMap[a.Key] = a.Value.Any()
+	}
+	assert.Equal(t, "GET", attrMap["method"])
+	assert.Equal(t, "/ping", attrMap["path"])
+	assert.Equal(t, int64(200), attrMap["status"])
+	_, hasDuration := attrMap["duration"]
+	assert.True(t, hasDuration, "duration attribute must be present")
 }
 
 type captureHandler struct {
