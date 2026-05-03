@@ -2,16 +2,18 @@ package handlers_test
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"testing"
 	"time"
 	"tutorgo/handlers"
 	"tutorgo/models"
+	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log/slog"
 )
 
 func newCourseRouter(svc *mockCourseService, tutorID string) *gin.Engine {
@@ -105,11 +107,11 @@ func TestCourseCreate_ServiceError(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("Create", mock.Anything, testCreateCourseReq, testTutorID).Return(models.Course{}, errors.New("student not found or access denied"))
+	svc.On("Create", mock.Anything, testCreateCourseReq, testTutorID).Return(models.Course{}, fmt.Errorf("student: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodPost, "/courses", testCreateCourseReq)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -131,7 +133,7 @@ func TestCourseGetByID_NotFound(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("GetByID", mock.Anything, testCourseID, testTutorID).Return(models.Course{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testCourseID, testTutorID).Return(models.Course{}, fmt.Errorf("course: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/courses/"+testCourseID, nil)
 
@@ -157,10 +159,10 @@ func TestCourseDelete_ServiceError(t *testing.T) {
 	svc := new(mockCourseService)
 	r := newCourseRouter(svc, testTutorID)
 
-	svc.On("Delete", mock.Anything, testCourseID, testTutorID).Return(errors.New("cannot delete a course with existing lessons"))
+	svc.On("Delete", mock.Anything, testCourseID, testTutorID).Return(fmt.Errorf("course has active lessons: %w", service.ErrConflict))
 
 	w := makeRequest(t, r, http.MethodDelete, "/courses/"+testCourseID, nil)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusConflict, w.Code)
 	svc.AssertExpectations(t)
 }

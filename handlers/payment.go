@@ -33,7 +33,7 @@ func (h *PaymentHandler) GetAll(c *gin.Context) {
 	payments, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get payments", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve payments"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Payments retrieved", slog.Int("count", len(payments)))
@@ -53,7 +53,7 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 	payment, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create payment", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create payment"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Payment created", slog.String("id", payment.ID), slog.Float64("amount", payment.Amount))
@@ -69,7 +69,7 @@ func (h *PaymentHandler) GetRecent(c *gin.Context) {
 	payments, err := h.service.GetAllByTutor(c.Request.Context(), tutorID, 5)
 	if err != nil {
 		h.log.Error("Failed to get recent payments", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve payments"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, payments)
@@ -84,7 +84,7 @@ func (h *PaymentHandler) GetMonthlyIncome(c *gin.Context) {
 	total, err := h.service.GetMonthlyIncome(c.Request.Context(), tutorID)
 	if err != nil {
 		h.log.Error("Failed to get monthly income", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get monthly income"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"total": total})
@@ -104,7 +104,7 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	balance, err := h.service.GetBalance(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get balance", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get balance"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, balance)

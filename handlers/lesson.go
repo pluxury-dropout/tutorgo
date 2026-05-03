@@ -33,7 +33,7 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 	lessons, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get lessons", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve lessons"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Lessons retrieved", slog.Int("count", len(lessons)))
@@ -53,7 +53,7 @@ func (h *LessonHandler) CreateBulk(c *gin.Context) {
 	lessons, err := h.service.CreateBulk(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create lessons", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lessons"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Lessons created", slog.Int("count", len(lessons)))
@@ -73,7 +73,7 @@ func (h *LessonHandler) Create(c *gin.Context) {
 	lesson, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create lesson", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create lesson"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Lesson created", slog.String("id", lesson.ID))
@@ -90,7 +90,7 @@ func (h *LessonHandler) GetByID(c *gin.Context) {
 	lesson, err := h.service.GetByID(c.Request.Context(), id, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get lesson", slog.String("id", id), slog.String("error", err.Error()))
-		c.JSON(http.StatusNotFound, gin.H{"error": "Lesson not found"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, lesson)
@@ -110,7 +110,7 @@ func (h *LessonHandler) Update(c *gin.Context) {
 	lesson, err := h.service.Update(c.Request.Context(), id, req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to update lesson", slog.String("id", id), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update lesson"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Lesson updated", slog.String("id", id))
@@ -126,7 +126,7 @@ func (h *LessonHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete lesson", slog.String("id", id), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete lesson"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Lesson deleted", slog.String("id", id))
@@ -146,7 +146,7 @@ func (h *LessonHandler) DeleteByCourse(c *gin.Context) {
 	}
 	if err := h.service.DeleteByCourse(c.Request.Context(), courseID, tutorID); err != nil {
 		h.log.Error("Failed to delete lessons by course", slog.String("courseId", courseID), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete lessons"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Lessons deleted by course", slog.String("courseId", courseID))
@@ -167,7 +167,7 @@ func (h *LessonHandler) DeleteSeries(c *gin.Context) {
 	}
 	if err := h.service.DeleteSeries(c.Request.Context(), seriesID, tutorID, fromDatePtr); err != nil {
 		h.log.Error("Failed to delete series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete series"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Series deleted", slog.String("seriesId", seriesID))
@@ -187,11 +187,7 @@ func (h *LessonHandler) UpdateSeries(c *gin.Context) {
 	}
 	if err := h.service.UpdateSeries(c.Request.Context(), seriesID, tutorID, req); err != nil {
 		h.log.Error("Failed to update series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
-		if err.Error() == "at least one field must be provided" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update series"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Series updated", slog.String("seriesId", seriesID))
@@ -213,7 +209,7 @@ func (h *LessonHandler) GetCalendar(c *gin.Context) {
 	lessons, err := h.service.GetCalendar(c.Request.Context(), tutorID, from, to)
 	if err != nil {
 		h.log.Error("Failed to get calendar", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve calendar"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, lessons)

@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -26,14 +26,14 @@ func NewPaymentService(repo repository.PaymentRepository, courseRepo repository.
 
 func (s *paymentService) Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
 	if _, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID); err != nil {
-		return models.Payment{}, errors.New("course not found or access denied")
+		return models.Payment{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.Create(ctx, req)
 }
 
 func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error) {
 	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
-		return nil, errors.New("course not found or access denied")
+		return nil, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.GetByCourse(ctx, courseID)
 }
@@ -44,7 +44,7 @@ func (s *paymentService) GetAllByTutor(ctx context.Context, tutorID string, limi
 
 func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
 	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
-		return models.CourseBalance{}, errors.New("course not found or access denied")
+		return models.CourseBalance{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.GetBalance(ctx, courseID)
 }

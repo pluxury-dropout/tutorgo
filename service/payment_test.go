@@ -97,8 +97,7 @@ func TestPaymentCreate_CourseNotFound(t *testing.T) {
 
 	payment, err := svc.Create(context.Background(), paymentReq, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, payment)
 	payRepo.AssertNotCalled(t, "Create")
 	courseRepo.AssertExpectations(t)
@@ -148,8 +147,7 @@ func TestPaymentGetByCourse_CourseNotFound(t *testing.T) {
 
 	payments, err := svc.GetByCourse(context.Background(), courseID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Nil(t, payments)
 	payRepo.AssertNotCalled(t, "GetByCourse")
 	courseRepo.AssertExpectations(t)
@@ -187,8 +185,7 @@ func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
 
 	balance, err := svc.GetBalance(context.Background(), courseID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, balance)
 	payRepo.AssertNotCalled(t, "GetBalance")
 	courseRepo.AssertExpectations(t)

@@ -2,17 +2,19 @@ package handlers_test
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"tutorgo/handlers"
 	"tutorgo/models"
+	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log/slog"
 )
 
 func newStudentRouter(svc *mockStudentService, tutorID string) *gin.Engine {
@@ -141,7 +143,7 @@ func TestStudentGetByID_NotFound(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, fmt.Errorf("student: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID, nil)
 

@@ -141,8 +141,7 @@ func TestLessonCreate_CourseNotFound(t *testing.T) {
 
 	lesson, err := svc.Create(context.Background(), createLessonReq, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
 	lessonRepo.AssertNotCalled(t, "Create")
 	courseRepo.AssertExpectations(t)
@@ -192,8 +191,7 @@ func TestLessonGetByCourse_CourseNotFound(t *testing.T) {
 
 	lessons, err := svc.GetByCourse(context.Background(), courseID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Nil(t, lessons)
 	lessonRepo.AssertNotCalled(t, "GetByCourse")
 	courseRepo.AssertExpectations(t)
@@ -224,8 +222,7 @@ func TestLessonGetByID_NotFound(t *testing.T) {
 
 	lesson, err := svc.GetByID(context.Background(), lessonID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "lesson not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
 	courseRepo.AssertNotCalled(t, "GetByID")
 	lessonRepo.AssertExpectations(t)
@@ -266,8 +263,7 @@ func TestLessonUpdate_NotFound(t *testing.T) {
 
 	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "lesson not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
 	lessonRepo.AssertNotCalled(t, "Update")
 	lessonRepo.AssertExpectations(t)
@@ -313,8 +309,7 @@ func TestLessonDelete_NotFound(t *testing.T) {
 
 	err := svc.Delete(context.Background(), lessonID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "lesson not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	lessonRepo.AssertNotCalled(t, "Delete")
 	lessonRepo.AssertExpectations(t)
 }

@@ -1,17 +1,18 @@
 package handlers_test
 
 import (
-	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"testing"
 	"time"
 	"tutorgo/handlers"
 	"tutorgo/models"
+	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log/slog"
 )
 
 func newLessonRouter(svc *mockLessonService, tutorID string) *gin.Engine {
@@ -66,11 +67,11 @@ func TestLessonGetByCourse_ServiceError(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Lesson{}, errors.New("course not found or access denied"))
+	svc.On("GetByCourse", mock.Anything, testCourseID, testTutorID).Return([]models.Lesson{}, fmt.Errorf("course: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/lessons?course_id="+testCourseID, nil)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -103,11 +104,11 @@ func TestLessonCreate_ServiceError(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Create", mock.Anything, testCreateLessonReq, testTutorID).Return(models.Lesson{}, errors.New("course not found or access denied"))
+	svc.On("Create", mock.Anything, testCreateLessonReq, testTutorID).Return(models.Lesson{}, fmt.Errorf("course: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodPost, "/lessons", testCreateLessonReq)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -129,7 +130,7 @@ func TestLessonGetByID_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("GetByID", mock.Anything, testLessonID, testTutorID).Return(models.Lesson{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testLessonID, testTutorID).Return(models.Lesson{}, fmt.Errorf("lesson: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/lessons/"+testLessonID, nil)
 
@@ -155,11 +156,11 @@ func TestLessonUpdate_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID).Return(models.Lesson{}, errors.New("lesson not found or access denied"))
+	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID).Return(models.Lesson{}, fmt.Errorf("lesson: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodPut, "/lessons/"+testLessonID, testUpdateLessonReq)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -181,10 +182,10 @@ func TestLessonDelete_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Delete", mock.Anything, testLessonID, testTutorID).Return(errors.New("lesson not found or access denied"))
+	svc.On("Delete", mock.Anything, testLessonID, testTutorID).Return(fmt.Errorf("lesson: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodDelete, "/lessons/"+testLessonID, nil)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }

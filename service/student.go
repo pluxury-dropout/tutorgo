@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -31,13 +32,24 @@ func (s *studentService) GetAll(ctx context.Context, tutorID string) ([]models.S
 }
 
 func (s *studentService) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {
-	return s.repo.GetByID(ctx, id, tutorID)
+	student, err := s.repo.GetByID(ctx, id, tutorID)
+	if err != nil {
+		return models.Student{}, fmt.Errorf("student: %w", ErrNotFound)
+	}
+	return student, nil
 }
 
 func (s *studentService) Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
-	return s.repo.Update(ctx, id, tutorID, req)
+	student, err := s.repo.Update(ctx, id, tutorID, req)
+	if err != nil {
+		return models.Student{}, fmt.Errorf("student: %w", ErrNotFound)
+	}
+	return student, nil
 }
 
 func (s *studentService) Delete(ctx context.Context, id string, tutorID string) error {
-	return s.repo.Delete(ctx, id, tutorID)
+	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
+		return fmt.Errorf("student: %w", ErrNotFound)
+	}
+	return nil
 }

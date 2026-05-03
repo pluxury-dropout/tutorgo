@@ -2,16 +2,18 @@ package handlers_test
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"testing"
 	"time"
 	"tutorgo/handlers"
 	"tutorgo/models"
+	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log/slog"
 )
 
 func newPaymentRouter(svc *mockPaymentService, tutorID string) *gin.Engine {
@@ -109,11 +111,11 @@ func TestPaymentCreate_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("Create", mock.Anything, testCreatePaymentReq, testTutorID).Return(models.Payment{}, errors.New("course not found or access denied"))
+	svc.On("Create", mock.Anything, testCreatePaymentReq, testTutorID).Return(models.Payment{}, fmt.Errorf("course: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodPost, "/payments", testCreatePaymentReq)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -149,10 +151,10 @@ func TestPaymentGetBalance_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetBalance", mock.Anything, testCourseID, testTutorID).Return(models.CourseBalance{}, errors.New("course not found or access denied"))
+	svc.On("GetBalance", mock.Anything, testCourseID, testTutorID).Return(models.CourseBalance{}, fmt.Errorf("course: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
