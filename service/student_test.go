@@ -112,6 +112,7 @@ func TestDeleteStudent_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
 	svc := service.NewStudentService(repo)
 
+	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(nil)
 
 	err := svc.Delete(context.Background(), "student-1", "tutor-1")

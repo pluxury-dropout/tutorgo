@@ -33,7 +33,7 @@ func (h *EnrollmentHandler) Add(c *gin.Context) {
 	enrollment, err := h.service.Add(c.Request.Context(), courseID, req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to enroll student", slog.String("error", err.Error()))
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Student enrolled", slog.String("course_id", courseID), slog.String("student_id", req.StudentID))
@@ -50,7 +50,7 @@ func (h *EnrollmentHandler) Remove(c *gin.Context) {
 	studentID := c.Param("studentId")
 	if err := h.service.Remove(c.Request.Context(), courseID, studentID, tutorID); err != nil {
 		h.log.Error("Failed to remove enrollment", slog.String("error", err.Error()))
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Student removed from course", slog.String("course_id", courseID), slog.String("student_id", studentID))
@@ -67,7 +67,7 @@ func (h *EnrollmentHandler) GetByCourse(c *gin.Context) {
 	enrollments, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get enrollments", slog.String("courseID", courseID), slog.String("error", err.Error()))
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, enrollments)

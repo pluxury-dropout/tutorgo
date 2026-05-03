@@ -40,16 +40,15 @@ func (s *studentService) GetByID(ctx context.Context, id string, tutorID string)
 }
 
 func (s *studentService) Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error) {
-	student, err := s.repo.Update(ctx, id, tutorID, req)
-	if err != nil {
+	if _, err := s.repo.GetByID(ctx, id, tutorID); err != nil {
 		return models.Student{}, fmt.Errorf("student: %w", ErrNotFound)
 	}
-	return student, nil
+	return s.repo.Update(ctx, id, tutorID, req)
 }
 
 func (s *studentService) Delete(ctx context.Context, id string, tutorID string) error {
-	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
+	if _, err := s.repo.GetByID(ctx, id, tutorID); err != nil {
 		return fmt.Errorf("student: %w", ErrNotFound)
 	}
-	return nil
+	return s.repo.Delete(ctx, id, tutorID)
 }
