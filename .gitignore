@@ -10,6 +10,7 @@ tmp/
 .claude/
 CLAUDE.md
 docs/superpowers/
+.superpowers/
 
 # Git worktrees
 .worktrees/
