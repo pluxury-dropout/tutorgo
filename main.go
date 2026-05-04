@@ -40,7 +40,7 @@ func runAutoCompleteLoop(ctx context.Context, interval time.Duration, autoComple
 
 func main() {
 	log := logger.New()
-	cfg := config.Load()
+	cfg := config.Load(log)
 
 	pool := database.Connect(cfg.DBUrl, log)
 	defer pool.Close()
