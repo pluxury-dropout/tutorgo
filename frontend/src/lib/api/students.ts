@@ -9,7 +9,7 @@ export interface StudentInput {
 }
 
 export const studentsApi = {
-  list: () => api.get<Student[]>('/students').then((r) => r.data),
+  list: () => api.get<{ data: Student[] }>('/students').then((r) => r.data.data),
   get: (id: string) => api.get<Student>(`/students/${id}`).then((r) => r.data),
   create: (data: StudentInput) =>
     api.post<Student>('/students', data).then((r) => r.data),

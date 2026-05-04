@@ -10,7 +10,7 @@ export interface PaymentInput {
 
 export const paymentsApi = {
   list: (courseId: string) =>
-    api.get<Payment[]>('/payments', { params: { course_id: courseId } }).then((r) => r.data ?? []),
+    api.get<{ data: Payment[] }>('/payments', { params: { course_id: courseId } }).then((r) => r.data.data ?? []),
   listRecent: () =>
     api.get<Payment[]>('/payments/recent').then((r) => r.data ?? []),
   create: (data: PaymentInput) =>

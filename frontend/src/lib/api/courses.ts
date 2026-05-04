@@ -10,7 +10,7 @@ export interface CourseInput {
 }
 
 export const coursesApi = {
-  list: () => api.get<Course[]>('/courses').then((r) => r.data ?? []),
+  list: () => api.get<{ data: Course[] }>('/courses').then((r) => r.data.data ?? []),
   get: (id: string) => api.get<Course>(`/courses/${id}`).then((r) => r.data),
   create: (data: CourseInput) =>
     api.post<Course>('/courses', data).then((r) => r.data),
