@@ -111,10 +111,10 @@
   /* Calendar event chips */
   --cal-scheduled-bg:      oklch(62.686% 0.1 276.493);       /* #828bc2 */
   --cal-scheduled-border:  oklch(0.55 0.14 250);
-  --cal-scheduled-text:    oklch(0.09 0.002 270);      /* #131314 */
-  --cal-completed-bg:      oklch(79.473% 0.07701 153.3);
+  --cal-scheduled-text:    oklch(26.448% 0.00003 271);      /* #131314 */
+  --cal-completed-bg:      oklch(0.65 0.12 150.022);
   --cal-completed-border:  oklch(0.74 0.04 155);
-  --cal-completed-text:    oklch(0% 0 0);
+  --cal-completed-text:    oklch(26.448% 0.00003 271);
   --cal-cancelled-bg:      oklch(76.039% 0.00009 271.152);
   --cal-cancelled-border:  oklch(0.78 0.004 215);
   --cal-cancelled-text:    oklch(0% 0 0);
