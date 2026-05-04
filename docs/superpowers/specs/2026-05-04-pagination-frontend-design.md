@@ -139,6 +139,7 @@ export function useStudents(params: { page: number; limit: number; search: strin
 - Remove client-side `.filter()` for search
 - Pass `data`, `total`, `page`, `limit` from hook response to `<Pagination>`
 - Search input writes debounced value to URL (`router.replace`)
+- `PageHeader` description updated to show `total` from API response (e.g., "47 учеников") instead of `data.length` (which is only the current page)
 
 ### Updated: Dashboard
 
