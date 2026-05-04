@@ -25,14 +25,18 @@ func (h *StudentHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	students, err := h.service.GetAll(c.Request.Context(), tutorID)
+	var p models.Pagination
+	_ = c.ShouldBindQuery(&p)
+	p.Normalize()
+
+	students, total, err := h.service.GetAll(c.Request.Context(), tutorID, p)
 	if err != nil {
-		h.log.Error("Failed to get students", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve students"})
+		handleServiceError(c, err)
 		return
 	}
-	h.log.Info("Students retrieved", slog.Int("count", len(students)))
-	c.JSON(http.StatusOK, students)
+	c.JSON(http.StatusOK, models.PagedResponse[models.Student]{
+		Data: students, Total: total, Page: p.Page, Limit: p.Limit,
+	})
 }
 
 func (h *StudentHandler) Create(c *gin.Context) {
@@ -48,7 +52,7 @@ func (h *StudentHandler) Create(c *gin.Context) {
 	student, err := h.service.Create(c.Request.Context(), req, tutorID)
 	if err != nil {
 		h.log.Error("Failed to create student", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create student"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Student created", slog.String("id", student.ID))
@@ -65,7 +69,7 @@ func (h *StudentHandler) GetByID(c *gin.Context) {
 	student, err := h.service.GetByID(c.Request.Context(), id, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get student", slog.String("id", id), slog.String("error", err.Error()))
-		c.JSON(http.StatusNotFound, gin.H{"error": "Student not found"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, student)
@@ -85,7 +89,7 @@ func (h *StudentHandler) Update(c *gin.Context) {
 	student, err := h.service.Update(c.Request.Context(), id, tutorID, req)
 	if err != nil {
 		h.log.Error("Failed to update student", slog.String("id", id), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update student"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Student updated", slog.String("id", id))
@@ -101,7 +105,7 @@ func (h *StudentHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete student", slog.String("id", id), slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete student"})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Student deleted", slog.String("id", id))

@@ -2,15 +2,19 @@ package handlers_test
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"tutorgo/handlers"
 	"tutorgo/models"
+	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log/slog"
 )
 
 func newStudentRouter(svc *mockStudentService, tutorID string) *gin.Engine {
@@ -31,16 +35,17 @@ func TestStudentGetAll_Success(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
+	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Student{testStudent}
-	svc.On("GetAll", mock.Anything, testTutorID).Return(expected, nil)
+	svc.On("GetAll", mock.Anything, testTutorID, p).Return(expected, 1, nil)
 
-	w := makeRequest(t, r, http.MethodGet, "/students", nil)
+	w := makeRequest(t, r, http.MethodGet, "/students?page=1&limit=20", nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var got []models.Student
+	var got models.PagedResponse[models.Student]
 	decodeJSON(t, w, &got)
-	assert.Len(t, got, 1)
-	assert.Equal(t, testStudent.ID, got[0].ID)
+	assert.Len(t, got.Data, 1)
+	assert.Equal(t, 1, got.Total)
 	svc.AssertExpectations(t)
 }
 
@@ -58,9 +63,10 @@ func TestStudentGetAll_ServiceError(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("GetAll", mock.Anything, testTutorID).Return([]models.Student{}, errors.New("db error"))
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetAll", mock.Anything, testTutorID, p).Return([]models.Student{}, 0, errors.New("db error"))
 
-	w := makeRequest(t, r, http.MethodGet, "/students", nil)
+	w := makeRequest(t, r, http.MethodGet, "/students?page=1&limit=20", nil)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)
@@ -139,7 +145,7 @@ func TestStudentGetByID_NotFound(t *testing.T) {
 	svc := new(mockStudentService)
 	r := newStudentRouter(svc, testTutorID)
 
-	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, errors.New("not found"))
+	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, fmt.Errorf("student: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID, nil)
 
@@ -200,4 +206,28 @@ func TestStudentDelete_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)
+}
+
+// Body Size Limit
+
+func TestStudentCreate_BodyTooLarge(t *testing.T) {
+	svc := new(mockStudentService)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10)
+		c.Next()
+	})
+	h := handlers.NewStudentHandler(svc, slog.Default())
+	r.Use(withTutorID(testTutorID))
+	r.POST("/students", h.Create)
+
+	body := strings.NewReader(`{"first_name":"Aiya","last_name":"Bekova"}`)
+	req := httptest.NewRequest(http.MethodPost, "/students", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "error", "response should contain error field")
+	svc.AssertNotCalled(t, "Create")
 }

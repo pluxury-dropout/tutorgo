@@ -9,7 +9,7 @@ import (
 
 type StudentRepository interface {
 	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(ctx context.Context, tutorID string) ([]models.Student, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
 	Delete(ctx context.Context, id string, tutorID string) error
@@ -34,25 +34,34 @@ func (r *studentRepository) Create(ctx context.Context, req models.CreateStudent
 	return student, err
 }
 
-func (r *studentRepository) GetAll(ctx context.Context, tutorID string) ([]models.Student, error) {
+func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
+	var total int
+	if err := r.conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM students WHERE tutor_id = $1`, tutorID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	rows, err := r.conn.Query(ctx,
 		`SELECT id, tutor_id, first_name, last_name, phone, email, notes, active
-		 FROM students WHERE tutor_id = $1`, tutorID)
+		 FROM students WHERE tutor_id = $1
+		 ORDER BY first_name, last_name
+		 LIMIT $2 OFFSET $3`,
+		tutorID, p.Limit, p.Offset())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	students := []models.Student{}
 	for rows.Next() {
 		var student models.Student
-		err := rows.Scan(&student.ID, &student.TutorID, &student.FirstName, &student.LastName, &student.Phone, &student.Email, &student.Notes, &student.Active)
-		if err != nil {
-			return nil, err
+		if err := rows.Scan(&student.ID, &student.TutorID, &student.FirstName, &student.LastName, &student.Phone, &student.Email, &student.Notes, &student.Active); err != nil {
+			return nil, 0, err
 		}
 		students = append(students, student)
 	}
-	return students, rows.Err()
+	return students, total, rows.Err()
 }
 
 func (r *studentRepository) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {

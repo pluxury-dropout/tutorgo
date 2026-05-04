@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -25,14 +25,14 @@ func NewAttendanceService(repo repository.AttendanceRepository, lessonRepo repos
 func (s *attendanceService) Update(ctx context.Context, lessonID string, req models.UpdateAttendanceRequest, tutorID string) error {
 	lesson, err := s.lessonRepo.GetByIDForTutor(ctx, lessonID, tutorID)
 	if err != nil {
-		return errors.New("lesson not found or access denied")
+		return fmt.Errorf("lesson: %w", ErrNotFound)
 	}
 	course, err := s.courseRepo.GetByID(ctx, lesson.CourseID, tutorID)
 	if err != nil {
-		return errors.New("course not found or access denied")
+		return fmt.Errorf("course: %w", ErrNotFound)
 	}
 	if course.StudentID != nil {
-		return errors.New("attendance is only available for group courses")
+		return fmt.Errorf("attendance for individual courses: %w", ErrForbidden)
 	}
 
 	return s.repo.Upsert(ctx, lessonID, req.Attendances)
@@ -40,7 +40,7 @@ func (s *attendanceService) Update(ctx context.Context, lessonID string, req mod
 
 func (s *attendanceService) GetByLesson(ctx context.Context, lessonID string, tutorID string) ([]models.LessonAttendance, error) {
 	if _, err := s.lessonRepo.GetByIDForTutor(ctx, lessonID, tutorID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("lesson: %w", ErrNotFound)
 	}
 	return s.repo.GetByLesson(ctx, lessonID)
 }

@@ -2,14 +2,14 @@ package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
 
 type PaymentService interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
-	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error)
+	GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
@@ -26,16 +26,16 @@ func NewPaymentService(repo repository.PaymentRepository, courseRepo repository.
 
 func (s *paymentService) Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
 	if _, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID); err != nil {
-		return models.Payment{}, errors.New("course not found or access denied")
+		return models.Payment{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.Create(ctx, req)
 }
 
-func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Payment, error) {
+func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
 	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
-		return nil, errors.New("course not found or access denied")
+		return nil, 0, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.GetByCourse(ctx, courseID)
+	return s.repo.GetByCourse(ctx, courseID, p)
 }
 
 func (s *paymentService) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
@@ -44,7 +44,7 @@ func (s *paymentService) GetAllByTutor(ctx context.Context, tutorID string, limi
 
 func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
 	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
-		return models.CourseBalance{}, errors.New("course not found or access denied")
+		return models.CourseBalance{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.GetBalance(ctx, courseID)
 }

@@ -81,6 +81,12 @@ func (h *CallHandler) GetGuestToken(c *gin.Context) {
 	}
 
 	lessonID := c.Param("id")
+	if err := h.lessonService.ExistsPublic(c.Request.Context(), lessonID); err != nil {
+		h.log.Error("lesson existence check failed", slog.String("lessonID", lessonID), slog.String("error", err.Error()))
+		c.JSON(http.StatusNotFound, gin.H{"error": "lesson not found"})
+		return
+	}
+
 	roomName := "lesson-" + lessonID
 
 	canPublish := true

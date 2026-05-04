@@ -1,24 +1,24 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	DBUrl           string
-	ServerPort      string
-	JWTSecret       string
-	AllowedOrigin   string
-	LiveKitURL      string
-	LiveKitAPIKey   string
+	DBUrl            string
+	ServerPort       string
+	JWTSecret        string
+	AllowedOrigin    string
+	LiveKitURL       string
+	LiveKitAPIKey    string
 	LiveKitAPISecret string
 }
 
-func Load() Config {
-	godotenv.Load() // optional: ignored in production where env vars are already set
+func Load(log *slog.Logger) Config {
+	godotenv.Load()
 
 	port := os.Getenv("SERVER_PORT")
 	if port != "" && port[0] != ':' {
@@ -36,13 +36,16 @@ func Load() Config {
 	}
 
 	if cfg.DBUrl == "" {
-		log.Fatal("DB_URL is required")
+		log.Error("DB_URL is required")
+		os.Exit(1)
 	}
 	if cfg.ServerPort == "" {
-		log.Fatal("SERVER_PORT is required")
+		log.Error("SERVER_PORT is required")
+		os.Exit(1)
 	}
 	if cfg.JWTSecret == "" {
-		log.Fatal("JWT_SECRET is required")
+		log.Error("JWT_SECRET is required")
+		os.Exit(1)
 	}
 
 	return cfg

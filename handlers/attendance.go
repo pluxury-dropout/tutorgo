@@ -32,7 +32,7 @@ func (h *AttendanceHandler) Update(c *gin.Context) {
 	}
 	if err := h.service.Update(c.Request.Context(), lessonID, req, tutorID); err != nil {
 		h.log.Error("Failed to update attendance", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	h.log.Info("Attendance updated", slog.String("lesson_id", lessonID))
@@ -49,7 +49,7 @@ func (h *AttendanceHandler) Get(c *gin.Context) {
 	attendances, err := h.service.GetByLesson(c.Request.Context(), lessonID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get attendance", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, attendances)

@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,9 +20,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func runAutoCompleteLoop(ctx context.Context, interval time.Duration, autoComplete func(context.Context) (int64, error), log *slog.Logger) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			count, err := autoComplete(ctx)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				log.Error("Auto-complete failed", slog.String("error", err.Error()))
+			} else if count > 0 {
+				log.Info("Auto-completed lessons", slog.Int64("count", count))
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func main() {
 	log := logger.New()
-	cfg := config.Load()
+	cfg := config.Load(log)
 
 	pool := database.Connect(cfg.DBUrl, log)
 	defer pool.Close()
@@ -29,18 +49,11 @@ func main() {
 
 	// Auto-complete: mark expired lessons as completed every minute
 	lessonRepo := repository.NewLessonRepository(pool)
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			count, err := lessonRepo.AutoComplete(context.Background())
-			if err != nil {
-				log.Error("Auto-complete failed", slog.String("error", err.Error()))
-			} else if count > 0 {
-				log.Info("Auto-completed lessons", slog.Int64("count", count))
-			}
-		}
-	}()
+	bgCtx, bgCancel := context.WithCancel(context.Background())
+	var bgWg sync.WaitGroup
+	bgWg.Go(func() {
+		runAutoCompleteLoop(bgCtx, 1*time.Minute, lessonRepo.AutoComplete, log)
+	})
 
 	r.GET("/health", func(c *gin.Context) {
 		if err := pool.Ping(c.Request.Context()); err != nil {
@@ -67,11 +80,13 @@ func main() {
 	<-quit
 
 	log.Info("Shutting down server...")
+	bgCancel()
+	bgWg.Wait()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("Server forced to shutdown", slog.String("error", err.Error()))
 		os.Exit(1)
 	}

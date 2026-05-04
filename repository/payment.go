@@ -9,7 +9,7 @@ import (
 
 type PaymentRepository interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error)
-	GetByCourse(ctx context.Context, courseID string) ([]models.Payment, error)
+	GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
@@ -34,25 +34,34 @@ func (r *paymentRepository) Create(ctx context.Context, req models.CreatePayment
 	return payment, err
 }
 
-func (r *paymentRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Payment, error) {
+func (r *paymentRepository) GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error) {
+	var total int
+	if err := r.conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM payments WHERE course_id = $1`, courseID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
 	rows, err := r.conn.Query(ctx,
 		`SELECT id, course_id, amount, lessons_count, paid_at
-		 FROM payments WHERE course_id = $1`, courseID)
+		 FROM payments WHERE course_id = $1
+		 ORDER BY paid_at DESC
+		 LIMIT $2 OFFSET $3`,
+		courseID, p.Limit, p.Offset())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var payments []models.Payment
+	payments := []models.Payment{}
 	for rows.Next() {
 		var payment models.Payment
-		err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt)
-		if err != nil {
-			return nil, err
+		if err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt); err != nil {
+			return nil, 0, err
 		}
 		payments = append(payments, payment)
 	}
-	return payments, rows.Err()
+	return payments, total, rows.Err()
 }
 
 func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {

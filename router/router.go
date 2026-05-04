@@ -2,6 +2,8 @@ package router
 
 import (
 	"log/slog"
+	"net/http"
+	"time"
 
 	"tutorgo/config"
 	"tutorgo/handlers"
@@ -12,6 +14,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/time/rate"
 )
 
 func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine {
@@ -49,6 +52,11 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(middleware.Logger(log))
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1 MB
+		c.Next()
+	})
 	origins := []string{"http://localhost:3000"}
 	if cfg.AllowedOrigin != "" {
 		origins = append(origins, cfg.AllowedOrigin)
@@ -61,9 +69,10 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	}))
 
 	// Public routes
-	r.POST("/auth/register", authHandler.Register)
-	r.POST("/auth/login", authHandler.Login)
-	r.GET("/public/lessons/:id/guest-token", callHandler.GetGuestToken)
+	authLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
+	r.POST("/auth/register", authLimiter, authHandler.Register)
+	r.POST("/auth/login", authLimiter, authHandler.Login)
+	r.GET("/public/lessons/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetGuestToken)
 
 	// Protected routes
 	auth := r.Group("/")

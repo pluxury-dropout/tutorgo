@@ -75,6 +75,10 @@ func (m *mockLessonRepo) UpdateSeries(ctx context.Context, seriesID string, tuto
 	return m.Called(ctx, seriesID, tutorID, req).Error(0)
 }
 
+func (m *mockLessonRepo) ExistsPublic(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 // fixtures
 
 var (
@@ -137,8 +141,7 @@ func TestLessonCreate_CourseNotFound(t *testing.T) {
 
 	lesson, err := svc.Create(context.Background(), createLessonReq, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
 	lessonRepo.AssertNotCalled(t, "Create")
 	courseRepo.AssertExpectations(t)
@@ -188,8 +191,7 @@ func TestLessonGetByCourse_CourseNotFound(t *testing.T) {
 
 	lessons, err := svc.GetByCourse(context.Background(), courseID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "course not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Nil(t, lessons)
 	lessonRepo.AssertNotCalled(t, "GetByCourse")
 	courseRepo.AssertExpectations(t)
@@ -220,8 +222,7 @@ func TestLessonGetByID_NotFound(t *testing.T) {
 
 	lesson, err := svc.GetByID(context.Background(), lessonID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "lesson not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
 	courseRepo.AssertNotCalled(t, "GetByID")
 	lessonRepo.AssertExpectations(t)
@@ -262,8 +263,7 @@ func TestLessonUpdate_NotFound(t *testing.T) {
 
 	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "lesson not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
 	lessonRepo.AssertNotCalled(t, "Update")
 	lessonRepo.AssertExpectations(t)
@@ -309,8 +309,7 @@ func TestLessonDelete_NotFound(t *testing.T) {
 
 	err := svc.Delete(context.Background(), lessonID, tutorID)
 
-	assert.Error(t, err)
-	assert.EqualError(t, err, "lesson not found or access denied")
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	lessonRepo.AssertNotCalled(t, "Delete")
 	lessonRepo.AssertExpectations(t)
 }
@@ -324,6 +323,34 @@ func TestLessonDelete_RepoError(t *testing.T) {
 	lessonRepo.On("Delete", mock.Anything, lessonID).Return(errors.New("db error"))
 
 	err := svc.Delete(context.Background(), lessonID, tutorID)
+
+	assert.Error(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+// ExistsPublic
+
+func TestLessonExistsPublic_Success(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(nil)
+
+	err := svc.ExistsPublic(context.Background(), lessonID)
+
+	assert.NoError(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestLessonExistsPublic_Error(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(errors.New("not found"))
+
+	err := svc.ExistsPublic(context.Background(), lessonID)
 
 	assert.Error(t, err)
 	lessonRepo.AssertExpectations(t)

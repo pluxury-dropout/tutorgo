@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"tutorgo/models"
@@ -24,6 +25,7 @@ type LessonRepository interface {
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	AutoComplete(ctx context.Context) (int64, error)
+	ExistsPublic(ctx context.Context, id string) error
 }
 
 type lessonRepository struct {
@@ -247,4 +249,18 @@ func (r *lessonRepository) AutoComplete(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+func (r *lessonRepository) ExistsPublic(ctx context.Context, id string) error {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM lessons WHERE id = $1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("lesson not found")
+	}
+	return nil
 }
