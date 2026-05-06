@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Payment, PaymentBalance } from '@/types/api'
+import { Payment, PaymentBalance, PagedResponse } from '@/types/api'
 
 export interface PaymentInput {
   course_id: string
@@ -8,15 +8,24 @@ export interface PaymentInput {
   paid_at?: string
 }
 
+export interface PaymentListParams {
+  page:  number
+  limit: number
+}
+
 export const paymentsApi = {
   list: (courseId: string) =>
-    api.get<{ data: Payment[] }>('/payments', { params: { course_id: courseId } }).then((r) => r.data.data ?? []),
+    api.get<PagedResponse<Payment>>('/payments', { params: { course_id: courseId } })
+      .then((r) => r.data.data ?? []),
+  listPaged: (p: PaymentListParams) =>
+    api.get<PagedResponse<Payment>>('/payments', { params: p }).then((r) => r.data),
   listRecent: () =>
     api.get<Payment[]>('/payments/recent').then((r) => r.data ?? []),
   create: (data: PaymentInput) =>
     api.post<Payment>('/payments', data).then((r) => r.data),
   getBalance: (courseId: string) =>
-    api.get<PaymentBalance>('/payments/balance', { params: { course_id: courseId } }).then((r) => r.data),
+    api.get<PaymentBalance>('/payments/balance', { params: { course_id: courseId } })
+      .then((r) => r.data),
   monthlyIncome: () =>
     api.get<{ total: number }>('/payments/monthly-income').then((r) => r.data.total),
 }

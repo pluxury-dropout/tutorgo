@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { paymentsApi } from '@/lib/api/payments'
+import { paymentsApi, PaymentListParams } from '@/lib/api/payments'
 import { courseKeys } from '@/lib/hooks/useCourses'
 
 export const paymentKeys = {
   byCourse:      (courseId: string) => ['payments', 'course', courseId] as const,
+  paged:         (p: PaymentListParams) => ['payments', 'list', p] as const,
   recent:        ['payments', 'recent'] as const,
   monthlyIncome: ['payments', 'monthly-income'] as const,
 }
@@ -38,5 +39,12 @@ export function useCreatePayment(courseId: string) {
       qc.invalidateQueries({ queryKey: paymentKeys.byCourse(courseId) })
       qc.invalidateQueries({ queryKey: courseKeys.balance(courseId) })
     },
+  })
+}
+
+export function usePaymentsPaged(params: PaymentListParams) {
+  return useQuery({
+    queryKey: paymentKeys.paged(params),
+    queryFn:  () => paymentsApi.listPaged(params),
   })
 }
