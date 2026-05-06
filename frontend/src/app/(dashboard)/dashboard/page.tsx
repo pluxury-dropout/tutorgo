@@ -3,8 +3,8 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { LayoutDashboard, CalendarDays, Users, BookOpen, Banknote } from 'lucide-react'
-import { useStudents } from '@/lib/hooks/useStudents'
-import { useCourses } from '@/lib/hooks/useCourses'
+import { useStudentCount } from '@/lib/hooks/useStudents'
+import { useCourseCount } from '@/lib/hooks/useCourses'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useRecentPayments, useMonthlyIncome } from '@/lib/hooks/usePayments'
 import { FC_COLORS } from '@/lib/lessonStatus'
@@ -88,16 +88,11 @@ function LessonRow({ lesson }: LessonRowProps) {
 }
 
 export default function DashboardPage() {
-  const { data: students  = [] } = useStudents()
-  const { data: courses   = [] } = useCourses()
+  const { data: studentCount = 0 } = useStudentCount()
+  const { data: courseCount  = 0 } = useCourseCount()
   const { data: todayLessons = [] } = useCalendar(todayFrom, todayTo)
   const { data: recentPayments = [] } = useRecentPayments()
   const { data: monthlyIncome  = 0 } = useMonthlyIncome()
-
-  const activeCourses = useMemo(
-    () => courses.filter((c) => !c.ended_at),
-    [courses],
-  )
 
   const sortedLessons = useMemo(
     () => [...todayLessons].sort((a, b) =>
@@ -129,14 +124,14 @@ export default function DashboardPage() {
           highlight
         />
         <StatCard
-          label="Активных учеников"
-          value={students.length}
+          label="Учеников"
+          value={studentCount}
           icon={<Users className="h-4 w-4" style={{ color: 'oklch(0.42 0.14 280)' }} />}
           iconBg="oklch(0.94 0.03 280)"
         />
         <StatCard
-          label="Активных курсов"
-          value={activeCourses.length}
+          label="Курсов"
+          value={courseCount}
           icon={<BookOpen className="h-4 w-4" style={{ color: 'oklch(0.36 0.10 155)' }} />}
           iconBg="oklch(0.92 0.05 155)"
         />
