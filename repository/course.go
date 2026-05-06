@@ -38,17 +38,22 @@ func (r *courseRepository) Create(ctx context.Context, req models.CreateCourseRe
 func (r *courseRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
 	var total int
 	if err := r.conn.QueryRow(ctx,
-		`SELECT COUNT(*) FROM courses WHERE tutor_id = $1`, tutorID,
+		`SELECT COUNT(*) FROM courses
+		 WHERE tutor_id = $1
+		   AND ($2 = '' OR subject ILIKE '%' || $2 || '%')`,
+		tutorID, p.Search,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.conn.Query(ctx,
 		`SELECT id, student_id, tutor_id, subject, price_per_lesson, started_at, ended_at
-		 FROM courses WHERE tutor_id = $1
+		 FROM courses
+		 WHERE tutor_id = $1
+		   AND ($2 = '' OR subject ILIKE '%' || $2 || '%')
 		 ORDER BY started_at DESC
-		 LIMIT $2 OFFSET $3`,
-		tutorID, p.Limit, p.Offset())
+		 LIMIT $3 OFFSET $4`,
+		tutorID, p.Search, p.Limit, p.Offset())
 	if err != nil {
 		return nil, 0, err
 	}

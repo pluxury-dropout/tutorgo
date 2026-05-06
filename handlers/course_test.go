@@ -81,6 +81,24 @@ func TestCourseGetAll_ServiceError(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
+func TestCourseGetAll_WithSearch(t *testing.T) {
+	svc := new(mockCourseService)
+	r := newCourseRouter(svc, testTutorID)
+
+	p := models.Pagination{Page: 1, Limit: 20, Search: "Math"}
+	expected := []models.Course{testCourse}
+	svc.On("GetAll", mock.Anything, testTutorID, p).Return(expected, 1, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/courses?page=1&limit=20&search=Math", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.PagedResponse[models.Course]
+	decodeJSON(t, w, &got)
+	assert.Len(t, got.Data, 1)
+	assert.Equal(t, 1, got.Total)
+	svc.AssertExpectations(t)
+}
+
 // Create
 
 func TestCourseCreate_Success(t *testing.T) {
