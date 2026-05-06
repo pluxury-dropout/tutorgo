@@ -11,6 +11,7 @@ type PaymentService interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
+	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 }
@@ -40,6 +41,10 @@ func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutor
 
 func (s *paymentService) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
 	return s.repo.GetAllByTutor(ctx, tutorID, limit)
+}
+
+func (s *paymentService) GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
+	return s.repo.GetAllByTutorPaged(ctx, tutorID, p)
 }
 
 func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {

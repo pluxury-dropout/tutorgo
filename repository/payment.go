@@ -11,6 +11,7 @@ type PaymentRepository interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
+	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 }
@@ -86,6 +87,40 @@ func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, l
 		payments = append(payments, p)
 	}
 	return payments, rows.Err()
+}
+
+func (r *paymentRepository) GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
+	var total int
+	if err := r.conn.QueryRow(ctx,
+		`SELECT COUNT(*) FROM payments p
+		 JOIN courses c ON c.id = p.course_id
+		 WHERE c.tutor_id = $1`, tutorID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.conn.Query(ctx,
+		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at
+		 FROM payments p
+		 JOIN courses c ON c.id = p.course_id
+		 WHERE c.tutor_id = $1
+		 ORDER BY p.paid_at DESC
+		 LIMIT $2 OFFSET $3`,
+		tutorID, p.Limit, p.Offset())
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	payments := []models.Payment{}
+	for rows.Next() {
+		var payment models.Payment
+		if err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt); err != nil {
+			return nil, 0, err
+		}
+		payments = append(payments, payment)
+	}
+	return payments, total, rows.Err()
 }
 
 func (r *paymentRepository) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {

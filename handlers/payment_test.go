@@ -52,14 +52,21 @@ func TestPaymentGetAll_Success(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
-func TestPaymentGetAll_MissingCourseID(t *testing.T) {
+func TestPaymentGetAll_AllTutor(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	w := makeRequest(t, r, http.MethodGet, "/payments", nil)
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetAllByTutorPaged", mock.Anything, testTutorID, p).Return([]models.Payment{testPayment}, 1, nil)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	svc.AssertNotCalled(t, "GetByCourse")
+	w := makeRequest(t, r, http.MethodGet, "/payments?page=1&limit=20", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.PagedResponse[models.Payment]
+	decodeJSON(t, w, &got)
+	assert.Len(t, got.Data, 1)
+	assert.Equal(t, 1, got.Total)
+	svc.AssertExpectations(t)
 }
 
 func TestPaymentGetAll_Unauthorized(t *testing.T) {

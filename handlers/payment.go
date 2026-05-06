@@ -25,17 +25,26 @@ func (h *PaymentHandler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	courseID := c.Query("course_id")
-	if courseID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
-		return
-	}
 	var p models.Pagination
 	_ = c.ShouldBindQuery(&p)
 	p.Normalize()
 
-	payments, total, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID, p)
+	courseID := c.Query("course_id")
+	if courseID != "" {
+		payments, total, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID, p)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, models.PagedResponse[models.Payment]{
+			Data: payments, Total: total, Page: p.Page, Limit: p.Limit,
+		})
+		return
+	}
+
+	payments, total, err := h.service.GetAllByTutorPaged(c.Request.Context(), tutorID, p)
 	if err != nil {
+		h.log.Error("Failed to get all payments", slog.String("error", err.Error()))
 		handleServiceError(c, err)
 		return
 	}

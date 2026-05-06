@@ -212,6 +212,10 @@ func (m *mockPaymentService) GetAllByTutor(ctx context.Context, tutorID string, 
 	args := m.Called(ctx, tutorID, limit)
 	return args.Get(0).([]models.Payment), args.Error(1)
 }
+func (m *mockPaymentService) GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Payment), args.Int(1), args.Error(2)
+}
 func (m *mockPaymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
 	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).(models.CourseBalance), args.Error(1)
