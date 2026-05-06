@@ -37,17 +37,26 @@ func (r *studentRepository) Create(ctx context.Context, req models.CreateStudent
 func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
 	var total int
 	if err := r.conn.QueryRow(ctx,
-		`SELECT COUNT(*) FROM students WHERE tutor_id = $1`, tutorID,
+		`SELECT COUNT(*) FROM students
+		 WHERE tutor_id = $1
+		   AND ($2 = '' OR first_name ILIKE '%' || $2 || '%'
+		                 OR last_name  ILIKE '%' || $2 || '%'
+		                 OR email      ILIKE '%' || $2 || '%')`,
+		tutorID, p.Search,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.conn.Query(ctx,
 		`SELECT id, tutor_id, first_name, last_name, phone, email, notes, active
-		 FROM students WHERE tutor_id = $1
+		 FROM students
+		 WHERE tutor_id = $1
+		   AND ($2 = '' OR first_name ILIKE '%' || $2 || '%'
+		                 OR last_name  ILIKE '%' || $2 || '%'
+		                 OR email      ILIKE '%' || $2 || '%')
 		 ORDER BY first_name, last_name
-		 LIMIT $2 OFFSET $3`,
-		tutorID, p.Limit, p.Offset())
+		 LIMIT $3 OFFSET $4`,
+		tutorID, p.Search, p.Limit, p.Offset())
 	if err != nil {
 		return nil, 0, err
 	}

@@ -1,8 +1,9 @@
 package models
 
 type Pagination struct {
-	Page  int `form:"page"`
-	Limit int `form:"limit"`
+	Page   int    `form:"page"`
+	Limit  int    `form:"limit"`
+	Search string `form:"search"`
 }
 
 func (p *Pagination) Normalize() {
