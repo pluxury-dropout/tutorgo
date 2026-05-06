@@ -59,7 +59,7 @@ func (r *courseRepository) GetAll(ctx context.Context, tutorID string, p models.
 	}
 	defer rows.Close()
 
-	var courses []models.Course
+	courses := []models.Course{}
 	for rows.Next() {
 		var course models.Course
 		if err := rows.Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerLesson, &course.StartedAt, &course.EndedAt); err != nil {
