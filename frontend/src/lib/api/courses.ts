@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Course, CourseBalance, Enrollment } from '@/types/api'
+import { Course, CourseBalance, Enrollment, PagedResponse } from '@/types/api'
 
 export interface CourseInput {
   student_id?: string
@@ -9,8 +9,18 @@ export interface CourseInput {
   ended_at?: string
 }
 
+export interface CourseListParams {
+  page:   number
+  limit:  number
+  search: string
+}
+
 export const coursesApi = {
-  list: () => api.get<{ data: Course[] }>('/courses').then((r) => r.data.data ?? []),
+  list: () =>
+    api.get<PagedResponse<Course>>('/courses', { params: { page: 1, limit: 100 } })
+      .then((r) => r.data.data ?? []),
+  listPaged: (p: CourseListParams) =>
+    api.get<PagedResponse<Course>>('/courses', { params: p }).then((r) => r.data),
   get: (id: string) => api.get<Course>(`/courses/${id}`).then((r) => r.data),
   create: (data: CourseInput) =>
     api.post<Course>('/courses', data).then((r) => r.data),
@@ -22,10 +32,7 @@ export const coursesApi = {
   getEnrollments: (id: string) =>
     api.get<Enrollment[]>(`/courses/${id}/enrollments`).then((r) => r.data ?? []),
   addEnrollment: (courseId: string, studentId: string) =>
-    api
-      .post<Enrollment>(`/courses/${courseId}/enrollments`, {
-        student_id: studentId,
-      })
+    api.post<Enrollment>(`/courses/${courseId}/enrollments`, { student_id: studentId })
       .then((r) => r.data),
   removeEnrollment: (courseId: string, studentId: string) =>
     api.delete(`/courses/${courseId}/enrollments/${studentId}`).then(() => studentId),

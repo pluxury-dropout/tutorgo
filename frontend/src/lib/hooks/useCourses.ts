@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { coursesApi, CourseInput } from '@/lib/api/courses'
+import { coursesApi, CourseInput, CourseListParams } from '@/lib/api/courses'
 
 export const courseKeys = {
   all:         ['courses'] as const,
@@ -77,5 +77,19 @@ export function useRemoveEnrollment(courseId: string) {
   return useMutation({
     mutationFn: (studentId: string) => coursesApi.removeEnrollment(courseId, studentId),
     onSuccess:  () => qc.invalidateQueries({ queryKey: courseKeys.enrollments(courseId) }),
+  })
+}
+
+export function useCoursesPaged(params: CourseListParams) {
+  return useQuery({
+    queryKey: [...courseKeys.all, 'list', params],
+    queryFn:  () => coursesApi.listPaged(params),
+  })
+}
+
+export function useCourseCount() {
+  return useQuery({
+    queryKey: [...courseKeys.all, 'count'],
+    queryFn:  () => coursesApi.listPaged({ page: 1, limit: 1, search: '' }).then((r) => r.total),
   })
 }
