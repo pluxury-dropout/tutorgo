@@ -98,3 +98,10 @@ export interface ApiError {
   fieldErrors?: ApiValidationError
   status: number
 }
+
+export interface PagedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+}
