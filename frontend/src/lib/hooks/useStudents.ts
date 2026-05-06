@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { studentsApi, StudentInput } from '@/lib/api/students'
+import { studentsApi, StudentInput, StudentListParams } from '@/lib/api/students'
 
 export const studentKeys = {
   all:    ['students'] as const,
@@ -44,5 +44,19 @@ export function useDeleteStudent() {
   return useMutation({
     mutationFn: studentsApi.delete,
     onSuccess:  () => qc.invalidateQueries({ queryKey: studentKeys.all }),
+  })
+}
+
+export function useStudentsPaged(params: StudentListParams) {
+  return useQuery({
+    queryKey: [...studentKeys.all, 'list', params],
+    queryFn:  () => studentsApi.listPaged(params),
+  })
+}
+
+export function useStudentCount() {
+  return useQuery({
+    queryKey: [...studentKeys.all, 'count'],
+    queryFn:  () => studentsApi.listPaged({ page: 1, limit: 1, search: '' }).then((r) => r.total),
   })
 }

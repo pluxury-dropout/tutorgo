@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Student } from '@/types/api'
+import { Student, PagedResponse } from '@/types/api'
 
 export interface StudentInput {
   first_name: string
@@ -8,8 +8,18 @@ export interface StudentInput {
   phone?: string
 }
 
+export interface StudentListParams {
+  page:   number
+  limit:  number
+  search: string
+}
+
 export const studentsApi = {
-  list: () => api.get<{ data: Student[] }>('/students').then((r) => r.data.data),
+  list: () =>
+    api.get<PagedResponse<Student>>('/students', { params: { page: 1, limit: 100 } })
+      .then((r) => r.data.data),
+  listPaged: (p: StudentListParams) =>
+    api.get<PagedResponse<Student>>('/students', { params: p }).then((r) => r.data),
   get: (id: string) => api.get<Student>(`/students/${id}`).then((r) => r.data),
   create: (data: StudentInput) =>
     api.post<Student>('/students', data).then((r) => r.data),
