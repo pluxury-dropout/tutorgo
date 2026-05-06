@@ -38,6 +38,9 @@ export function useCreatePayment(courseId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: paymentKeys.byCourse(courseId) })
       qc.invalidateQueries({ queryKey: courseKeys.balance(courseId) })
+      qc.invalidateQueries({ queryKey: ['payments', 'list'] })
+      qc.invalidateQueries({ queryKey: paymentKeys.recent })
+      qc.invalidateQueries({ queryKey: paymentKeys.monthlyIncome })
     },
   })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronRight, CreditCard } from 'lucide-react'
 
@@ -30,6 +30,12 @@ function PaymentsPageInner() {
   const payments   = pagedPayments?.data ?? []
   const total      = pagedPayments?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
+
+  useEffect(() => {
+    if (!isLoading && total > 0 && page > totalPages) {
+      handlePageChange(totalPages)
+    }
+  }, [isLoading, total, page, totalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
 

@@ -54,6 +54,12 @@ function StudentsPageInner() {
   const total      = data?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
 
+  useEffect(() => {
+    if (!isLoading && total > 0 && page > totalPages) {
+      handlePageChange(totalPages)
+    }
+  }, [isLoading, total, page, totalPages]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing]   = useState<Student | undefined>()
 
