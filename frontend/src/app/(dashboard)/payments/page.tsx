@@ -1,12 +1,13 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { useState, Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronRight, CreditCard } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 
 import { useCourses } from '@/lib/hooks/useCourses'
 import { usePaymentsPaged, useMonthlyIncome } from '@/lib/hooks/usePayments'
-import { PageHeader } from '@/components/common/PageHeader'
+import { HeaderPanel } from '@/components/HeaderPanel'
+import type { KpiSegment } from '@/components/HeaderPanel'
 import { Pagination } from '@/components/common/Pagination'
 
 const LIMIT = 20
@@ -14,6 +15,7 @@ const LIMIT = 20
 function PaymentsPageInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
+  const [activeSegment, setActiveSegment] = useState('received')
 
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
 
@@ -23,9 +25,9 @@ function PaymentsPageInner() {
     router.push(`/payments?${p}`)
   }
 
-  const { data: courses = [] }                       = useCourses()
-  const { data: pagedPayments, isLoading }           = usePaymentsPaged({ page, limit: LIMIT })
-  const { data: monthlyIncome = 0 }                  = useMonthlyIncome()
+  const { data: courses = [] }                                  = useCourses()
+  const { data: pagedPayments, isLoading }                      = usePaymentsPaged({ page, limit: LIMIT })
+  const { data: monthlyIncome = 0, isLoading: incomeLoading }   = useMonthlyIncome()
 
   const payments   = pagedPayments?.data ?? []
   const total      = pagedPayments?.total ?? 0
@@ -39,22 +41,54 @@ function PaymentsPageInner() {
 
   const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
 
+  const avgCheck =
+    total > 0 && monthlyIncome > 0
+      ? '₸ ' + Math.round(monthlyIncome / total).toLocaleString('ru-RU')
+      : '—'
+
+  const segments: KpiSegment[] = [
+    {
+      id:       'received',
+      label:    'Получено',
+      value:    '₸ ' + monthlyIncome.toLocaleString('ru-RU'),
+      dotColor: 'var(--success)',
+      meta:     'этот месяц',
+      loading:  incomeLoading,
+    },
+    {
+      id:       'count',
+      label:    'Операций',
+      value:    String(total),
+      dotColor: 'var(--primary)',
+      meta:     'всего записей',
+      loading:  isLoading,
+    },
+    {
+      id:       'avg',
+      label:    'Средний чек',
+      value:    avgCheck,
+      dotColor: 'var(--warning)',
+      meta:     avgCheck === '—' ? 'нет данных' : 'за месяц',
+      loading:  incomeLoading || isLoading,
+    },
+    {
+      id:       'pending',
+      label:    'Ожидается',
+      value:    '—',
+      dotColor: 'var(--purple)',
+      meta:     'нет данных',
+    },
+  ]
+
   return (
     <>
-      <PageHeader
+      <HeaderPanel
         title="Платежи"
-        description={`${total} записей`}
-        icon={CreditCard}
-        iconBg="var(--accent-light)"
-        iconColor="oklch(0.52 0.18 55)"
+        subtitle={`${total} записей`}
+        segments={segments}
+        activeSegment={activeSegment}
+        onSegmentChange={setActiveSegment}
       />
-
-      <div className="bg-card border border-border rounded-[var(--radius-lg)] p-5 shadow-[var(--shadow-card)] mt-4 inline-block min-w-[200px]">
-        <p className="text-xs font-medium text-muted-foreground mb-1">Этот месяц</p>
-        <p className="text-[28px] font-bold leading-none bg-gradient-to-r from-amber-500 to-yellow-400 bg-clip-text text-transparent">
-          {monthlyIncome.toLocaleString()} ₸
-        </p>
-      </div>
 
       <div className="border rounded-lg mt-4 overflow-hidden">
         <table className="w-full text-sm">
