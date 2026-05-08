@@ -15,6 +15,14 @@ export function useLessons(courseId: string) {
   })
 }
 
+export function useLessonsPaged(courseId: string, page: number) {
+  return useQuery({
+    queryKey: [...lessonKeys.byCourse(courseId), page] as const,
+    queryFn:  () => lessonsApi.listPaged(courseId, page),
+    enabled:  !!courseId,
+  })
+}
+
 export function useLesson(id: string) {
   return useQuery({
     queryKey: lessonKeys.detail(id),

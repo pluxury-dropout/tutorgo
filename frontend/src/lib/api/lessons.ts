@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Lesson, LessonStatus, AttendanceRecord } from '@/types/api'
+import { Lesson, LessonStatus, AttendanceRecord, PagedResponse } from '@/types/api'
 
 export interface LessonInput {
   course_id:        string
@@ -32,6 +32,9 @@ export interface SeriesUpdateInput {
 export const lessonsApi = {
   list:   (courseId: string) =>
     api.get<Lesson[]>('/lessons', { params: { course_id: courseId } }).then((r) => r.data ?? []),
+  listPaged: (courseId: string, page: number, limit = 10) =>
+    api.get<PagedResponse<Lesson>>('/lessons', { params: { course_id: courseId, page, limit } })
+       .then((r) => r.data),
   get:    (id: string) =>
     api.get<Lesson>(`/lessons/${id}`).then((r) => r.data),
   create: (data: LessonInput) =>
