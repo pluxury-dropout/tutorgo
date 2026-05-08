@@ -274,3 +274,8 @@ func (m *mockLessonService) UpdateSeries(ctx context.Context, seriesID string, t
 func (m *mockLessonService) ExistsPublic(ctx context.Context, id string) error {
 	return m.Called(ctx, id).Error(0)
 }
+
+func (m *mockLessonService) GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error) {
+	args := m.Called(ctx, courseID, tutorID, p)
+	return args.Get(0).(models.PagedResponse[models.Lesson]), args.Error(1)
+}
