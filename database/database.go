@@ -4,12 +4,23 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func Connect(dbURL string, log *slog.Logger) *pgxpool.Pool {
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	cfg, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		log.Error("Failed to parse db config", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	cfg.MaxConnLifetime = 30 * time.Minute
+	cfg.MaxConnIdleTime = 5 * time.Minute
+	cfg.HealthCheckPeriod = 1 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
 		log.Error("Failed to connect to db", slog.String("error", err.Error()))
 		os.Exit(1)
