@@ -30,7 +30,7 @@ export function HeaderPanel({
   className,
 }: HeaderPanelProps) {
   return (
-    <div className={cn('bg-white rounded-[16px] border border-border overflow-hidden', className)}>
+    <div className={cn('bg-card rounded-[16px] border border-border overflow-hidden', className)}>
       <div className="flex items-center px-[18px] py-[14px] pb-[12px] border-b border-border">
         <div>
           <h1 className="text-[16px] font-bold tracking-[-0.3px]">{title}</h1>
@@ -40,7 +40,7 @@ export function HeaderPanel({
         </div>
       </div>
 
-      <div role="tablist" className="grid grid-cols-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 md:grid-cols-4">
         {segments.map((seg, i) => {
           const isActive      = seg.id === activeSegment
           const isEven        = (i + 1) % 2 === 0
@@ -57,8 +57,6 @@ export function HeaderPanel({
           return (
             <button
               key={seg.id}
-              role="tab"
-              aria-selected={isActive}
               aria-label={`${seg.label}, ${seg.value}${seg.delta ? ', ' + seg.delta.value : ''}`}
               onClick={() => onSegmentChange(seg.id)}
               style={{ all: 'unset' }}
@@ -71,8 +69,8 @@ export function HeaderPanel({
                 'md:border-b-0',
                 !isLastDesktop ? 'md:border-r' : 'md:border-r-0',
                 isActive
-                  ? 'bg-[oklch(0.985_0.004_210)]'
-                  : 'hover:bg-[oklch(0.985_0.004_210)]',
+                  ? 'bg-secondary'
+                  : 'hover:bg-secondary',
               )}
             >
               <div className="flex items-center gap-[5px]">

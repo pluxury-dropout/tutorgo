@@ -41,11 +41,6 @@ function PaymentsPageInner() {
 
   const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
 
-  const avgCheck =
-    total > 0 && monthlyIncome > 0
-      ? '₸ ' + Math.round(monthlyIncome / total).toLocaleString('ru-RU')
-      : '—'
-
   const segments: KpiSegment[] = [
     {
       id:       'received',
@@ -66,10 +61,9 @@ function PaymentsPageInner() {
     {
       id:       'avg',
       label:    'Средний чек',
-      value:    avgCheck,
+      value:    '—',
       dotColor: 'var(--warning)',
-      meta:     avgCheck === '—' ? 'нет данных' : 'за месяц',
-      loading:  incomeLoading || isLoading,
+      meta:     'нет данных',
     },
     {
       id:       'pending',
