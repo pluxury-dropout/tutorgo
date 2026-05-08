@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX } from 'lucide-react'
@@ -15,7 +15,7 @@ import {
   useRemoveEnrollment,
 } from '@/lib/hooks/useCourses'
 import {
-  useLessons,
+  useLessonsPaged,
   useCreateLesson,
   useCreateLessons,
   useUpdateLesson,
@@ -40,6 +40,7 @@ import { Lesson } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
+import { Pagination } from '@/components/common/Pagination'
 
 function generateDates(baseISO: string, opts: RecurrenceOptions, courseEndAt?: string | null): string[] {
   const base    = new Date(baseISO)
@@ -116,7 +117,11 @@ export default function CourseDetailPage() {
   const { data: balance }           = useCourseBalance(id)
   const { data: enrollments = [] }  = useCourseEnrollments(id)
   const { data: students = [] }     = useStudents()
-  const { data: lessons = [] }      = useLessons(id)
+  const [lessonPage, setLessonPage]                        = useState(1)
+  const { data: pagedLessons, isLoading: lessonsLoading }  = useLessonsPaged(id, lessonPage)
+  const lessons           = pagedLessons?.data  ?? []
+  const lessonsTotal      = pagedLessons?.total ?? 0
+  const lessonsTotalPages = Math.ceil(lessonsTotal / 10)
   const { data: payments = [] }     = usePayments(id)
 
   const [courseFormOpen, setCourseFormOpen]     = useState(false)
@@ -203,7 +208,7 @@ export default function CourseDetailPage() {
   }
 
   async function handleDeleteAllLessons() {
-    if (!confirm(`Удалить все ${lessons.length} уроков курса?`)) return
+    if (!confirm(`Удалить все ${lessonsTotal} уроков курса?`)) return
     await deleteLessonsByCourse.mutateAsync()
     toast.success('Все уроки удалены')
   }
@@ -235,6 +240,12 @@ export default function CourseDetailPage() {
     setEditingLesson(lesson)
     setLessonFormOpen(true)
   }
+
+  useEffect(() => {
+    if (!lessonsLoading && lessonsTotal > 0 && lessonPage > lessonsTotalPages) {
+      setLessonPage(lessonsTotalPages)
+    }
+  }, [lessonsLoading, lessonsTotal, lessonPage, lessonsTotalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return <div className="space-y-3">{[...Array(4)].map((_, i) => (
@@ -384,9 +395,9 @@ export default function CourseDetailPage() {
       {/* Lessons */}
       <div className="border rounded-lg p-4 mt-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">Уроки ({lessons.length})</h2>
+          <h2 className="text-sm font-semibold">Уроки ({lessonsTotal})</h2>
           <div className="flex gap-2">
-            {lessons.length > 0 && (
+            {lessonsTotal > 0 && (
               <Button size="sm" variant="outline"
                 className="text-destructive hover:text-destructive"
                 onClick={handleDeleteAllLessons}
@@ -400,7 +411,11 @@ export default function CourseDetailPage() {
           </div>
         </div>
 
-        {lessons.length === 0 ? (
+        {lessonsLoading ? (
+          [...Array(4)].map((_, i) => (
+            <div key={i} className="h-8 rounded bg-muted animate-pulse mb-1" />
+          ))
+        ) : lessons.length === 0 ? (
           <p className="text-sm text-muted-foreground">Нет уроков</p>
         ) : (
           <div className="space-y-1">
@@ -450,6 +465,19 @@ export default function CourseDetailPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {lessonsTotalPages > 1 && (
+          <div className="flex items-center justify-between mt-3 px-1">
+            <span className="text-xs text-muted-foreground">
+              Страница {lessonPage} из {lessonsTotalPages}
+            </span>
+            <Pagination
+              page={lessonPage}
+              totalPages={lessonsTotalPages}
+              onPageChange={setLessonPage}
+            />
           </div>
         )}
       </div>
