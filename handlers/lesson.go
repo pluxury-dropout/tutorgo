@@ -30,6 +30,24 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
 		return
 	}
+
+	if c.Query("page") != "" {
+		var p models.Pagination
+		_ = c.ShouldBindQuery(&p)
+		if p.Limit == 0 {
+			p.Limit = 10 // default for lessons; Normalize would set 20
+		}
+		p.Normalize()
+		result, err := h.service.GetByCoursePaged(c.Request.Context(), courseID, tutorID, p)
+		if err != nil {
+			h.log.Error("Failed to get lessons paged", slog.String("error", err.Error()))
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
 	lessons, err := h.service.GetByCourse(c.Request.Context(), courseID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get lessons", slog.String("error", err.Error()))
