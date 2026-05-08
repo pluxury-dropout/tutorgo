@@ -79,7 +79,7 @@ func (m *mockLessonRepo) ExistsPublic(ctx context.Context, id string) error {
 	return m.Called(ctx, id).Error(0)
 }
 
-func (m *mockLessonRepo) GetByCoursesPaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error) {
+func (m *mockLessonRepo) GetByCoursePaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error) {
 	return nil, 0, nil
 }
 

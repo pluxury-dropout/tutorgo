@@ -16,7 +16,7 @@ type LessonRepository interface {
 	Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error)
 	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error)
-	GetByCoursesPaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error)
+	GetByCoursePaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error)
 	GetByID(ctx context.Context, id string) (models.Lesson, error)
 	GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
@@ -94,7 +94,7 @@ func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]
 	return lessons, rows.Err()
 }
 
-func (r *lessonRepository) GetByCoursesPaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error) {
+func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error) {
 	var total int
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM lessons WHERE course_id = $1`, courseID,
