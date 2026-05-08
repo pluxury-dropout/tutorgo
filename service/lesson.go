@@ -11,6 +11,7 @@ type LessonService interface {
 	Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error)
 	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error)
+	GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID string) error
@@ -52,6 +53,23 @@ func (s *lessonService) GetByCourse(ctx context.Context, courseID string, tutorI
 		return nil, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.GetByCourse(ctx, courseID)
+}
+
+func (s *lessonService) GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error) {
+	_, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+	if err != nil {
+		return models.PagedResponse[models.Lesson]{}, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	lessons, total, err := s.repo.GetByCoursePaged(ctx, courseID, p)
+	if err != nil {
+		return models.PagedResponse[models.Lesson]{}, err
+	}
+	return models.PagedResponse[models.Lesson]{
+		Data:  lessons,
+		Total: total,
+		Page:  p.Page,
+		Limit: p.Limit,
+	}, nil
 }
 
 func (s *lessonService) GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error) {
