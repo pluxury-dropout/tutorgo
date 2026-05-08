@@ -16,6 +16,7 @@ type LessonRepository interface {
 	Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error)
 	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error)
+	GetByCoursesPaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error)
 	GetByID(ctx context.Context, id string) (models.Lesson, error)
 	GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
@@ -91,6 +92,36 @@ func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]
 		lessons = append(lessons, lesson)
 	}
 	return lessons, rows.Err()
+}
+
+func (r *lessonRepository) GetByCoursesPaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error) {
+	var total int
+	if err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM lessons WHERE course_id = $1`, courseID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes, series_id
+		 FROM lessons WHERE course_id = $1
+		 ORDER BY scheduled_at DESC
+		 LIMIT $2 OFFSET $3`,
+		courseID, p.Limit, p.Offset())
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	lessons := []models.Lesson{}
+	for rows.Next() {
+		var l models.Lesson
+		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes, &l.SeriesID); err != nil {
+			return nil, 0, err
+		}
+		lessons = append(lessons, l)
+	}
+	return lessons, total, rows.Err()
 }
 
 func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesson, error) {
