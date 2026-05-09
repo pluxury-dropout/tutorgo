@@ -14,6 +14,7 @@ type PaymentRepository interface {
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
+	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 }
 
 type paymentRepository struct {
@@ -155,4 +156,23 @@ func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (mo
 		LessonsCompleted: completed,
 		LessonsRemaining: paid - completed,
 	}, nil
+}
+
+func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
+	var total float64
+	err := r.conn.QueryRow(ctx,
+		`SELECT COALESCE(SUM(c.price_per_lesson * lc.cnt), 0)
+		 FROM courses c
+		 JOIN (
+		     SELECT course_id, COUNT(*) AS cnt
+		     FROM lessons
+		     WHERE status IN ('scheduled', 'completed', 'missed')
+		       AND scheduled_at >= date_trunc('month', NOW())
+		       AND scheduled_at <  date_trunc('month', NOW()) + interval '1 month'
+		     GROUP BY course_id
+		 ) lc ON lc.course_id = c.id
+		 WHERE c.tutor_id = $1`,
+		tutorID,
+	).Scan(&total)
+	return total, err
 }
