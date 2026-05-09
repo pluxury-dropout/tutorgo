@@ -7,12 +7,20 @@ export const paymentKeys = {
   paged:         (p: PaymentListParams) => ['payments', 'list', p] as const,
   recent:        ['payments', 'recent'] as const,
   monthlyIncome: ['payments', 'monthly-income'] as const,
+  monthlyExpected: ['payments', 'monthly-expected'] as const,
 }
 
 export function useMonthlyIncome() {
   return useQuery({
     queryKey: paymentKeys.monthlyIncome,
     queryFn:  paymentsApi.monthlyIncome,
+  })
+}
+
+export function useMonthlyExpected() {
+  return useQuery({
+    queryKey: paymentKeys.monthlyExpected,
+    queryFn:  paymentsApi.monthlyExpected,
   })
 }
 

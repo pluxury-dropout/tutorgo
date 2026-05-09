@@ -28,4 +28,6 @@ export const paymentsApi = {
       .then((r) => r.data),
   monthlyIncome: () =>
     api.get<{ total: number }>('/payments/monthly-income').then((r) => r.data.total),
+  monthlyExpected: () =>
+    api.get<{ total: number }>('/payments/monthly-expected').then((r) => r.data.total),
 }
