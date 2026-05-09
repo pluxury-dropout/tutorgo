@@ -14,6 +14,7 @@ type PaymentService interface {
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
+	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 }
 
 type paymentService struct {
@@ -56,4 +57,8 @@ func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorI
 
 func (s *paymentService) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {
 	return s.repo.GetMonthlyIncome(ctx, tutorID)
+}
+
+func (s *paymentService) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
+	return s.repo.GetMonthlyExpected(ctx, tutorID)
 }

@@ -46,6 +46,11 @@ func (m *mockPaymentRepo) GetMonthlyIncome(ctx context.Context, tutorID string) 
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *mockPaymentRepo) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).(float64), args.Error(1)
+}
+
 var (
 	tutorID  = "tutor-uuid-1"
 	courseID = "course-uuid-1"
@@ -198,4 +203,34 @@ func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
 	assert.Empty(t, balance)
 	payRepo.AssertNotCalled(t, "GetBalance")
 	courseRepo.AssertExpectations(t)
+}
+
+// GetMonthlyExpected
+
+func TestPaymentGetMonthlyExpected_Success(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	payRepo.On("GetMonthlyExpected", mock.Anything, tutorID).Return(75000.0, nil)
+
+	result, err := svc.GetMonthlyExpected(context.Background(), tutorID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 75000.0, result)
+	payRepo.AssertExpectations(t)
+}
+
+func TestPaymentGetMonthlyExpected_RepoError(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo)
+
+	payRepo.On("GetMonthlyExpected", mock.Anything, tutorID).Return(0.0, errors.New("db error"))
+
+	result, err := svc.GetMonthlyExpected(context.Background(), tutorID)
+
+	assert.Error(t, err)
+	assert.Equal(t, 0.0, result)
+	payRepo.AssertExpectations(t)
 }
