@@ -103,6 +103,21 @@ func (h *PaymentHandler) GetMonthlyIncome(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"total": total})
 }
 
+func (h *PaymentHandler) GetMonthlyExpected(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	total, err := h.service.GetMonthlyExpected(c.Request.Context(), tutorID)
+	if err != nil {
+		h.log.Error("Failed to get monthly expected", slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"total": total})
+}
+
 func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

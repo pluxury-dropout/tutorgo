@@ -226,6 +226,11 @@ func (m *mockPaymentService) GetMonthlyIncome(ctx context.Context, tutorID strin
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *mockPaymentService) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).(float64), args.Error(1)
+}
+
 // --- Mock: LessonService ---
 
 type mockLessonService struct{ mock.Mock }

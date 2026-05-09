@@ -23,6 +23,7 @@ func newPaymentRouter(svc *mockPaymentService, tutorID string) *gin.Engine {
 	r.GET("/payments", h.GetAll)
 	r.POST("/payments", h.Create)
 	r.GET("/payments/balance", h.GetBalance)
+	r.GET("/payments/monthly-expected", h.GetMonthlyExpected)
 	return r
 }
 
@@ -169,5 +170,44 @@ func TestPaymentGetBalance_ServiceError(t *testing.T) {
 	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	svc.AssertExpectations(t)
+}
+
+// GetMonthlyExpected
+
+func TestPaymentGetMonthlyExpected_Success(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, testTutorID)
+
+	svc.On("GetMonthlyExpected", mock.Anything, testTutorID).Return(75000.0, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/payments/monthly-expected", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got map[string]float64
+	decodeJSON(t, w, &got)
+	assert.Equal(t, 75000.0, got["total"])
+	svc.AssertExpectations(t)
+}
+
+func TestPaymentGetMonthlyExpected_Unauthorized(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, "")
+
+	w := makeRequest(t, r, http.MethodGet, "/payments/monthly-expected", nil)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	svc.AssertNotCalled(t, "GetMonthlyExpected")
+}
+
+func TestPaymentGetMonthlyExpected_ServiceError(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, testTutorID)
+
+	svc.On("GetMonthlyExpected", mock.Anything, testTutorID).Return(0.0, errors.New("db error"))
+
+	w := makeRequest(t, r, http.MethodGet, "/payments/monthly-expected", nil)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)
 }
