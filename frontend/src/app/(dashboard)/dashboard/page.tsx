@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useStudentCount } from '@/lib/hooks/useStudents'
 import { useCourseCount } from '@/lib/hooks/useCourses'
 import { useCalendar } from '@/lib/hooks/useCalendar'
-import { useRecentPayments, useMonthlyIncome } from '@/lib/hooks/usePayments'
+import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
 import { FC_COLORS } from '@/lib/lessonStatus'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { HeaderPanel } from '@/components/HeaderPanel'
@@ -69,6 +69,7 @@ export default function DashboardPage() {
   const { data: todayLessons = [], isLoading: lessonsLoading  } = useCalendar(todayFrom, todayTo)
   const { data: recentPayments = [] }                           = useRecentPayments()
   const { data: monthlyIncome  = 0, isLoading: incomeLoading  } = useMonthlyIncome()
+  const { data: monthlyExpected = 0, isLoading: expectedLoading } = useMonthlyExpected()
 
   const sortedLessons = useMemo(
     () => [...todayLessons].sort((a, b) =>
@@ -88,10 +89,10 @@ export default function DashboardPage() {
     {
       id:       'revenue',
       label:    'Доход',
-      value:    formatAmount(monthlyIncome),
+      value:    formatAmount(monthlyExpected),
       dotColor: 'var(--warning)',
-      meta:     'этот месяц',
-      loading:  incomeLoading,
+      meta:     'получено ' + formatAmount(monthlyIncome),
+      loading:  expectedLoading || incomeLoading,
     },
     {
       id:       'students',
