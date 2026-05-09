@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 
 import { useCourses } from '@/lib/hooks/useCourses'
-import { usePaymentsPaged, useMonthlyIncome } from '@/lib/hooks/usePayments'
+import { usePaymentsPaged, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
 import { HeaderPanel } from '@/components/HeaderPanel'
 import type { KpiSegment } from '@/components/HeaderPanel'
 import { Pagination } from '@/components/common/Pagination'
@@ -28,6 +28,7 @@ function PaymentsPageInner() {
   const { data: courses = [] }                                  = useCourses()
   const { data: pagedPayments, isLoading }                      = usePaymentsPaged({ page, limit: LIMIT })
   const { data: monthlyIncome = 0, isLoading: incomeLoading }   = useMonthlyIncome()
+  const { data: monthlyExpected = 0, isLoading: expectedLoading } = useMonthlyExpected()
 
   const payments   = pagedPayments?.data ?? []
   const total      = pagedPayments?.total ?? 0
@@ -68,9 +69,10 @@ function PaymentsPageInner() {
     {
       id:       'pending',
       label:    'Ожидается',
-      value:    '—',
+      value:    '₸ ' + monthlyExpected.toLocaleString('ru-RU'),
       dotColor: 'var(--purple)',
-      meta:     'нет данных',
+      meta:     'этот месяц',
+      loading:  expectedLoading,
     },
   ]
 
