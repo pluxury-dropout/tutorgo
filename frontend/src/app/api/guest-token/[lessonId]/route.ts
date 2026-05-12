@@ -5,7 +5,7 @@ export async function GET(
   { params }: { params: Promise<{ lessonId: string }> },
 ) {
   const { lessonId } = await params
-  const backendURL = process.env.NEXT_PUBLIC_API_URL
+  const backendURL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '')
 
   if (!backendURL) {
     return NextResponse.json({ error: 'NEXT_PUBLIC_API_URL not configured' }, { status: 503 })
