@@ -5,12 +5,19 @@ export async function GET(
   { params }: { params: Promise<{ lessonId: string }> },
 ) {
   const { lessonId } = await params
-  const backendURL = process.env.API_URL ?? 'http://localhost:8080'
+  const backendURL = process.env.NEXT_PUBLIC_API_URL
 
-  const res = await fetch(`${backendURL}/public/lessons/${lessonId}/guest-token`, {
-    cache: 'no-store',
-  })
+  if (!backendURL) {
+    return NextResponse.json({ error: 'NEXT_PUBLIC_API_URL not configured' }, { status: 503 })
+  }
 
-  const data = await res.json()
-  return NextResponse.json(data, { status: res.status })
+  try {
+    const res = await fetch(`${backendURL}/public/lessons/${lessonId}/guest-token`, {
+      cache: 'no-store',
+    })
+    const data = await res.json()
+    return NextResponse.json(data, { status: res.status })
+  } catch {
+    return NextResponse.json({ error: 'backend unavailable' }, { status: 502 })
+  }
 }
