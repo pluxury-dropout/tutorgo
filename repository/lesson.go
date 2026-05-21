@@ -286,7 +286,8 @@ func (r *lessonRepository) AutoComplete(ctx context.Context) (int64, error) {
 func (r *lessonRepository) ExistsPublic(ctx context.Context, id string) error {
 	var exists bool
 	err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM lessons WHERE id = $1)`, id,
+		`SELECT EXISTS(SELECT 1 FROM lessons WHERE id = $1
+		AND room_started_at IS NOT NULL)`, id,
 	).Scan(&exists)
 	if err != nil {
 		return err
