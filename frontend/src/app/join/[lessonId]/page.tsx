@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
@@ -13,22 +13,42 @@ import { GraduationCap } from 'lucide-react'
 export default function JoinPage() {
   const { lessonId } = useParams<{ lessonId: string }>()
 
-  const [name, setName]     = useState('')
-  const [room, setRoom]     = useState<RoomTokenResponse | null>(null)
+  const [name, setName]       = useState('')
+  const [room, setRoom]       = useState<RoomTokenResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState<string | null>(null)
+  const [waiting, setWaiting] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  function clearPolling() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }
+
+  useEffect(() => () => clearPolling(), [])
+
+  async function tryJoin(): Promise<boolean> {
+    try {
+      const data = await callsApi.getGuestToken(lessonId)
+      clearPolling()
+      setWaiting(false)
+      setLoading(false)
+      setRoom(data)
+      return true
+    } catch {
+      return false
+    }
+  }
 
   async function handleJoin() {
     if (!name.trim()) return
     setLoading(true)
-    setError(null)
-    try {
-      const data = await callsApi.getGuestToken(lessonId)
-      setRoom(data)
-    } catch {
-      setError('Не удалось подключиться. Проверьте ссылку.')
-    } finally {
+    const joined = await tryJoin()
+    if (!joined) {
       setLoading(false)
+      setWaiting(true)
+      intervalRef.current = setInterval(tryJoin, 5000)
     }
   }
 
@@ -61,26 +81,32 @@ export default function JoinPage() {
         <div className="rounded-lg border p-6 space-y-4">
           <h1 className="text-base font-semibold">Присоединиться к уроку</h1>
 
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">Ваше имя</label>
-            <Input
-              placeholder="Введите ваше имя"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
-              autoFocus
-            />
-          </div>
+          {waiting ? (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Урок ещё не начался. Ожидаем начала...
+            </p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground">Ваше имя</label>
+                <Input
+                  placeholder="Введите ваше имя"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+                  autoFocus
+                />
+              </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <Button
-            className="w-full"
-            onClick={handleJoin}
-            disabled={!name.trim() || loading}
-          >
-            {loading ? 'Подключение...' : 'Войти в урок'}
-          </Button>
+              <Button
+                className="w-full"
+                onClick={handleJoin}
+                disabled={!name.trim() || loading}
+              >
+                {loading ? 'Подключение...' : 'Войти в урок'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

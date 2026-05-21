@@ -117,3 +117,19 @@ func (h *CallHandler) GetGuestToken(c *gin.Context) {
 		"server_url": h.livekitURL,
 	})
 }
+
+func (h *CallHandler) StartRoom(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	lessonID := c.Param("id")
+	err := h.lessonService.StartRoom(c.Request.Context(), lessonID, tutorID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "lesson not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "room started"})
+
+}

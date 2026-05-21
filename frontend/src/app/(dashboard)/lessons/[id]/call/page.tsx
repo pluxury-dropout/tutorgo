@@ -1,6 +1,6 @@
 'use client'
 
-import { Component, useEffect, useState, type ReactNode } from 'react'
+import { Component, useState, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
@@ -8,8 +8,6 @@ import '@livekit/components-styles'
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
 import { Button } from '@/components/ui/button'
 
-// Catches the transient "Element not part of the array" error from LiveKit when
-// a placeholder track is swapped for the real track, then remounts to recover.
 class VideoConferenceBoundary extends Component<
   { children: ReactNode },
   { hasError: boolean }
@@ -29,18 +27,30 @@ class VideoConferenceBoundary extends Component<
   }
 }
 
+type Stage = 'idle' | 'starting' | 'connecting' | 'in-room'
+
 export default function CallPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
 
+  const [stage, setStage] = useState<Stage>('idle')
   const [room, setRoom]   = useState<RoomTokenResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    callsApi.getRoomToken(id)
-      .then(setRoom)
-      .catch(() => setError('Не удалось подключиться к видеозвонку'))
-  }, [id])
+  async function handleStart() {
+    setStage('starting')
+    setError(null)
+    try {
+      await callsApi.startRoom(id)
+      setStage('connecting')
+      const data = await callsApi.getRoomToken(id)
+      setRoom(data)
+      setStage('in-room')
+    } catch {
+      setError('Не удалось запустить урок')
+      setStage('idle')
+    }
+  }
 
   if (error) {
     return (
@@ -51,10 +61,21 @@ export default function CallPage() {
     )
   }
 
+  if (stage === 'idle') {
+    return (
+      <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+        <p className="text-muted-foreground">Нажмите кнопку, чтобы открыть комнату для учеников</p>
+        <Button onClick={handleStart}>Начать урок</Button>
+      </div>
+    )
+  }
+
   if (!room) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
-        <p className="text-muted-foreground">Подключение...</p>
+        <p className="text-muted-foreground">
+          {stage === 'starting' ? 'Открываем комнату...' : 'Подключение...'}
+        </p>
       </div>
     )
   }

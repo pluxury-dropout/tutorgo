@@ -10,6 +10,9 @@ export const callsApi = {
   getRoomToken: (lessonId: string) =>
     api.post<RoomTokenResponse>(`/lessons/${lessonId}/room-token`).then((r) => r.data),
 
+  startRoom: (lessonId: string) =>
+    api.post(`/lessons/${lessonId}/start-room`).then((r) => r.data),
+
   getGuestToken: (lessonId: string) =>
     fetch(`/api/guest-token/${lessonId}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<RoomTokenResponse> }),
