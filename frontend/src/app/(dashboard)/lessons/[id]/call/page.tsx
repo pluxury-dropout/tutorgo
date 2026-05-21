@@ -7,6 +7,7 @@ import '@livekit/components-styles'
 
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
 import { Button } from '@/components/ui/button'
+import { Link, Check } from 'lucide-react'
 
 class VideoConferenceBoundary extends Component<
   { children: ReactNode },
@@ -33,9 +34,17 @@ export default function CallPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
 
-  const [stage, setStage] = useState<Stage>('idle')
-  const [room, setRoom]   = useState<RoomTokenResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [stage, setStage]   = useState<Stage>('idle')
+  const [room, setRoom]     = useState<RoomTokenResponse | null>(null)
+  const [error, setError]   = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  function handleCopyLink() {
+    const url = `${window.location.origin}/join/${id}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   async function handleStart() {
     setStage('starting')
@@ -81,7 +90,7 @@ export default function CallPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 64px)' }}>
+    <div style={{ height: 'calc(100vh - 64px)', position: 'relative' }}>
       <LiveKitRoom
         key={room.token}
         serverUrl={room.server_url}
@@ -94,6 +103,16 @@ export default function CallPage() {
           <VideoConference />
         </VideoConferenceBoundary>
       </LiveKitRoom>
+
+      <Button
+        variant="secondary"
+        size="icon"
+        onClick={handleCopyLink}
+        title="Скопировать ссылку для ученика"
+        style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 50 }}
+      >
+        {copied ? <Check className="h-4 w-4" /> : <Link className="h-4 w-4" />}
+      </Button>
     </div>
   )
 }
