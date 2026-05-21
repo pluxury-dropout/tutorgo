@@ -20,6 +20,7 @@ type LessonService interface {
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	ExistsPublic(ctx context.Context, id string) error
+	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 }
 
 type lessonService struct {
@@ -121,4 +122,8 @@ func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from st
 
 func (s *lessonService) ExistsPublic(ctx context.Context, id string) error {
 	return s.repo.ExistsPublic(ctx, id)
+}
+
+func (s *lessonService) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
+	return s.repo.StartRoom(ctx, lessonID, tutorID)
 }
