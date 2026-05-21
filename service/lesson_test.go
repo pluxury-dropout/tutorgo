@@ -79,6 +79,10 @@ func (m *mockLessonRepo) ExistsPublic(ctx context.Context, id string) error {
 	return m.Called(ctx, id).Error(0)
 }
 
+func (m *mockLessonRepo) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
+	return m.Called(ctx, lessonID, tutorID).Error(0)
+}
+
 func (m *mockLessonRepo) GetByCoursePaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error) {
 	return nil, 0, nil
 }
@@ -355,6 +359,34 @@ func TestLessonExistsPublic_Error(t *testing.T) {
 	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(errors.New("not found"))
 
 	err := svc.ExistsPublic(context.Background(), lessonID)
+
+	assert.Error(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+// StartRoom
+
+func TestLessonStartRoom_Success(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("StartRoom", mock.Anything, lessonID, tutorID).Return(nil)
+
+	err := svc.StartRoom(context.Background(), lessonID, tutorID)
+
+	assert.NoError(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestLessonStartRoom_NotFound(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("StartRoom", mock.Anything, lessonID, tutorID).Return(errors.New("lesson not found"))
+
+	err := svc.StartRoom(context.Background(), lessonID, tutorID)
 
 	assert.Error(t, err)
 	lessonRepo.AssertExpectations(t)
