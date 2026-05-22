@@ -28,6 +28,8 @@ type LessonRepository interface {
 	AutoComplete(ctx context.Context) (int64, error)
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
+	Endroom(ctx context.Context, lessonID string, tutorID string) error
+	GetRoomStatus(ctx context.Context, id string) (string, error)
 }
 
 type lessonRepository struct {
@@ -302,6 +304,24 @@ func (r *lessonRepository) StartRoom(ctx context.Context, lessonID string, tutor
 	result, err := r.pool.Exec(ctx,
 		`UPDATE lessons
 		SET room_started_at = NOW()
+		FROM courses
+		WHERE lessons.id = $1
+		  AND lessons.course_id = courses.id
+		  AND courses.tutor_id = $2`,
+		lessonID, tutorID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("lesson not found")
+	}
+	return nil
+}
+
+func (r *lessonRepository) EndRoom(ctx context.Context, lessonID string, tutorID string) error {
+	result, err := r.pool.Exec(ctx,
+		`UPDATE lessons
+		SET room_ended_at = NOW()
 		FROM courses
 		WHERE lessons.id = $1
 		  AND lessons.course_id = courses.id
