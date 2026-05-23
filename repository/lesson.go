@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"tutorgo/models"
 
 	"github.com/google/uuid"
@@ -29,7 +30,7 @@ type LessonRepository interface {
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	Endroom(ctx context.Context, lessonID string, tutorID string) error
-	GetRoomStatus(ctx context.Context, id string) (string, error)
+	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
 }
 
 type lessonRepository struct {
@@ -334,4 +335,20 @@ func (r *lessonRepository) EndRoom(ctx context.Context, lessonID string, tutorID
 		return errors.New("lesson not found")
 	}
 	return nil
+}
+
+func (r *lessonRepository) GetRoomStatus(ctx context.Context, lessonID string) (string, error) {
+	var startedAt, endedAt *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT room_started_at, room_ended_at FROM lessons WHERE id =$ 1`, lessonID).Scan(&startedAt, endedAt)
+	if err != nil {
+		return "", err
+	}
+	if endedAt != nil {
+		return "ended", nil
+	}
+	if startedAt != nil {
+		return "active", nil
+	}
+	return "waiting", nil
 }
