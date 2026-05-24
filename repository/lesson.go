@@ -292,7 +292,7 @@ func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tut
 	}
 	defer rows.Close()
 
-	var lessons []models.Lesson
+	lessons := []models.Lesson{}
 	for rows.Next() {
 		var l models.Lesson
 		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes, &l.SeriesID); err != nil {
