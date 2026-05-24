@@ -51,6 +51,9 @@ export default function CallPage() {
     setError(null)
     try {
       await callsApi.startRoom(id)
+      navigator.clipboard.writeText(`${window.location.origin}/join/${id}`)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
       setStage('connecting')
       const data = await callsApi.getRoomToken(id)
       setRoom(data)
@@ -59,6 +62,11 @@ export default function CallPage() {
       setError('Не удалось запустить урок')
       setStage('idle')
     }
+  }
+
+  async function handleDisconnected() {
+    try { await callsApi.endRoom(id) } catch {}
+    router.back()
   }
 
   if (error) {
@@ -95,7 +103,7 @@ export default function CallPage() {
         key={room.token}
         serverUrl={room.server_url}
         token={room.token}
-        onDisconnected={() => router.back()}
+        onDisconnected={handleDisconnected}
         data-lk-theme="default"
         style={{ height: '100%' }}
       >
