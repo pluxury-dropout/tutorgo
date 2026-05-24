@@ -40,7 +40,11 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 		}
 		lessons, err := h.service.GetByPeriod(c.Request.Context(), courseID, tutorID, from, to)
 		if err != nil {
-			h.log.Error("Failed to get lessons by period", slog.String("error", err.Error()))
+			h.log.Error("Failed to get lessons by period",
+				slog.String("courseId", courseID),
+				slog.String("from", from),
+				slog.String("to", to),
+				slog.String("error", err.Error()))
 			handleServiceError(c, err)
 			return
 		}

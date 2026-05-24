@@ -189,3 +189,46 @@ func TestLessonDelete_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
 }
+
+// GetByCourse — period branch
+
+func TestLessonHandler_GetByCourse_WithPeriod_Success(t *testing.T) {
+	svc := new(mockLessonService)
+	r := newLessonRouter(svc, testTutorID)
+
+	from := "2026-05-19T00:00:00Z"
+	to := "2026-05-26T00:00:00Z"
+	lessons := []models.Lesson{testLesson}
+
+	svc.On("GetByPeriod", mock.Anything, testCourseID, testTutorID, from, to).Return(lessons, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/lessons?course_id="+testCourseID+"&from="+from+"&to="+to, nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	svc.AssertExpectations(t)
+}
+
+func TestLessonHandler_GetByCourse_WithPeriod_MissingTo(t *testing.T) {
+	svc := new(mockLessonService)
+	r := newLessonRouter(svc, testTutorID)
+
+	w := makeRequest(t, r, http.MethodGet, "/lessons?course_id="+testCourseID+"&from=2026-05-19T00:00:00Z", nil)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	svc.AssertNotCalled(t, "GetByPeriod")
+}
+
+func TestLessonHandler_GetByCourse_WithPeriod_ServiceError(t *testing.T) {
+	svc := new(mockLessonService)
+	r := newLessonRouter(svc, testTutorID)
+
+	from := "2026-05-19T00:00:00Z"
+	to := "2026-05-26T00:00:00Z"
+
+	svc.On("GetByPeriod", mock.Anything, testCourseID, testTutorID, from, to).Return([]models.Lesson(nil), fmt.Errorf("course: %w", service.ErrNotFound))
+
+	w := makeRequest(t, r, http.MethodGet, "/lessons?course_id="+testCourseID+"&from="+from+"&to="+to, nil)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	svc.AssertExpectations(t)
+}
