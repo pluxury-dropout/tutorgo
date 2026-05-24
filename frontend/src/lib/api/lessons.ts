@@ -35,6 +35,9 @@ export const lessonsApi = {
   listPaged: (courseId: string, page: number, limit = 10) =>
     api.get<PagedResponse<Lesson>>('/lessons', { params: { course_id: courseId, page, limit } })
        .then((r) => r.data ?? { data: [], total: 0, page, limit }),
+  listByPeriod: (courseId: string, from: string, to: string) =>
+    api.get<Lesson[]>('/lessons', { params: { course_id: courseId, from, to } })
+       .then((r) => r.data ?? []),
   get:    (id: string) =>
     api.get<Lesson>(`/lessons/${id}`).then((r) => r.data),
   create: (data: LessonInput) =>

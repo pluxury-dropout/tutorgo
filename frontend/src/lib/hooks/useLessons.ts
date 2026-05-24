@@ -23,6 +23,14 @@ export function useLessonsPaged(courseId: string, page: number) {
   })
 }
 
+export function useLessonsByPeriod(courseId: string, from: string, to: string) {
+  return useQuery({
+    queryKey: [...lessonKeys.byCourse(courseId), 'period', from, to] as const,
+    queryFn:  () => lessonsApi.listByPeriod(courseId, from, to),
+    enabled:  !!courseId && !!from && !!to,
+  })
+}
+
 export function useLesson(id: string) {
   return useQuery({
     queryKey: lessonKeys.detail(id),
