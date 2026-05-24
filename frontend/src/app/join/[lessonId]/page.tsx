@@ -10,13 +10,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { GraduationCap } from 'lucide-react'
 
+type Stage = 'form' | 'waiting' | 'in-room' | 'ended'
+
 export default function JoinPage() {
   const { lessonId } = useParams<{ lessonId: string }>()
 
-  const [name, setName]       = useState('')
-  const [room, setRoom]       = useState<RoomTokenResponse | null>(null)
+  const [stage, setStage]   = useState<Stage>('form')
+  const [name, setName]     = useState('')
+  const [room, setRoom]     = useState<RoomTokenResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [waiting, setWaiting] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   function clearPolling() {
@@ -30,11 +32,19 @@ export default function JoinPage() {
 
   async function tryJoin(): Promise<boolean> {
     try {
+      const { status } = await callsApi.getRoomStatus(lessonId)
+      if (status === 'ended') {
+        clearPolling()
+        setLoading(false)
+        setStage('ended')
+        return true
+      }
+      if (status !== 'active') return false
       const data = await callsApi.getGuestToken(lessonId)
       clearPolling()
-      setWaiting(false)
       setLoading(false)
       setRoom(data)
+      setStage('in-room')
       return true
     } catch {
       return false
@@ -47,12 +57,25 @@ export default function JoinPage() {
     const joined = await tryJoin()
     if (!joined) {
       setLoading(false)
-      setWaiting(true)
+      setStage('waiting')
       intervalRef.current = setInterval(tryJoin, 5000)
     }
   }
 
-  if (room) {
+  async function handleDisconnected() {
+    try {
+      const { status } = await callsApi.getRoomStatus(lessonId)
+      if (status === 'ended') {
+        setRoom(null)
+        setStage('ended')
+        return
+      }
+    } catch {}
+    setRoom(null)
+    setStage('form')
+  }
+
+  if (stage === 'in-room' && room) {
     return (
       <div style={{ height: '100dvh' }}>
         <LiveKitRoom
@@ -60,12 +83,29 @@ export default function JoinPage() {
           token={room.token}
           video={true}
           audio={true}
-          onDisconnected={() => setRoom(null)}
+          onDisconnected={handleDisconnected}
           data-lk-theme="default"
           style={{ height: '100%' }}
         >
           <VideoConference />
         </LiveKitRoom>
+      </div>
+    )
+  }
+
+  if (stage === 'ended') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="flex items-center gap-2 justify-center">
+            <GraduationCap className="h-6 w-6 text-primary" />
+            <span className="font-semibold text-lg">TutorGo</span>
+          </div>
+          <div className="rounded-lg border p-6 text-center space-y-2">
+            <p className="font-semibold">Урок завершён</p>
+            <p className="text-sm text-muted-foreground">Спасибо за занятие!</p>
+          </div>
+        </div>
       </div>
     )
   }
@@ -81,7 +121,7 @@ export default function JoinPage() {
         <div className="rounded-lg border p-6 space-y-4">
           <h1 className="text-base font-semibold">Присоединиться к уроку</h1>
 
-          {waiting ? (
+          {stage === 'waiting' ? (
             <p className="text-sm text-muted-foreground text-center py-2">
               Урок ещё не начался. Ожидаем начала...
             </p>
