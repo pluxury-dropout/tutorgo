@@ -484,7 +484,7 @@ func TestLessonGetByPeriod_CourseNotFound(t *testing.T) {
 
 	lessons, err := svc.GetByPeriod(context.Background(), courseID, tutorID, from, to)
 
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Nil(t, lessons)
 	courseRepo.AssertExpectations(t)
 	lessonRepo.AssertNotCalled(t, "GetByPeriod")
