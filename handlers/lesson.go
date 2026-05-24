@@ -31,6 +31,23 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 		return
 	}
 
+	// period-based fetch
+	if from := c.Query("from"); from != "" {
+		to := c.Query("to")
+		if to == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "to is required when from is set"})
+			return
+		}
+		lessons, err := h.service.GetByPeriod(c.Request.Context(), courseID, tutorID, from, to)
+		if err != nil {
+			h.log.Error("Failed to get lessons by period", slog.String("error", err.Error()))
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, lessons)
+		return
+	}
+
 	if c.Query("page") != "" {
 		var p models.Pagination
 		_ = c.ShouldBindQuery(&p)
