@@ -10,6 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	lkauth "github.com/livekit/protocol/auth"
+	livekit "github.com/livekit/protocol/livekit"
+	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
 type CallHandler struct {
@@ -18,10 +20,22 @@ type CallHandler struct {
 	livekitURL    string
 	apiKey        string
 	apiSecret     string
+	roomClient    *lksdk.RoomServiceClient
 }
 
 func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string) *CallHandler {
-	return &CallHandler{lessonService: svc, log: log, livekitURL: url, apiKey: key, apiSecret: secret}
+	var roomClient *lksdk.RoomServiceClient
+	if key != "" {
+		roomClient = lksdk.NewRoomServiceClient(url, key, secret)
+	}
+	return &CallHandler{
+		lessonService: svc,
+		log:           log,
+		livekitURL:    url,
+		apiKey:        key,
+		apiSecret:     secret,
+		roomClient:    roomClient,
+	}
 }
 
 // POST /lessons/:id/room-token — защищённый, только для репетитора
@@ -131,5 +145,34 @@ func (h *CallHandler) StartRoom(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "room started"})
+}
 
+// POST /lessons/:id/end-room
+func (h *CallHandler) EndRoom(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	lessonID := c.Param("id")
+	if err := h.lessonService.EndRoom(c.Request.Context(), lessonID, tutorID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "lesson not found"})
+		return
+	}
+	if h.roomClient != nil {
+		roomName := "lesson-" + lessonID
+		_, _ = h.roomClient.DeleteRoom(c.Request.Context(), &livekit.DeleteRoomRequest{Room: roomName})
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "room ended"})
+}
+
+// GET /public/lessons/:id/room-status
+func (h *CallHandler) GetRoomStatus(c *gin.Context) {
+	lessonID := c.Param("id")
+	status, err := h.lessonService.GetRoomStatus(c.Request.Context(), lessonID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "lesson not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": status})
 }
