@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX } from 'lucide-react'
@@ -15,7 +15,7 @@ import {
   useRemoveEnrollment,
 } from '@/lib/hooks/useCourses'
 import {
-  useLessonsPaged,
+  useLessonsByPeriod,
   useCreateLesson,
   useCreateLessons,
   useUpdateLesson,
@@ -40,7 +40,20 @@ import { Lesson } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
-import { Pagination } from '@/components/common/Pagination'
+import { PeriodPicker } from '@/components/lessons/PeriodPicker'
+
+// Возвращает { from, to } для текущей недели (Пн–Пн+7)
+function currentWeekRange(): { from: Date; to: Date } {
+  const now = new Date()
+  const day = now.getDay()                   // 0=Вс, 1=Пн...
+  const diff = day === 0 ? -6 : 1 - day
+  const from = new Date(now)
+  from.setDate(now.getDate() + diff)
+  from.setHours(0, 0, 0, 0)
+  const to = new Date(from)
+  to.setDate(from.getDate() + 7)
+  return { from, to }
+}
 
 function generateDates(baseISO: string, opts: RecurrenceOptions, courseEndAt?: string | null): string[] {
   const base    = new Date(baseISO)
@@ -117,11 +130,13 @@ export default function CourseDetailPage() {
   const { data: balance }           = useCourseBalance(id)
   const { data: enrollments = [] }  = useCourseEnrollments(id)
   const { data: students = [] }     = useStudents()
-  const [lessonPage, setLessonPage]                        = useState(1)
-  const { data: pagedLessons, isLoading: lessonsLoading }  = useLessonsPaged(id, lessonPage)
-  const lessons           = pagedLessons?.data  ?? []
-  const lessonsTotal      = pagedLessons?.total ?? 0
-  const lessonsTotalPages = Math.ceil(lessonsTotal / 10)
+  const [period, setPeriod] = useState(currentWeekRange)
+  const { data: lessons = [], isLoading: lessonsLoading } = useLessonsByPeriod(
+    id,
+    period.from.toISOString(),
+    period.to.toISOString(),
+  )
+  const lessonsTotal = lessons.length
   const { data: payments = [] }     = usePayments(id)
 
   const [courseFormOpen, setCourseFormOpen]     = useState(false)
@@ -240,12 +255,6 @@ export default function CourseDetailPage() {
     setEditingLesson(lesson)
     setLessonFormOpen(true)
   }
-
-  useEffect(() => {
-    if (!lessonsLoading && lessonsTotal > 0 && lessonPage > lessonsTotalPages) {
-      setLessonPage(lessonsTotalPages)
-    }
-  }, [lessonsLoading, lessonsTotal, lessonPage, lessonsTotalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return <div className="space-y-3">{[...Array(4)].map((_, i) => (
@@ -395,7 +404,14 @@ export default function CourseDetailPage() {
       {/* Lessons */}
       <div className="border rounded-lg p-4 mt-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">Уроки ({lessonsTotal})</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold">Уроки ({lessonsTotal})</h2>
+            <PeriodPicker
+              from={period.from}
+              to={period.to}
+              onChange={(from, to) => setPeriod({ from, to })}
+            />
+          </div>
           <div className="flex gap-2">
             {lessonsTotal > 0 && (
               <Button size="sm" variant="outline"
@@ -468,18 +484,6 @@ export default function CourseDetailPage() {
           </div>
         )}
 
-        {lessonsTotalPages > 1 && (
-          <div className="flex items-center justify-between mt-3 px-1">
-            <span className="text-xs text-muted-foreground">
-              Страница {lessonPage} из {lessonsTotalPages}
-            </span>
-            <Pagination
-              page={lessonPage}
-              totalPages={lessonsTotalPages}
-              onPageChange={setLessonPage}
-            />
-          </div>
-        )}
       </div>
 
       <CourseForm
