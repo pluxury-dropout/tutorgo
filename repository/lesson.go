@@ -26,6 +26,7 @@ type LessonRepository interface {
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
+	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
 	AutoComplete(ctx context.Context) (int64, error)
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
@@ -271,6 +272,33 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 			return nil, err
 		}
 		lessons = append(lessons, cl)
+	}
+	return lessons, rows.Err()
+}
+
+func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes, l.series_id
+		 FROM lessons l
+		 JOIN courses c ON c.id = l.course_id
+		 WHERE l.course_id = $1
+		   AND c.tutor_id = $2
+		   AND l.scheduled_at >= $3::timestamptz
+		   AND l.scheduled_at < $4::timestamptz
+		 ORDER BY l.scheduled_at ASC`,
+		courseID, tutorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var lessons []models.Lesson
+	for rows.Next() {
+		var l models.Lesson
+		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes, &l.SeriesID); err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, l)
 	}
 	return lessons, rows.Err()
 }
