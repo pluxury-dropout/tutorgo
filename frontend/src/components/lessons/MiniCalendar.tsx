@@ -111,8 +111,6 @@ export function MiniCalendar({ from, to, onSelect, onClose }: MiniCalendarProps)
       !isStart && !isEnd && !inRange && !isWeekend && 'text-foreground hover:bg-accent hover:rounded-md',
       inRange && 'bg-muted text-foreground',
       (isStart || isEnd) && 'bg-foreground text-background font-semibold rounded-full',
-      isStart && !isEnd && 'rounded-full',
-      isEnd && !isStart && 'rounded-full',
       isToday && !isStart && !isEnd && 'font-bold',
     )
   }
