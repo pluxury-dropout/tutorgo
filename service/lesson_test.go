@@ -87,6 +87,11 @@ func (m *mockLessonRepo) GetByCoursePaged(ctx context.Context, courseID string, 
 	return nil, 0, nil
 }
 
+func (m *mockLessonRepo) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
+	args := m.Called(ctx, courseID, tutorID, from, to)
+	return args.Get(0).([]models.Lesson), args.Error(1)
+}
+
 func (m *mockLessonRepo) EndRoom(ctx context.Context, lessonID string, tutorID string) error {
 	return m.Called(ctx, lessonID, tutorID).Error(0)
 }
@@ -443,4 +448,44 @@ func TestGetRoomStatus_Ended(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "ended", status)
 	repo.AssertExpectations(t)
+}
+
+// GetByPeriod
+
+func TestLessonGetByPeriod_Success(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	from := "2026-05-19T00:00:00Z"
+	to := "2026-05-26T00:00:00Z"
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	lessonRepo.On("GetByPeriod", mock.Anything, courseID, tutorID, from, to).Return([]models.Lesson{expectedLesson}, nil)
+
+	lessons, err := svc.GetByPeriod(context.Background(), courseID, tutorID, from, to)
+
+	assert.NoError(t, err)
+	assert.Len(t, lessons, 1)
+	assert.Equal(t, expectedLesson, lessons[0])
+	courseRepo.AssertExpectations(t)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestLessonGetByPeriod_CourseNotFound(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	from := "2026-05-19T00:00:00Z"
+	to := "2026-05-26T00:00:00Z"
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+
+	lessons, err := svc.GetByPeriod(context.Background(), courseID, tutorID, from, to)
+
+	assert.Error(t, err)
+	assert.Nil(t, lessons)
+	courseRepo.AssertExpectations(t)
+	lessonRepo.AssertNotCalled(t, "GetByPeriod")
 }

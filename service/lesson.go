@@ -19,6 +19,7 @@ type LessonService interface {
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
+	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
@@ -56,6 +57,14 @@ func (s *lessonService) GetByCourse(ctx context.Context, courseID string, tutorI
 		return nil, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.GetByCourse(ctx, courseID)
+}
+
+func (s *lessonService) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
+	_, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+	if err != nil {
+		return nil, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	return s.repo.GetByPeriod(ctx, courseID, tutorID, from, to)
 }
 
 func (s *lessonService) GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error) {

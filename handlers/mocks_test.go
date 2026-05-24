@@ -297,3 +297,8 @@ func (m *mockLessonService) GetByCoursePaged(ctx context.Context, courseID strin
 	args := m.Called(ctx, courseID, tutorID, p)
 	return args.Get(0).(models.PagedResponse[models.Lesson]), args.Error(1)
 }
+
+func (m *mockLessonService) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
+	args := m.Called(ctx, courseID, tutorID, from, to)
+	return args.Get(0).([]models.Lesson), args.Error(1)
+}
