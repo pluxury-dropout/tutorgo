@@ -21,6 +21,8 @@ type LessonService interface {
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
+	EndRoom(ctx context.Context, lessonID string, tutorID string) error
+	GetRoomStatus(ctx context.Context, id string) (string, error)
 }
 
 type lessonService struct {
@@ -126,4 +128,12 @@ func (s *lessonService) ExistsPublic(ctx context.Context, id string) error {
 
 func (s *lessonService) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
 	return s.repo.StartRoom(ctx, lessonID, tutorID)
+}
+
+func (s *lessonService) EndRoom(ctx context.Context, lessonID string, tutorID string) error {
+	return s.repo.EndRoom(ctx, lessonID, tutorID)
+}
+
+func (s *lessonService) GetRoomStatus(ctx context.Context, id string) (string, error) {
+	return s.repo.GetRoomStatus(ctx, id)
 }

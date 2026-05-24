@@ -87,6 +87,15 @@ func (m *mockLessonRepo) GetByCoursePaged(ctx context.Context, courseID string, 
 	return nil, 0, nil
 }
 
+func (m *mockLessonRepo) EndRoom(ctx context.Context, lessonID string, tutorID string) error {
+	return m.Called(ctx, lessonID, tutorID).Error(0)
+}
+
+func (m *mockLessonRepo) GetRoomStatus(ctx context.Context, lessonID string) (string, error) {
+	args := m.Called(ctx, lessonID)
+	return args.String(0), args.Error(1)
+}
+
 // fixtures
 
 var (
@@ -390,4 +399,48 @@ func TestLessonStartRoom_NotFound(t *testing.T) {
 
 	assert.Error(t, err)
 	lessonRepo.AssertExpectations(t)
+}
+func TestEndRoom_Success(t *testing.T) {
+	repo := new(mockLessonRepo)
+	svc := service.NewLessonService(repo, nil)
+
+	repo.On("EndRoom", mock.Anything, lessonID, tutorID).Return(nil)
+
+	err := svc.EndRoom(context.Background(), lessonID, tutorID)
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+func TestEndRoom_NotFound(t *testing.T) {
+	repo := new(mockLessonRepo)
+	svc := service.NewLessonService(repo, nil)
+
+	repo.On("EndRoom", mock.Anything, lessonID, tutorID).Return(errors.New("lesson not found"))
+
+	err := svc.EndRoom(context.Background(), lessonID, tutorID)
+	assert.Error(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestGetRoomStatus_Active(t *testing.T) {
+	repo := new(mockLessonRepo)
+	svc := service.NewLessonService(repo, nil)
+
+	repo.On("GetRoomStatus", mock.Anything, lessonID).Return("active", nil)
+
+	status, err := svc.GetRoomStatus(context.Background(), lessonID)
+	assert.NoError(t, err)
+	assert.Equal(t, "active", status)
+	repo.AssertExpectations(t)
+}
+
+func TestGetRoomStatus_Ended(t *testing.T) {
+	repo := new(mockLessonRepo)
+	svc := service.NewLessonService(repo, nil)
+
+	repo.On("GetRoomStatus", mock.Anything, lessonID).Return("ended", nil)
+
+	status, err := svc.GetRoomStatus(context.Background(), lessonID)
+	assert.NoError(t, err)
+	assert.Equal(t, "ended", status)
+	repo.AssertExpectations(t)
 }

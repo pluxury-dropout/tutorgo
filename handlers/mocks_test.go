@@ -284,6 +284,15 @@ func (m *mockLessonService) StartRoom(ctx context.Context, lessonID string, tuto
 	return m.Called(ctx, lessonID, tutorID).Error(0)
 }
 
+func (m *mockLessonService) EndRoom(ctx context.Context, lessonID string, tutorID string) error {
+	return m.Called(ctx, lessonID, tutorID).Error(0)
+}
+
+func (m *mockLessonService) GetRoomStatus(ctx context.Context, id string) (string, error) {
+	args := m.Called(ctx, id)
+	return args.String(0), args.Error(1)
+}
+
 func (m *mockLessonService) GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error) {
 	args := m.Called(ctx, courseID, tutorID, p)
 	return args.Get(0).(models.PagedResponse[models.Lesson]), args.Error(1)

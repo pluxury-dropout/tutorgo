@@ -29,7 +29,7 @@ type LessonRepository interface {
 	AutoComplete(ctx context.Context) (int64, error)
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
-	Endroom(ctx context.Context, lessonID string, tutorID string) error
+	EndRoom(ctx context.Context, lessonID string, tutorID string) error
 	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
 }
 
