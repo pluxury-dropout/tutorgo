@@ -11,6 +11,7 @@ import { STATUS_LABELS } from '@/lib/lessonStatus'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { LessonStatus } from '@/types/api'
 import { Video, Link2 } from 'lucide-react'
 
@@ -111,15 +112,16 @@ export function LessonQuickDialog({ lesson, onClose }: Props) {
         <div className="space-y-3 py-1">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Статус</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as LessonStatus)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {(Object.keys(STATUS_LABELS) as LessonStatus[]).map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-              ))}
-            </select>
+            <Select value={status} onValueChange={(v) => setStatus(v as LessonStatus)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(STATUS_LABELS) as LessonStatus[]).map((s) => (
+                  <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

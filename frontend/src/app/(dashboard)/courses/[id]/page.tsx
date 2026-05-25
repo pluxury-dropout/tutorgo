@@ -41,6 +41,7 @@ import { Lesson } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { PeriodPicker } from '@/components/lessons/PeriodPicker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // Возвращает { from, to } для текущей недели (Пн–Пн+7)
 function currentWeekRange(): { from: Date; to: Date } {
@@ -368,16 +369,18 @@ export default function CourseDetailPage() {
           <h2 className="text-sm font-semibold mb-3">Ученики группы</h2>
           {availableStudents.length > 0 && (
             <div className="flex gap-2 mb-4">
-              <select
-                value={selectedStudent}
-                onChange={(e) => setSelected(e.target.value)}
-                className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">Выберите ученика...</option>
-                {availableStudents.map((s) => (
-                  <option key={s.id} value={s.id}>{s.first_name}{s.last_name ? ` ${s.last_name}` : ''}</option>
-                ))}
-              </select>
+              <Select value={selectedStudent} onValueChange={(v) => setSelected(v ?? '')}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Выберите ученика..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStudents.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.first_name}{s.last_name ? ` ${s.last_name}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button size="sm" onClick={handleAddEnrollment} disabled={!selectedStudent}>
                 <UserPlus className="h-4 w-4 mr-1.5" /> Добавить
               </Button>

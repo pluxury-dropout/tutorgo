@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TimePicker } from '@/components/ui/time-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled:  'Запланирован',
@@ -55,6 +56,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<LessonFormValues>({ resolver: zodResolver(lessonSchema) })
 
@@ -175,15 +177,22 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
           {initial && (
             <div className="space-y-1.5">
               <Label htmlFor="status">Статус</Label>
-              <select
-                id="status"
-                {...register('status')}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {Object.entries(STATUS_LABELS).map(([v, label]) => (
-                  <option key={v} value={v}>{label}</option>
-                ))}
-              </select>
+              <Controller
+                name="status"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value ?? 'scheduled'} onValueChange={field.onChange}>
+                    <SelectTrigger id="status" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(STATUS_LABELS).map(([v, label]) => (
+                        <SelectItem key={v} value={v}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           )}
 
@@ -211,15 +220,16 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                 <>
                   <div className="space-y-1.5">
                     <Label>Тип повторения</Label>
-                    <select
-                      value={recType}
-                      onChange={(e) => setRecType(e.target.value as RecurrenceType)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="weekly_same">Каждую неделю в этот день</option>
-                      <option value="weekly_custom">Каждую неделю по выбранным дням</option>
-                      <option value="every_n_weeks">Каждые N недель</option>
-                    </select>
+                    <Select value={recType} onValueChange={(v) => setRecType(v as RecurrenceType)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly_same">Каждую неделю в этот день</SelectItem>
+                        <SelectItem value="weekly_custom">Каждую неделю по выбранным дням</SelectItem>
+                        <SelectItem value="every_n_weeks">Каждые N недель</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {recType === 'weekly_custom' && (

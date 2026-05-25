@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface CourseFormProps {
   open: boolean
@@ -30,6 +31,7 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     reset,
     watch,
     setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
@@ -100,18 +102,24 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
           {courseType === 'individual' && !initial && (
             <div className="space-y-1.5">
               <Label htmlFor="student_id">Ученик</Label>
-              <select
-                id="student_id"
-                {...register('student_id')}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Выберите ученика</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.first_name}{s.last_name ? ` ${s.last_name}` : ''}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="student_id"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                    <SelectTrigger id="student_id">
+                      <SelectValue placeholder="Выберите ученика" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {students.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.first_name}{s.last_name ? ` ${s.last_name}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.student_id && (
                 <p className="text-xs text-destructive">{errors.student_id.message}</p>
               )}
