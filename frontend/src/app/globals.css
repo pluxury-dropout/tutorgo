@@ -70,9 +70,9 @@
   --secondary-foreground: #37352F;
   --muted:               #F1F1EF;
   --muted-foreground:    #787774;   /* Notion gray text */
-  --accent:              #D87620;   /* Notion orange icon */
+  --accent:              #373736;   /* Notion orange icon */
   --accent-light:        #F8ECDF;   /* Notion orange bg */
-  --accent-foreground:   #CC782F;   /* Notion orange text */
+  --accent-foreground:   #373736;   /* Notion orange text */
   --destructive:         #D44C47;   /* Notion red icon */
   --success:             #448361;   /* Notion green icon */
   --warning:             #CB912F;   /* Notion yellow icon */
@@ -142,16 +142,16 @@
   --card-foreground:     #E3E2E0;
   --popover:             #222222;
   --popover-foreground:  #E3E2E0;
-  --primary:             #2E7CD1;   /* Notion blue icon dark */
-  --primary-light:       #1F282D;   /* Notion blue bg dark */
+  --primary:             #000000;   /* Notion blue icon dark */
+  --primary-light:       #3e3e3e;   /* Notion blue bg dark */
   --primary-foreground:  #f0efed;   /* warm off-white on blue */
   --secondary:           #2a2a2a;
   --secondary-foreground: #E3E2E0;
   --muted:               #2a2a2a;
   --muted-foreground:    #979A9B;
-  --accent:              #D9730D;   /* Notion orange icon dark */
+  --accent:              #373736;   /* Notion orange icon dark */
   --accent-light:        #36291F;   /* Notion orange bg dark */
-  --accent-foreground:   #CB7B37;
+  --accent-foreground:   #e3e2e0;
   --destructive:         #CD4945;   /* Notion red icon dark */
   --success:             #2D9964;   /* Notion green icon dark */
   --warning:             #CA8E1B;   /* Notion yellow icon dark */
@@ -171,13 +171,13 @@
   /* Sidebar */
   --sidebar:             #222222;
   --sidebar-foreground:  #E3E2E0;
-  --sidebar-primary:     #2E7CD1;
+  --sidebar-primary:     #c4c4c4;
   --sidebar-primary-foreground: #f0efed;
   --sidebar-accent:      #3F4448;
   --sidebar-accent-foreground: #E3E2E0;
   --sidebar-border:      #2e2e2e;
   --sidebar-ring:        #2E7CD1;
-  --sidebar-active-bg:   #1F282D;
+  --sidebar-active-bg:   #393939;
   --sidebar-active-text: #f0efed;
   --sidebar-hover-bg:    #2a2a2a;
   --sidebar-text:        #979A9B;
@@ -193,7 +193,7 @@
   --status-missed-text:    #BE524B;   /* Notion red text dark */
 
   /* Calendar event chips dark */
-  --cal-scheduled-bg:      #2E7CD1;
+  --cal-scheduled-bg:      #2e7dd1;
   --cal-scheduled-border:  #447ACB;
   --cal-scheduled-text:    #FFFFFF;
   --cal-completed-bg:      #2D9964;
