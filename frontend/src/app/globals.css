@@ -56,126 +56,155 @@
 }
 
 :root {
-  /* Base */
-  --background:          oklch(96% 0.00011 271.152);
-  --foreground:          oklch(0.18 0.02 215);
-  --card:                oklch(1 0 0);
-  --card-foreground:     oklch(0.18 0.02 215);
-  --popover:             oklch(1 0 0);
-  --popover-foreground:  oklch(0.18 0.02 215);
-  --primary:             oklch(0.52 0.1 185);
-  --primary-light:       oklch(0.94 0.04 185);
-  --primary-foreground:  oklch(0.985 0 0);
-  --secondary:           oklch(0.96 0.004 215);
-  --secondary-foreground: oklch(0.18 0.02 215);
-  --muted:               oklch(0.96 0.004 215);
-  --muted-foreground:    oklch(0.50 0.02 215);
-  --accent:              oklch(0.72 0.14 55);
-  --accent-light:        oklch(0.96 0.04 55);
-  --accent-foreground:   oklch(0.28 0.06 35);
-  --destructive:         oklch(0.577 0.245 27.325);
-  --success: oklch(0.55 0.14 155);
-  --warning: oklch(0.62 0.16 55);
-  --purple:  oklch(0.52 0.14 280);
-  --danger:  oklch(0.55 0.18 25);
-  --border:              oklch(0.91 0.006 215);
-  --input:               oklch(0.91 0.006 215);
-  --ring:                oklch(52.412% 0.09238 185.012);
+  /* Base — Notion Light */
+  --background:          #FFFFFF;
+  --foreground:          #37352F;
+  --card:                #FFFFFF;
+  --card-foreground:     #37352F;
+  --popover:             #FFFFFF;
+  --popover-foreground:  #37352F;
+  --primary:             #337EA9;   /* Notion blue icon */
+  --primary-light:       #E9F3F7;   /* Notion blue bg */
+  --primary-foreground:  #f0efed;   /* warm off-white on blue */
+  --secondary:           #F1F1EF;   /* Notion gray bg */
+  --secondary-foreground: #37352F;
+  --muted:               #F1F1EF;
+  --muted-foreground:    #787774;   /* Notion gray text */
+  --accent:              #D87620;   /* Notion orange icon */
+  --accent-light:        #F8ECDF;   /* Notion orange bg */
+  --accent-foreground:   #CC782F;   /* Notion orange text */
+  --destructive:         #D44C47;   /* Notion red icon */
+  --success:             #448361;   /* Notion green icon */
+  --warning:             #CB912F;   /* Notion yellow icon */
+  --purple:              #9065B0;   /* Notion purple icon */
+  --danger:              #D44C47;
+  --border:              #DFDCD9;
+  --input:               #DFDCD9;
+  --ring:                #337EA9;
   --radius:              0.5rem;
   --radius-lg:           0.75rem;
 
   /* Shadows */
-  --shadow-sm:           0 1px 2px oklch(0.18 0.02 215 / 0.06);
-  --shadow-card:         0 1px 3px oklch(0.18 0.02 215 / 0.08);
+  --shadow-sm:           0 1px 2px rgba(55, 53, 47, 0.06);
+  --shadow-card:         0 1px 3px rgba(55, 53, 47, 0.08);
 
   /* Sidebar */
-  --sidebar:             oklch(96% 0.00011 271.152);
-  --sidebar-foreground:  oklch(0.18 0.02 215);
-  --sidebar-primary:     oklch(0.52 0.1 185);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent:      oklch(0.96 0.004 215);
-  --sidebar-accent-foreground: oklch(0.18 0.02 215);
-  --sidebar-border:      oklch(0.91 0.006 215);
-  --sidebar-ring:        oklch(0.52 0.1 185);
-  --sidebar-active-bg:   oklch(0.94 0.04 185);
-  --sidebar-active-text: oklch(0.52 0.1 185);
-  --sidebar-hover-bg:    oklch(0.96 0.004 215);
-  --sidebar-text:        oklch(0.42 0.02 215);
+  --sidebar:             #F7F6F3;
+  --sidebar-foreground:  #37352F;
+  --sidebar-primary:     #337EA9;
+  --sidebar-primary-foreground: #f0efed;
+  --sidebar-accent:      #EBEBEA;
+  --sidebar-accent-foreground: #37352F;
+  --sidebar-border:      #DFDCD9;
+  --sidebar-ring:        #337EA9;
+  --sidebar-active-bg:   #337EA9;   /* solid blue pill */
+  --sidebar-active-text: #f0efed;   /* warm off-white on blue */
+  --sidebar-hover-bg:    #EBEBEA;
+  --sidebar-text:        #787774;
 
-  /* Lesson status chips */
-  --status-scheduled-bg:   oklch(0.94 0.04 250);
-  --status-scheduled-text: oklch(0.40 0.12 250);
-  --status-completed-bg:   oklch(0.93 0.06 155);
-  --status-completed-text: oklch(0.35 0.10 155);
-  --status-cancelled-bg:   oklch(0.94 0.004 215);
-  --status-cancelled-text: oklch(0.48 0.01 215);
-  --status-missed-bg:      oklch(0.94 0.04 25);
-  --status-missed-text:    oklch(0.42 0.18 25);
+  /* Lesson / course status chips */
+  --status-scheduled-bg:   #E9F3F7;   /* Notion blue bg */
+  --status-scheduled-text: #487CA5;   /* Notion blue text */
+  --status-completed-bg:   #EEF3ED;   /* Notion green bg */
+  --status-completed-text: #548164;   /* Notion green text */
+  --status-cancelled-bg:   #F1F1EF;   /* Notion gray bg */
+  --status-cancelled-text: #787774;   /* Notion gray text */
+  --status-missed-bg:      #FAECEC;   /* Notion red bg */
+  --status-missed-text:    #C4554D;   /* Notion red text */
 
-  /* Calendar event chips */
-  --cal-scheduled-bg:      oklch(62.686% 0.1 276.493);       /* #828bc2 */
-  --cal-scheduled-border:  oklch(0.55 0.14 250);
-  --cal-scheduled-text:    oklch(26.448% 0.00003 271);      /* #131314 */
-  --cal-completed-bg:      oklch(0.65 0.12 150.022);
-  --cal-completed-border:  oklch(0.74 0.04 155);
-  --cal-completed-text:    oklch(26.448% 0.00003 271);
-  --cal-cancelled-bg:      oklch(76.039% 0.00009 271.152);
-  --cal-cancelled-border:  oklch(0.78 0.004 215);
-  --cal-cancelled-text:    oklch(0% 0 0);
-  --cal-missed-bg:         oklch(0.96 0.018 25);
-  --cal-missed-border:     oklch(0.74 0.07 25);
-  --cal-missed-text:       oklch(0.58 0.08 25);
+  /* Calendar event chips — solid icon colors, white label */
+  --cal-scheduled-bg:      #337EA9;
+  --cal-scheduled-border:  #487CA5;
+  --cal-scheduled-text:    #FFFFFF;
+  --cal-completed-bg:      #448361;
+  --cal-completed-border:  #548164;
+  --cal-completed-text:    #FFFFFF;
+  --cal-cancelled-bg:      #A6A299;
+  --cal-cancelled-border:  #787774;
+  --cal-cancelled-text:    #FFFFFF;
+  --cal-missed-bg:         #D44C47;
+  --cal-missed-border:     #C4554D;
+  --cal-missed-text:       #FFFFFF;
 
   /* Charts */
-  --chart-1: oklch(0.52 0.1 185);
-  --chart-2: oklch(0.72 0.14 55);
-  --chart-3: oklch(0.65 0.18 145);
-  --chart-4: oklch(0.60 0.20 295);
-  --chart-5: oklch(0.55 0.22 25);
+  --chart-1: #337EA9;   /* blue */
+  --chart-2: #D87620;   /* orange */
+  --chart-3: #448361;   /* green */
+  --chart-4: #9065B0;   /* purple */
+  --chart-5: #D44C47;   /* red */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary:             oklch(0.65 0.10 185);
-  --primary-light:       oklch(0.22 0.04 185);
-  --primary-foreground:  oklch(0.985 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent:              oklch(0.72 0.14 55);
-  --accent-light:        oklch(0.22 0.05 55);
-  --accent-foreground:   oklch(0.95 0.03 55);
-  --destructive: oklch(0.704 0.191 22.216);
-  --success: oklch(0.65 0.14 155);
-  --warning: oklch(0.72 0.16 55);
-  --purple:  oklch(0.62 0.14 280);
-  --danger:  oklch(0.65 0.18 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring:                oklch(0.65 0.10 185);
-  --chart-1: oklch(0.65 0.10 185);
-  --chart-2: oklch(0.72 0.14 55);
-  --chart-3: oklch(0.65 0.18 145);
-  --chart-4: oklch(0.60 0.20 295);
-  --chart-5: oklch(0.55 0.22 25);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary:     oklch(0.65 0.10 185);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring:        oklch(0.65 0.10 185);
-  --sidebar-active-bg:   oklch(0.22 0.04 185);
-  --sidebar-active-text: oklch(0.65 0.10 185);
-  --sidebar-hover-bg:    oklch(0.25 0.005 215);
-  --sidebar-text:        oklch(0.65 0.01 215);
+  /* Base — Notion Dark */
+  --background:          #191919;
+  --foreground:          #E3E2E0;
+  --card:                #222222;
+  --card-foreground:     #E3E2E0;
+  --popover:             #222222;
+  --popover-foreground:  #E3E2E0;
+  --primary:             #2E7CD1;   /* Notion blue icon dark */
+  --primary-light:       #1F282D;   /* Notion blue bg dark */
+  --primary-foreground:  #f0efed;   /* warm off-white on blue */
+  --secondary:           #2a2a2a;
+  --secondary-foreground: #E3E2E0;
+  --muted:               #2a2a2a;
+  --muted-foreground:    #979A9B;
+  --accent:              #D9730D;   /* Notion orange icon dark */
+  --accent-light:        #36291F;   /* Notion orange bg dark */
+  --accent-foreground:   #CB7B37;
+  --destructive:         #CD4945;   /* Notion red icon dark */
+  --success:             #2D9964;   /* Notion green icon dark */
+  --warning:             #CA8E1B;   /* Notion yellow icon dark */
+  --purple:              #8D5BC1;   /* Notion purple icon dark */
+  --danger:              #CD4945;
+  --border:              #2e2e2e;
+  --input:               rgba(255, 255, 255, 0.1);
+  --ring:                #2E7CD1;
+
+  /* Charts */
+  --chart-1: #2E7CD1;
+  --chart-2: #D9730D;
+  --chart-3: #2D9964;
+  --chart-4: #8D5BC1;
+  --chart-5: #CD4945;
+
+  /* Sidebar */
+  --sidebar:             #222222;
+  --sidebar-foreground:  #E3E2E0;
+  --sidebar-primary:     #2E7CD1;
+  --sidebar-primary-foreground: #f0efed;
+  --sidebar-accent:      #3F4448;
+  --sidebar-accent-foreground: #E3E2E0;
+  --sidebar-border:      #2e2e2e;
+  --sidebar-ring:        #2E7CD1;
+  --sidebar-active-bg:   #1F282D;
+  --sidebar-active-text: #f0efed;
+  --sidebar-hover-bg:    #2a2a2a;
+  --sidebar-text:        #979A9B;
+
+  /* Lesson / course status chips dark */
+  --status-scheduled-bg:   #1F282D;   /* Notion blue bg dark */
+  --status-scheduled-text: #447ACB;   /* Notion blue text dark */
+  --status-completed-bg:   #242B26;   /* Notion green bg dark */
+  --status-completed-text: #4F9768;   /* Notion green text dark */
+  --status-cancelled-bg:   #252525;   /* Notion gray bg dark */
+  --status-cancelled-text: #9B9B9B;   /* Notion gray text dark */
+  --status-missed-bg:      #332523;   /* Notion red bg dark */
+  --status-missed-text:    #BE524B;   /* Notion red text dark */
+
+  /* Calendar event chips dark */
+  --cal-scheduled-bg:      #2E7CD1;
+  --cal-scheduled-border:  #447ACB;
+  --cal-scheduled-text:    #FFFFFF;
+  --cal-completed-bg:      #2D9964;
+  --cal-completed-border:  #4F9768;
+  --cal-completed-text:    #FFFFFF;
+  --cal-cancelled-bg:      #7F7F7F;
+  --cal-cancelled-border:  #9B9B9B;
+  --cal-cancelled-text:    #FFFFFF;
+  --cal-missed-bg:         #CD4945;
+  --cal-missed-border:     #BE524B;
+  --cal-missed-text:       #FFFFFF;
 }
 
 @layer base {
@@ -212,7 +241,7 @@
   background: transparent !important;
 }
 .fc .fc-daygrid-day.fc-day-today {
-  background: oklch(0.97 0.015 185) !important;
+  background: #F0F8FC !important;   /* Notion blue bg tint */
 }
 
 /* Today date circle in month view */
@@ -231,7 +260,7 @@
 
 /* Empty slot hover — scoped to background grid only, not event container */
 .fc-timegrid-slots .fc-timegrid-col:hover {
-  background: oklch(0.95 0.04 185 / 0.3) !important;
+  background: rgba(51, 126, 169, 0.12) !important;   /* Notion blue tint */
   cursor: pointer;
 }
 
@@ -259,7 +288,7 @@
 .fc-event-dragging {
   transition: none !important;
   opacity: 0.75 !important;
-  box-shadow: 0 4px 12px oklch(0.18 0.02 215 / 0.15) !important;
+  box-shadow: 0 4px 12px rgba(55, 53, 47, 0.18) !important;
 }
 
 

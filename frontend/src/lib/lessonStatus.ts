@@ -8,10 +8,10 @@ export const STATUS_LABELS: Record<LessonStatus, string> = {
 }
 
 export const STATUS_COLORS: Record<LessonStatus, string> = {
-  scheduled: 'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  cancelled: 'bg-gray-100 text-gray-500',
-  missed:    'bg-red-100 text-red-700',
+  scheduled: 'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
+  completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
+  cancelled: 'bg-[var(--status-cancelled-bg)] text-[var(--status-cancelled-text)]',
+  missed:    'bg-[var(--status-missed-bg)]    text-[var(--status-missed-text)]',
 }
 
 export const FC_COLORS: Record<LessonStatus, { bg: string; border: string; text: string }> = {
