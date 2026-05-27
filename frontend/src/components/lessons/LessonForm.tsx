@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 
 import { lessonSchema, LessonFormValues } from '@/schemas/lesson'
 import { Lesson, ApiError } from '@/types/api'
+import { STATUS_LABELS } from '@/lib/lessonStatus'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,13 +15,6 @@ import { Label } from '@/components/ui/label'
 import { TimePicker } from '@/components/ui/time-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-const STATUS_LABELS: Record<string, string> = {
-  scheduled:  'Запланирован',
-  completed:  'Проведён',
-  cancelled:  'Отменён',
-  missed:     'Пропущен',
-}
 
 const WEEK_DAYS = [
   { label: 'Пн', iso: 1 },
@@ -183,7 +177,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                 render={({ field }) => (
                   <Select value={field.value ?? 'scheduled'} onValueChange={field.onChange}>
                     <SelectTrigger id="status" className="w-full">
-                      <SelectValue />
+                      <SelectValue>{STATUS_LABELS[field.value ?? 'scheduled']}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {Object.entries(STATUS_LABELS).map(([v, label]) => (

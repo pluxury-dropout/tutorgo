@@ -114,7 +114,7 @@ export function LessonQuickDialog({ lesson, onClose }: Props) {
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Статус</label>
             <Select value={status} onValueChange={(v) => setStatus(v as LessonStatus)}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>{STATUS_LABELS[status]}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {(Object.keys(STATUS_LABELS) as LessonStatus[]).map((s) => (

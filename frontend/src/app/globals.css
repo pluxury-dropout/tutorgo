@@ -142,9 +142,9 @@
   --card-foreground:     #E3E2E0;
   --popover:             #222222;
   --popover-foreground:  #E3E2E0;
-  --primary:             #000000;   /* Notion blue icon dark */
+  --primary:             #737373;   /* Notion blue icon dark */
   --primary-light:       #3e3e3e;   /* Notion blue bg dark */
-  --primary-foreground:  #f0efed;   /* warm off-white on blue */
+  --primary-foreground:  #737373;   /* warm off-white on blue */
   --secondary:           #2a2a2a;
   --secondary-foreground: #E3E2E0;
   --muted:               #2a2a2a;
@@ -159,7 +159,7 @@
   --danger:              #CD4945;
   --border:              #2e2e2e;
   --input:               rgba(255, 255, 255, 0.1);
-  --ring:                #2E7CD1;
+  --ring:                #737373;
 
   /* Charts */
   --chart-1: #2E7CD1;
@@ -195,16 +195,16 @@
   /* Calendar event chips dark */
   --cal-scheduled-bg:      #2e7dd1;
   --cal-scheduled-border:  #447ACB;
-  --cal-scheduled-text:    #FFFFFF;
+  --cal-scheduled-text:    #d6d6d6;
   --cal-completed-bg:      #2D9964;
   --cal-completed-border:  #4F9768;
-  --cal-completed-text:    #FFFFFF;
+  --cal-completed-text:    #d6d6d6;
   --cal-cancelled-bg:      #7F7F7F;
   --cal-cancelled-border:  #9B9B9B;
-  --cal-cancelled-text:    #FFFFFF;
+  --cal-cancelled-text:    #d6d6d6;
   --cal-missed-bg:         #CD4945;
   --cal-missed-border:     #BE524B;
-  --cal-missed-text:       #FFFFFF;
+  --cal-missed-text:       #d6d6d6;
 }
 
 @layer base {
@@ -266,7 +266,7 @@
 
 /* Past events — darker, more saturated */
 .fc-event-past {
-  filter: brightness(0.9);
+  filter: brightness(0.75);
 }
 
 /* Event chip styling — flat pastel, no left border accent */

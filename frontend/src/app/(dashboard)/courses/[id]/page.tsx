@@ -42,6 +42,7 @@ import { Button } from '@/components/ui/button'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { PeriodPicker } from '@/components/lessons/PeriodPicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { STATUS_LABELS, STATUS_COLORS } from '@/lib/lessonStatus'
 
 // Возвращает { from, to } для текущей недели (Пн–Пн+7)
 function currentWeekRange(): { from: Date; to: Date } {
@@ -107,20 +108,6 @@ function generateDates(baseISO: string, opts: RecurrenceOptions, courseEndAt?: s
   }
 
   return results.map((d) => d.toISOString())
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: 'Запланирован',
-  completed: 'Проведён',
-  cancelled: 'Отменён',
-  missed:    'Пропущен',
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: 'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
-  completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
-  cancelled: 'bg-[var(--status-cancelled-bg)] text-[var(--status-cancelled-text)]',
-  missed:    'bg-[var(--status-missed-bg)]    text-[var(--status-missed-text)]',
 }
 
 export default function CourseDetailPage() {
