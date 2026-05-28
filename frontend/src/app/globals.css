@@ -112,19 +112,19 @@
   --status-missed-bg:      #FAECEC;   /* Notion red bg */
   --status-missed-text:    #C4554D;   /* Notion red text */
 
-  /* Calendar event chips — solid icon colors, white label */
-  --cal-scheduled-bg:      #337EA9;
-  --cal-scheduled-border:  #487CA5;
-  --cal-scheduled-text:    #FFFFFF;
-  --cal-completed-bg:      #448361;
-  --cal-completed-border:  #548164;
-  --cal-completed-text:    #FFFFFF;
-  --cal-cancelled-bg:      #A6A299;
-  --cal-cancelled-border:  #787774;
-  --cal-cancelled-text:    #FFFFFF;
-  --cal-missed-bg:         #D44C47;
-  --cal-missed-border:     #C4554D;
-  --cal-missed-text:       #FFFFFF;
+  /* Calendar event chips — Notion muted pastel, dark text */
+  --cal-scheduled-bg:      #e7f0f9;
+  --cal-scheduled-border:  #cbdef0;
+  --cal-scheduled-text:    #1e466e;
+  --cal-completed-bg:      #dde9dd;
+  --cal-completed-border:  #c2d6c2;
+  --cal-completed-text:    #2e4d2e;
+  --cal-cancelled-bg:      #efeeec;
+  --cal-cancelled-border:  #e2e1de;
+  --cal-cancelled-text:    #8c8a83;
+  --cal-missed-bg:         #fbe6e0;
+  --cal-missed-border:     #f0cfc4;
+  --cal-missed-text:       #7a3322;
 
   /* Charts */
   --chart-1: #337EA9;   /* blue */
@@ -142,7 +142,7 @@
   --card-foreground:     #E3E2E0;
   --popover:             #222222;
   --popover-foreground:  #E3E2E0;
-  --primary:             #737373;   /* Notion blue icon dark */
+  --primary:             #ffffff;   /* Notion blue icon dark */
   --primary-light:       #3e3e3e;   /* Notion blue bg dark */
   --primary-foreground:  #f0efed;   /* warm off-white on dark button */
   --secondary:           #2a2a2a;
@@ -192,19 +192,19 @@
   --status-missed-bg:      #332523;   /* Notion red bg dark */
   --status-missed-text:    #BE524B;   /* Notion red text dark */
 
-  /* Calendar event chips dark */
-  --cal-scheduled-bg:      #2e7dd1;
-  --cal-scheduled-border:  #447ACB;
-  --cal-scheduled-text:    #d6d6d6;
-  --cal-completed-bg:      #2D9964;
-  --cal-completed-border:  #4F9768;
-  --cal-completed-text:    #d6d6d6;
-  --cal-cancelled-bg:      #7F7F7F;
-  --cal-cancelled-border:  #9B9B9B;
-  --cal-cancelled-text:    #d6d6d6;
-  --cal-missed-bg:         #CD4945;
-  --cal-missed-border:     #BE524B;
-  --cal-missed-text:       #d6d6d6;
+  /* Calendar event chips dark — Notion muted pastel */
+  --cal-scheduled-bg:      #1f3149;
+  --cal-scheduled-border:  #2c4666;
+  --cal-scheduled-text:    #b6d2ee;
+  --cal-completed-bg:      #1e2d1e;
+  --cal-completed-border:  #2b402b;
+  --cal-completed-text:    #aac5aa;
+  --cal-cancelled-bg:      #262625;
+  --cal-cancelled-border:  #333331;
+  --cal-cancelled-text:    #7a7872;
+  --cal-missed-bg:         #3a201a;
+  --cal-missed-border:     #4f2d24;
+  --cal-missed-text:       #e8b8a8;
 }
 
 @layer base {
@@ -241,7 +241,7 @@
   background: transparent !important;
 }
 .fc .fc-daygrid-day.fc-day-today {
-  background: #F0F8FC !important;   /* Notion blue bg tint */
+  background: #393939 !important;   /* Notion blue bg tint */
 }
 
 /* Today date circle in month view */
@@ -264,9 +264,9 @@
   cursor: pointer;
 }
 
-/* Past events — darker, more saturated */
+/* Past events — slightly darker for pastel palette */
 .fc-event-past {
-  filter: brightness(0.75);
+  filter: brightness(0.90);
 }
 
 /* Event chip styling — flat pastel, no left border accent */
@@ -306,7 +306,7 @@
 /* Toolbar button styling */
 .fc .fc-button {
   background: transparent !important;
-  border-color: var(--border) !important;
+  border: none !important;
   color: var(--foreground) !important;
   font-size: 13px !important;
   font-weight: 500 !important;
@@ -355,6 +355,7 @@
 
 /* Grid lines — thin and muted */
 .fc .fc-timegrid-slot-minor {
+  /* border: none !important; */
   border-top-style: none !important;
 }
 .fc-theme-standard td,
@@ -362,7 +363,7 @@
   border-color: var(--border) !important;
 }
 .fc-theme-standard .fc-scrollgrid {
-  border-color: var(--border) !important;
+  border: none !important;
 }
 
 /* Remove inner shadow on scroll area */

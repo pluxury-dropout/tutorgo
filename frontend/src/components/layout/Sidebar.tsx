@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -13,11 +13,248 @@ import {
   GraduationCap,
   Sun,
   Moon,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { useCalendar } from '@/lib/hooks/useCalendar'
+import type { LessonStatus, CalendarLesson } from '@/types/api'
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+const MONTHS_RU = [
+  'Январь','Февраль','Март','Апрель','Май','Июнь',
+  'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь',
+]
+const DOWS_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
+
+const STATUS_DOT: Record<LessonStatus, string> = {
+  scheduled: 'var(--cal-scheduled-text)',
+  completed: 'var(--cal-completed-text)',
+  cancelled: 'var(--cal-cancelled-text)',
+  missed:    'var(--cal-missed-text)',
+}
+
+function getWeekStart(d: Date): Date {
+  const day  = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const mon  = new Date(d)
+  mon.setDate(d.getDate() + diff)
+  mon.setHours(0, 0, 0, 0)
+  return mon
+}
+
+function isSameLocalDay(iso: string, ref: Date): boolean {
+  const d = new Date(iso)
+  return d.getFullYear() === ref.getFullYear()
+      && d.getMonth()    === ref.getMonth()
+      && d.getDate()     === ref.getDate()
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+// ─── MiniCalendar ─────────────────────────────────────────────────────────────
+
+function MiniCalendar({
+  displayedDates,
+  onNavigate,
+}: {
+  displayedDates: { start: Date; end: Date }
+  onNavigate: (date: Date) => void
+}) {
+  const today = useMemo(() => new Date(), [])
+
+  const [miniMonth, setMiniMonth] = useState(
+    () => new Date(displayedDates.start.getFullYear(), displayedDates.start.getMonth(), 1)
+  )
+
+  const sy = displayedDates.start.getFullYear()
+  const sm = displayedDates.start.getMonth()
+  useEffect(() => {
+    setMiniMonth(new Date(sy, sm, 1))
+  }, [sy, sm])
+
+  const year      = miniMonth.getFullYear()
+  const month     = miniMonth.getMonth()
+  const firstDay  = new Date(year, month, 1)
+  const totalDays = new Date(year, month + 1, 0).getDate()
+  const offset    = (firstDay.getDay() + 6) % 7
+
+  const cells: (number | null)[] = Array(offset).fill(null)
+  for (let d = 1; d <= totalDays; d++) cells.push(d)
+
+  const isInRange = (d: number) => {
+    const date = new Date(year, month, d)
+    return date >= displayedDates.start && date < displayedDates.end
+  }
+  const isToday = (d: number) =>
+    year === today.getFullYear() && month === today.getMonth() && d === today.getDate()
+
+  return (
+    <div className="p-2 select-none shrink-0">
+      <div className="flex items-center justify-between mb-1">
+        <button
+          onClick={() => setMiniMonth(new Date(year, month - 1, 1))}
+          className="h-6 w-6 flex items-center justify-center rounded hover:bg-[var(--sidebar-hover-bg)] text-[var(--sidebar-text)] transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        <span className="text-[11.5px] font-semibold text-foreground">
+          {MONTHS_RU[month]} {year}
+        </span>
+        <button
+          onClick={() => setMiniMonth(new Date(year, month + 1, 1))}
+          className="h-6 w-6 flex items-center justify-center rounded hover:bg-[var(--sidebar-hover-bg)] text-[var(--sidebar-text)] transition-colors"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7">
+        {DOWS_SHORT.map(d => (
+          <span key={d} className="text-center text-[9.5px] font-medium text-[var(--sidebar-text)] py-0.5">
+            {d}
+          </span>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((d, i) => (
+          <button
+            key={i}
+            onClick={() => d && onNavigate(new Date(year, month, d))}
+            disabled={!d}
+            className={cn(
+              'h-[21px] flex items-center justify-center rounded text-[11px] transition-colors',
+              !d && 'invisible',
+              d && isToday(d)
+                ? 'bg-foreground text-background font-semibold'
+                : d && isInRange(d)
+                ? 'bg-[var(--sidebar-hover-bg)] text-foreground font-medium'
+                : d
+                ? 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-foreground cursor-pointer'
+                : '',
+            )}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── TodayList ────────────────────────────────────────────────────────────────
+
+function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
+  const today = useMemo(() => new Date(), [])
+
+  const todayLessons = useMemo(
+    () => lessons
+      .filter(l => isSameLocalDay(l.scheduled_at, today))
+      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
+    [lessons, today],
+  )
+
+  const label = today.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
+
+  return (
+    <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
+      <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-text)]">
+          Сегодня · {label}
+        </span>
+        {todayLessons.length > 0 && (
+          <span className="text-[10px] text-[var(--sidebar-text)]/60">{todayLessons.length}</span>
+        )}
+      </div>
+
+      <div className="overflow-y-auto flex-1 pb-2">
+        {todayLessons.length === 0 ? (
+          <p className="px-3 py-1 text-[11.5px] text-[var(--sidebar-text)]/60">Занятий нет</p>
+        ) : (
+          todayLessons.map(l => (
+            <div
+              key={l.id}
+              className="flex gap-2 px-2 py-1 rounded-md mx-1 hover:bg-[var(--sidebar-hover-bg)] cursor-pointer transition-colors items-start"
+            >
+              <div
+                className="w-[2.5px] self-stretch rounded-full shrink-0 mt-[3px]"
+                style={{ background: STATUS_DOT[l.status] }}
+              />
+              <div className="min-w-0">
+                <div className="text-[10px] text-[var(--sidebar-text)] tabular-nums leading-tight">
+                  {formatTime(l.scheduled_at)}
+                </div>
+                <div className={cn(
+                  'text-[11.5px] font-medium leading-snug truncate',
+                  l.status === 'cancelled'
+                    ? 'line-through text-[var(--sidebar-text)]'
+                    : 'text-foreground',
+                )}>
+                  {l.is_group
+                    ? l.subject
+                    : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── CalendarSidebarPanel ─────────────────────────────────────────────────────
+// Отдельный компонент — чтобы хуки вызывались безусловно (Rules of Hooks)
+
+function CalendarSidebarPanel() {
+  const todayRange = useMemo(() => {
+    const n     = new Date()
+    const start = new Date(n.getFullYear(), n.getMonth(), n.getDate())
+    const end   = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return { from: start.toISOString(), to: end.toISOString() }
+  }, [])
+
+  const { data: todayLessons = [] } = useCalendar(todayRange.from, todayRange.to)
+
+  const [displayedDates, setDisplayedDates] = useState<{ start: Date; end: Date }>(() => {
+    const n     = new Date()
+    const start = getWeekStart(n)
+    const end   = new Date(start)
+    end.setDate(start.getDate() + 7)
+    return { start, end }
+  })
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ start: string; end: string }>
+      setDisplayedDates({ start: new Date(ce.detail.start), end: new Date(ce.detail.end) })
+    }
+    window.addEventListener('fc:datesSet', handler)
+    return () => window.removeEventListener('fc:datesSet', handler)
+  }, [])
+
+  function handleNavigate(date: Date) {
+    window.dispatchEvent(new CustomEvent('fc:goto', { detail: date.toISOString() }))
+  }
+
+  return (
+    <div className="flex-1 overflow-hidden flex flex-col min-h-0 border-t border-border">
+      <MiniCalendar displayedDates={displayedDates} onNavigate={handleNavigate} />
+      <div className="border-t border-border" />
+      <TodayList lessons={todayLessons} />
+    </div>
+  )
+}
+
+// ─── NAV ──────────────────────────────────────────────────────────────────────
 
 const NAV = [
   { href: '/dashboard',  label: 'Главная',    icon: LayoutDashboard },
@@ -32,23 +269,28 @@ function initials(firstName?: string, lastName?: string) {
   return `${(firstName?.[0] ?? '').toUpperCase()}${(lastName?.[0] ?? '').toUpperCase()}`
 }
 
+// ─── SidebarInner ─────────────────────────────────────────────────────────────
+
 function SidebarInner() {
   const pathname = usePathname()
   const { user, clearAuth } = useAuthStore()
   const { resolvedTheme, setTheme } = useTheme()
+  const isCalendar = pathname === '/calendar'
 
   return (
     <>
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border">
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border shrink-0">
         <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
           <GraduationCap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
         </div>
         <span className="font-heading text-[15px] font-bold tracking-tight">TutorGo</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      {/* Nav — не flex-1, когда снизу есть панель календаря */}
+      <nav className={cn('px-3 py-4 space-y-0.5 shrink-0', !isCalendar && 'flex-1')}>
         {NAV.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'))
+          const active =
+            pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'))
           return (
             <Link
               key={href}
@@ -67,8 +309,10 @@ function SidebarInner() {
         })}
       </nav>
 
+      {isCalendar && <CalendarSidebarPanel />}
+
       {user && (
-        <div className="px-4 py-4 border-t border-border flex items-center gap-3">
+        <div className="px-4 py-4 border-t border-border flex items-center gap-3 shrink-0">
           <div
             className="h-[34px] w-[34px] shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-primary"
             style={{ background: 'var(--primary-light)' }}
@@ -98,6 +342,8 @@ function SidebarInner() {
   )
 }
 
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+
 interface SidebarProps {
   mobileOpen:    boolean
   setMobileOpen: (open: boolean) => void
@@ -112,12 +358,10 @@ export function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop: всегда виден */}
       <aside className="hidden md:flex flex-col w-60 shrink-0 border-r bg-sidebar h-full">
         <SidebarInner />
       </aside>
 
-      {/* Mobile: Sheet-drawer */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-60 p-0 bg-sidebar flex flex-col" showCloseButton={false}>
           <SidebarInner />

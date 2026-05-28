@@ -41,8 +41,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar mobileOpen={sidebarOpen} setMobileOpen={setSidebarOpen} />
-        <main className="flex-1 overflow-y-auto bg-muted/20">
-          <div key={pathname} className="px-4 md:px-8 py-4 md:py-3 animate-in fade-in-0 duration-200">
+        <main className={pathname === '/calendar' ? 'flex-1 overflow-hidden bg-background' : 'flex-1 overflow-y-auto bg-muted/20'}>
+          <div
+            key={pathname}
+            className={pathname === '/calendar'
+              ? 'h-full animate-in fade-in-0 duration-200'
+              : 'px-4 md:px-8 py-4 md:py-3 animate-in fade-in-0 duration-200'
+            }
+          >
             {children}
           </div>
         </main>

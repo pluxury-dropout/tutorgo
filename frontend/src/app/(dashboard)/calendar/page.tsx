@@ -19,7 +19,7 @@ import type { LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
 
 const TASK_COLORS = {
-  active: { bg: 'oklch(0.86 0.06 305)', border: 'oklch(0.41 0.22 305)', text: 'oklch(0.26 0.18 305)' }, /* Grape */
+  active: { bg: 'oklch(0.86 0.06 305)', border: 'oklch(0.41 0.22 305)', text: 'oklch(0.26 0.18 305)' },
   done:   { bg: 'oklch(0.92 0.03 305)', border: 'oklch(0.65 0.08 305)', text: 'oklch(0.50 0.10 305)' },
 }
 
@@ -53,10 +53,22 @@ export default function CalendarPage() {
     setIsTouch(window.matchMedia('(pointer: coarse)').matches)
   }, [])
 
-  const now = new Date()
-  const [range, setRange] = useState({
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
-    to:   new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString(),
+  // Listen for navigation requests from the sidebar mini-calendar
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const iso = (e as CustomEvent<string>).detail
+      calendarRef.current?.getApi().gotoDate(new Date(iso))
+    }
+    window.addEventListener('fc:goto', handler)
+    return () => window.removeEventListener('fc:goto', handler)
+  }, [])
+
+  const [range, setRange] = useState(() => {
+    const n = new Date()
+    return {
+      from: new Date(n.getFullYear(), n.getMonth(), 1).toISOString(),
+      to:   new Date(n.getFullYear(), n.getMonth() + 1, 0, 23, 59, 59).toISOString(),
+    }
   })
 
   const { data: lessons = [] } = useCalendar(range.from, range.to)
@@ -128,25 +140,19 @@ export default function CalendarPage() {
 
   function handleEventDragStart() {
     refreshCalendarRect()
-
     const handler = (e: PointerEvent) => {
       const rect = calendarRectRef.current
       if (!rect) return
-
       const inLeft  = e.clientX < rect.left + EDGE_ZONE
       const inRight = e.clientX > rect.right - EDGE_ZONE
-
       if (inLeft && dragSideRef.current !== 'left') {
-        clearEdgeTimer()
-        armEdgeTimer('left')
+        clearEdgeTimer(); armEdgeTimer('left')
       } else if (inRight && dragSideRef.current !== 'right') {
-        clearEdgeTimer()
-        armEdgeTimer('right')
+        clearEdgeTimer(); armEdgeTimer('right')
       } else if (!inLeft && !inRight && dragSideRef.current !== null) {
         clearEdgeTimer()
       }
     }
-
     pointerHandlerRef.current = handler
     document.addEventListener('pointermove', handler)
   }
@@ -161,6 +167,10 @@ export default function CalendarPage() {
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
     setRange({ from: arg.start.toISOString(), to: arg.end.toISOString() })
+    // Notify sidebar mini-calendar about the displayed date range
+    window.dispatchEvent(new CustomEvent('fc:datesSet', {
+      detail: { start: arg.start.toISOString(), end: arg.end.toISOString() },
+    }))
   }, [])
 
   function handleEventClick(arg: EventClickArg) {
@@ -194,10 +204,10 @@ export default function CalendarPage() {
         {
           id:   arg.event.id,
           data: {
-            title:           arg.event.extendedProps.title as string,
-            scheduled_at:    snapped.toISOString(),
+            title:            arg.event.extendedProps.title as string,
+            scheduled_at:     snapped.toISOString(),
             duration_minutes: duration,
-            done:            arg.event.extendedProps.done as boolean,
+            done:             arg.event.extendedProps.done as boolean,
           },
         },
         { onError: () => arg.revert() },
@@ -247,7 +257,7 @@ export default function CalendarPage() {
         end={newTaskSlot?.end ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
-      <div className="rounded-lg border p-4">
+      <div className="h-full min-h-0 overflow-hidden">
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -296,7 +306,7 @@ export default function CalendarPage() {
                   >
                     {done
                       ? <CheckCircle2 size={12} className="text-current" />
-                      : <Circle      size={12} className="text-current" />}
+                      : <Circle       size={12} className="text-current" />}
                   </button>
                   <span
                     className="text-[11px] font-semibold leading-tight break-words min-w-0"
@@ -307,15 +317,22 @@ export default function CalendarPage() {
                 </div>
               )
             }
+
+            const cancelled = arg.event.extendedProps.status === 'cancelled'
             return (
               <>
                 <div className="fc-event-time">{arg.timeText}</div>
-                <div className="fc-event-title">{arg.event.title}</div>
+                <div
+                  className="fc-event-title"
+                  style={cancelled ? { textDecoration: 'line-through' } : undefined}
+                >
+                  {arg.event.title}
+                </div>
               </>
             )
           }}
           snapDuration="00:15:00"
-          height="90vh"
+          height="100%"
           eventLongPressDelay={300}
           allDaySlot={false}
           slotDuration="00:30:00"
