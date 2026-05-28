@@ -24,20 +24,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      {/* Мобильная шапка — только на телефоне */}
-      <header className="md:hidden flex items-center gap-3 h-12 px-4 border-b bg-sidebar shrink-0">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="text-[var(--sidebar-text)] hover:text-foreground transition-colors"
-          aria-label="Открыть меню"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <div className="h-6 w-6 rounded-md bg-primary flex items-center justify-center shrink-0">
-          <GraduationCap className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />
-        </div>
-        <span className="font-heading text-sm font-bold tracking-tight">TutorGo</span>
-      </header>
+      {/* Мобильная шапка — только на телефоне (не показывается на /calendar: там своя шапка) */}
+      {pathname !== '/calendar' && (
+        <header className="md:hidden flex items-center gap-3 h-12 px-4 border-b bg-sidebar shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-[var(--sidebar-text)] hover:text-foreground transition-colors"
+            aria-label="Открыть меню"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="h-6 w-6 rounded-md bg-primary flex items-center justify-center shrink-0">
+            <GraduationCap className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />
+          </div>
+          <span className="font-heading text-sm font-bold tracking-tight">TutorGo</span>
+        </header>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar mobileOpen={sidebarOpen} setMobileOpen={setSidebarOpen} />

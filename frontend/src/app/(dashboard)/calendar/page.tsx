@@ -15,6 +15,7 @@ import { useTasks, useToggleTask, useRescheduleTask } from '@/lib/hooks/useTasks
 import { FC_COLORS } from '@/lib/lessonStatus'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import { TaskCreateDialog } from '@/components/tasks/TaskCreateDialog'
+import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
 import type { LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
 
@@ -251,13 +252,19 @@ export default function CalendarPage() {
 
   return (
     <>
+      {/* Mobile: full-screen compact week (M1) */}
+      <div className="block md:hidden h-full">
+        <MobileWeekCalendar />
+      </div>
+
+      {/* Desktop: FullCalendar */}
       <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
       <TaskCreateDialog
         start={newTaskSlot?.start ?? null}
         end={newTaskSlot?.end ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
-      <div className="h-full min-h-0 overflow-hidden">
+      <div className="hidden md:block h-full min-h-0 overflow-hidden">
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
