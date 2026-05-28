@@ -97,8 +97,8 @@
   --sidebar-accent-foreground: #37352F;
   --sidebar-border:      #DFDCD9;
   --sidebar-ring:        #337EA9;
-  --sidebar-active-bg:   #337EA9;   /* solid blue pill */
-  --sidebar-active-text: #f0efed;   /* warm off-white on blue */
+  --sidebar-active-bg:   #EBEBEA;   /* Notion subtle active */
+  --sidebar-active-text: #37352F;   /* foreground on light active */
   --sidebar-hover-bg:    #EBEBEA;
   --sidebar-text:        #787774;
 
@@ -241,7 +241,10 @@
   background: transparent !important;
 }
 .fc .fc-daygrid-day.fc-day-today {
-  background: #393939 !important;   /* Notion blue bg tint */
+  background: #F0F8FC !important;
+}
+.dark .fc .fc-daygrid-day.fc-day-today {
+  background: #393939 !important;
 }
 
 /* Today date circle in month view */

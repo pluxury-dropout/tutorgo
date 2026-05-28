@@ -60,6 +60,10 @@ function formatTime(iso: string): string {
 
 // ─── MiniCalendar ─────────────────────────────────────────────────────────────
 
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function MiniCalendar({
   displayedDates,
   onNavigate,
@@ -84,6 +88,16 @@ function MiniCalendar({
   const firstDay  = new Date(year, month, 1)
   const totalDays = new Date(year, month + 1, 0).getDate()
   const offset    = (firstDay.getDay() + 6) % 7
+
+  const monthFrom = useMemo(() => new Date(year, month, 1).toISOString(), [year, month])
+  const monthTo   = useMemo(() => new Date(year, month + 1, 1).toISOString(), [year, month])
+  const { data: monthLessons = [] } = useCalendar(monthFrom, monthTo)
+
+  const lessonDays = useMemo(() => {
+    const s = new Set<string>()
+    monthLessons.forEach(l => s.add(toDateKey(new Date(l.scheduled_at))))
+    return s
+  }, [monthLessons])
 
   const cells: (number | null)[] = Array(offset).fill(null)
   for (let d = 1; d <= totalDays; d++) cells.push(d)
@@ -124,26 +138,36 @@ function MiniCalendar({
       </div>
 
       <div className="grid grid-cols-7 gap-y-0.5">
-        {cells.map((d, i) => (
-          <button
-            key={i}
-            onClick={() => d && onNavigate(new Date(year, month, d))}
-            disabled={!d}
-            className={cn(
-              'h-[21px] flex items-center justify-center rounded text-[11px] transition-colors',
-              !d && 'invisible',
-              d && isToday(d)
-                ? 'bg-foreground text-background font-semibold'
-                : d && isInRange(d)
-                ? 'bg-[var(--sidebar-hover-bg)] text-foreground font-medium'
-                : d
-                ? 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-foreground cursor-pointer'
-                : '',
-            )}
-          >
-            {d}
-          </button>
-        ))}
+        {cells.map((d, i) => {
+          const hasDot = d ? lessonDays.has(toDateKey(new Date(year, month, d))) : false
+          const todayCell = d ? isToday(d) : false
+          return (
+            <button
+              key={i}
+              onClick={() => d && onNavigate(new Date(year, month, d))}
+              disabled={!d}
+              className={cn(
+                'h-[24px] relative flex items-center justify-center rounded text-[11px] transition-colors',
+                !d && 'invisible',
+                todayCell
+                  ? 'bg-foreground text-background font-semibold'
+                  : d && isInRange(d)
+                  ? 'bg-[var(--sidebar-hover-bg)] text-foreground font-medium'
+                  : d
+                  ? 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-foreground cursor-pointer'
+                  : '',
+              )}
+            >
+              {d}
+              {hasDot && (
+                <span
+                  className="absolute bottom-[2px] left-1/2 -translate-x-1/2 w-[3px] h-[3px] rounded-full"
+                  style={{ background: todayCell ? 'var(--background)' : 'var(--muted-foreground)' }}
+                />
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -181,10 +205,10 @@ function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
           todayLessons.map(l => (
             <div
               key={l.id}
-              className="flex gap-2 px-2 py-1 rounded-md mx-1 hover:bg-[var(--sidebar-hover-bg)] cursor-pointer transition-colors items-start"
+              className="flex gap-2 px-2 py-1.5 rounded-md mx-1 hover:bg-[var(--sidebar-hover-bg)] cursor-pointer transition-colors items-start"
             >
               <div
-                className="w-[2.5px] self-stretch rounded-full shrink-0 mt-[3px]"
+                className="w-[3px] self-stretch rounded-full shrink-0 mt-[3px]"
                 style={{ background: STATUS_DOT[l.status] }}
               />
               <div className="min-w-0">
@@ -192,14 +216,15 @@ function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
                   {formatTime(l.scheduled_at)}
                 </div>
                 <div className={cn(
-                  'text-[11.5px] font-medium leading-snug truncate',
+                  'text-[12px] font-medium leading-snug truncate',
                   l.status === 'cancelled'
                     ? 'line-through text-[var(--sidebar-text)]'
                     : 'text-foreground',
                 )}>
-                  {l.is_group
-                    ? l.subject
-                    : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`}
+                  {l.subject}
+                </div>
+                <div className="text-[11px] text-[var(--sidebar-text)] truncate leading-tight">
+                  {l.is_group ? 'Групповой урок' : (l.student_name ?? '—')}
                 </div>
               </div>
             </div>
