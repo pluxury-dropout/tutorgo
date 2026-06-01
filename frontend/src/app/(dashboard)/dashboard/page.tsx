@@ -1,75 +1,118 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
 import { useStudentCount } from '@/lib/hooks/useStudents'
 import { useCourseCount } from '@/lib/hooks/useCourses'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
-import { FC_COLORS } from '@/lib/lessonStatus'
-import { StatusBadge } from '@/components/common/StatusBadge'
-import { HeaderPanel } from '@/components/HeaderPanel'
-import type { KpiSegment } from '@/components/HeaderPanel'
 import type { CalendarLesson } from '@/types/api'
 
-const today = new Date()
-const todayFrom = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
-const todayTo   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString()
+const now = new Date()
+const y = now.getFullYear()
+const m = now.getMonth()
+const d = now.getDate()
 
-const SUBTITLE = today.toLocaleDateString('ru-RU', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
+const todayFrom   = new Date(y, m, d).toISOString()
+const todayTo     = new Date(y, m, d, 23, 59, 59).toISOString()
+
+const dow         = now.getDay() === 0 ? 6 : now.getDay() - 1
+const weekStart   = new Date(y, m, d - dow)
+const weekEnd     = new Date(y, m, d - dow + 6, 23, 59, 59)
+
+const monthStart  = new Date(y, m, 1)
+const monthEnd    = new Date(y, m + 1, 0, 23, 59, 59)
+
+const DATE_LABEL  = now.toLocaleDateString('ru-RU', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
 })
 
-function formatTime(iso: string) {
+function fmt(iso: string) {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
-function formatAmount(n: number) {
-  return '₸ ' + n.toLocaleString('ru-RU')
+function fmtAmt(n: number) {
+  return '₸ ' + n.toLocaleString('ru-RU')
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace(' ', ' ')
 }
 
-interface LessonRowProps {
-  lesson: CalendarLesson
+const DOT_STYLE: React.CSSProperties = {
+  display: 'inline-block', borderRadius: '50%', flexShrink: 0,
+  width: 6, height: 6,
 }
 
-function LessonRow({ lesson }: LessonRowProps) {
-  const dotColor = FC_COLORS[lesson.status].border
+const MONO = 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace'
+
+function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boolean }) {
+  const cancelled = lesson.status === 'cancelled'
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0 hover:bg-secondary transition-colors">
-      <span className="min-w-[46px] text-[10px] font-semibold text-muted-foreground">
-        {formatTime(lesson.scheduled_at)}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '42px 1fr auto',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 0',
+        borderTop: isFirst ? 'none' : '1px solid var(--border)',
+
+      }}
+    >
+      <span style={{ fontFamily: MONO, fontSize: 12.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+        {fmt(lesson.scheduled_at)}
       </span>
-      <span
-        className="h-2 w-2 rounded-full shrink-0"
-        style={{ background: dotColor }}
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold truncate">{lesson.subject}</p>
+      <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{
+          fontSize: 14, fontWeight: 600,
+          color: cancelled ? 'var(--muted-foreground)' : 'var(--foreground)',
+          textDecoration: cancelled ? 'line-through' : 'none',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {lesson.subject}
+        </span>
         {lesson.student_name && (
-          <p className="text-[10px] text-muted-foreground truncate">{lesson.student_name}</p>
+          <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {lesson.student_name}
+          </span>
         )}
-      </div>
-      <StatusBadge status={lesson.status} />
+      </span>
+      <span style={{
+        fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+        color: cancelled ? 'var(--muted-foreground)' : 'var(--primary)',
+        whiteSpace: 'nowrap',
+      }}>
+        {cancelled ? 'Отменён' : 'Запланирован'}
+      </span>
     </div>
   )
 }
 
-export default function DashboardPage() {
-  const [activeSegment, setActiveSegment] = useState('lessons')
+const WIDGET_HEAD: React.CSSProperties = {
+  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+  paddingBottom: 11, marginBottom: 4, borderBottom: '1px solid var(--border)',
+}
+const WIDGET_TITLE: React.CSSProperties = {
+  margin: 0, fontSize: 15, fontWeight: 600,
+  color: 'var(--foreground)', letterSpacing: '-0.01em',
+}
+const WIDGET_LINK: React.CSSProperties = {
+  fontSize: 13, color: 'var(--muted-foreground)', textDecoration: 'none', fontWeight: 500,
+}
+const EMPTY: React.CSSProperties = {
+  fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', padding: '24px 0',
+}
 
-  const { data: studentCount = 0, isLoading: studentsLoading } = useStudentCount()
-  const { data: courseCount  = 0, isLoading: coursesLoading  } = useCourseCount()
-  const { data: todayLessons = [], isLoading: lessonsLoading  } = useCalendar(todayFrom, todayTo)
-  const { data: recentPayments = [] }                           = useRecentPayments()
-  const { data: monthlyIncome  = 0, isLoading: incomeLoading  } = useMonthlyIncome()
-  const { data: monthlyExpected = 0, isLoading: expectedLoading } = useMonthlyExpected()
+export default function DashboardPage() {
+  const { data: studentCount  = 0  } = useStudentCount()
+  const { data: courseCount   = 0  } = useCourseCount()
+  const { data: todayLessons  = [] } = useCalendar(todayFrom, todayTo)
+  const { data: weekLessons   = [] } = useCalendar(weekStart.toISOString(), weekEnd.toISOString())
+  const { data: monthLessons  = [] } = useCalendar(monthStart.toISOString(), monthEnd.toISOString())
+  const { data: recentPayments = [] } = useRecentPayments()
+  const { data: monthlyIncome  = 0  } = useMonthlyIncome()
+  const { data: monthlyExpected = 0 } = useMonthlyExpected()
 
   const sortedLessons = useMemo(
     () => [...todayLessons].sort((a, b) =>
@@ -77,92 +120,92 @@ export default function DashboardPage() {
     [todayLessons],
   )
 
-  const segments: KpiSegment[] = [
-    {
-      id:       'lessons',
-      label:    'Уроки',
-      value:    String(todayLessons.length),
-      dotColor: 'var(--primary)',
-      meta:     'сегодня',
-      loading:  lessonsLoading,
-    },
-    {
-      id:       'revenue',
-      label:    'Доход',
-      value:    formatAmount(monthlyExpected),
-      dotColor: 'var(--warning)',
-      meta:     'получено ' + formatAmount(monthlyIncome),
-      loading:  expectedLoading || incomeLoading,
-    },
-    {
-      id:       'students',
-      label:    'Ученики',
-      value:    String(studentCount),
-      dotColor: 'var(--purple)',
-      meta:     'всего',
-      loading:  studentsLoading,
-    },
-    {
-      id:       'courses',
-      label:    'Курсы',
-      value:    String(courseCount),
-      dotColor: 'var(--success)',
-      meta:     'активных',
-      loading:  coursesLoading,
-    },
+  const metrics = [
+    { color: 'var(--primary)',  value: todayLessons.length,        label: 'уроков сегодня' },
+    { color: 'var(--warning)',  value: fmtAmt(monthlyExpected),    label: 'доход'          },
+    { color: 'var(--purple)',   value: studentCount,                label: 'учеников'       },
+    { color: 'var(--success)',  value: courseCount,                 label: 'курсов'         },
   ]
 
   return (
-    <>
-      <HeaderPanel
-        title="Главная"
-        subtitle={SUBTITLE}
-        segments={segments}
-        activeSegment={activeSegment}
-        onSegmentChange={setActiveSegment}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 900 }}>
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6 max-w-4xl">
-        <div className="bg-card rounded-[var(--radius-lg)] border border-border shadow-[var(--shadow-card)] overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-[18px] border-b border-border">
-            <h2 className="text-xs font-semibold">Уроки сегодня</h2>
-            <Link href="/calendar" className="text-xs text-primary hover:underline">
-              Расписание →
-            </Link>
+      {/* V5 Reductive Header */}
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--foreground)' }}>
+              Главная
+            </span>
+            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{DATE_LABEL}</span>
           </div>
-          {sortedLessons.length === 0 ? (
-            <p className="px-5 py-8 text-xs text-muted-foreground text-center">
-              Уроков на сегодня нет
-            </p>
-          ) : (
-            sortedLessons.map((l) => <LessonRow key={l.id} lesson={l} />)
-          )}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 18, flexWrap: 'wrap' }}>
+            {metrics.map((m, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ ...DOT_STYLE, background: m.color, marginBottom: 1 }} />
+                <span style={{ fontSize: 15, fontWeight: 650 as React.CSSProperties['fontWeight'], color: 'var(--foreground)' }}>
+                  {m.value}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{m.label}</span>
+              </span>
+            ))}
+          </div>
         </div>
-
-        <div className="bg-card rounded-[var(--radius-lg)] border border-border shadow-[var(--shadow-card)] overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-[18px] border-b border-border">
-            <h2 className="text-xs font-semibold">Последние платежи</h2>
-            <Link href="/payments" className="text-xs text-primary hover:underline">
-              Все →
-            </Link>
-          </div>
-          {recentPayments.length === 0 ? (
-            <p className="px-5 py-8 text-xs text-muted-foreground text-center">
-              Платежей пока нет
-            </p>
-          ) : (
-            recentPayments.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{formatAmount(p.amount)}</p>
-                  <p className="text-[10px] text-muted-foreground">{p.lessons_count} урок(ов)</p>
-                </div>
-                <span className="text-[10px] text-muted-foreground shrink-0">{formatDate(p.paid_at)}</span>
-              </div>
-            ))
-          )}
+        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.75 }}>
+          неделя {weekLessons.length} · месяц {monthLessons.length} уроков · получено {fmtAmt(monthlyIncome)} из {fmtAmt(monthlyExpected)}
         </div>
       </div>
-    </>
+
+      {/* Table Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 36, alignItems: 'start' }}>
+
+        {/* Уроки сегодня */}
+        <section style={{ display: 'flex', flexDirection: 'column' }}>
+          <header style={WIDGET_HEAD}>
+            <h2 style={WIDGET_TITLE}>Уроки сегодня</h2>
+            <Link href="/calendar" style={WIDGET_LINK}>Расписание →</Link>
+          </header>
+          {sortedLessons.length === 0
+            ? <p style={EMPTY}>Уроков на сегодня нет</p>
+            : sortedLessons.map((l, i) => <LessonRow key={l.id} lesson={l} isFirst={i === 0} />)
+          }
+        </section>
+
+        {/* Последние платежи */}
+        <section style={{ display: 'flex', flexDirection: 'column' }}>
+          <header style={WIDGET_HEAD}>
+            <h2 style={WIDGET_TITLE}>Последние платежи</h2>
+            <Link href="/payments" style={WIDGET_LINK}>Все →</Link>
+          </header>
+          {recentPayments.length === 0
+            ? <p style={EMPTY}>Платежей пока нет</p>
+            : recentPayments.map((p, i) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 64px',
+                    alignItems: 'baseline',
+                    gap: 12,
+                    padding: '8px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {fmtAmt(p.amount)}
+                  </span>
+                  <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {p.lessons_count} ур.
+                  </span>
+                  <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtDate(p.paid_at)}
+                  </span>
+                </div>
+              ))
+          }
+        </section>
+
+      </div>
+    </div>
   )
 }
