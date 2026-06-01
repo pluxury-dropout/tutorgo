@@ -16,3 +16,9 @@ type CreatePaymentRequest struct {
 	LessonsCount int       `json:"lessons_count" validate:"required,gt=0"`
 	PaidAt       time.Time `json:"paid_at"       validate:"required"`
 }
+
+type UpdatePaymentRequest struct {
+	Amount       float64   `json:"amount"        validate:"required,gt=0"`
+	LessonsCount int       `json:"lessons_count" validate:"required,gt=0"`
+	PaidAt       time.Time `json:"paid_at"       validate:"required"`
+}
