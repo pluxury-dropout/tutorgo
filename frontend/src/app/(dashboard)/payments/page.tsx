@@ -2,13 +2,24 @@
 
 import { useState, Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronRight } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { useCourses } from '@/lib/hooks/useCourses'
-import { usePaymentsPaged, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
+import {
+  usePaymentsPaged,
+  useMonthlyIncome,
+  useMonthlyExpected,
+  useUpdatePayment,
+  useDeletePayment,
+} from '@/lib/hooks/usePayments'
 import { HeaderPanel } from '@/components/HeaderPanel'
 import type { KpiSegment } from '@/components/HeaderPanel'
 import { Pagination } from '@/components/common/Pagination'
+import { PaymentForm } from '@/components/payments/PaymentForm'
+import { Button } from '@/components/ui/button'
+import type { Payment } from '@/types/api'
+import type { PaymentFormValues } from '@/schemas/payment'
 
 const LIMIT = 20
 
@@ -16,6 +27,8 @@ function PaymentsPageInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const [activeSegment, setActiveSegment] = useState('received')
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
 
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
 
@@ -25,22 +38,48 @@ function PaymentsPageInner() {
     router.push(`/payments?${p}`)
   }
 
-  const { data: courses = [] }                                  = useCourses()
-  const { data: pagedPayments, isLoading }                      = usePaymentsPaged({ page, limit: LIMIT })
-  const { data: monthlyIncome = 0, isLoading: incomeLoading }   = useMonthlyIncome()
+  const { data: courses = [] }                                    = useCourses()
+  const { data: pagedPayments, isLoading }                        = usePaymentsPaged({ page, limit: LIMIT })
+  const { data: monthlyIncome = 0, isLoading: incomeLoading }     = useMonthlyIncome()
   const { data: monthlyExpected = 0, isLoading: expectedLoading } = useMonthlyExpected()
+
+  const updatePayment = useUpdatePayment()
+  const deletePayment = useDeletePayment()
 
   const payments   = pagedPayments?.data ?? []
   const total      = pagedPayments?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
 
   useEffect(() => {
-    if (!isLoading && total > 0 && page > totalPages) {
-      handlePageChange(totalPages)
-    }
+    if (!isLoading && total > 0 && page > totalPages) handlePageChange(totalPages)
   }, [isLoading, total, page, totalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
+  const courseMap      = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
+  const coursePriceMap = Object.fromEntries(courses.map((c) => [c.id, c.price_per_lesson]))
+
+  function openEdit(p: Payment) {
+    setEditingPayment(p)
+    setFormOpen(true)
+  }
+
+  async function handleEdit(values: PaymentFormValues) {
+    if (!editingPayment) return
+    await updatePayment.mutateAsync({
+      id:   editingPayment.id,
+      data: {
+        amount:        values.amount,
+        lessons_count: values.lessons_count,
+        paid_at:       values.paid_at,
+      },
+    })
+    toast.success('Платёж обновлён')
+  }
+
+  async function handleDelete(p: Payment) {
+    if (!confirm(`Удалить платёж на ${p.amount.toLocaleString()} ₸?`)) return
+    await deletePayment.mutateAsync(p.id)
+    toast.success('Платёж удалён')
+  }
 
   const segments: KpiSegment[] = [
     {
@@ -94,7 +133,7 @@ function PaymentsPageInner() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Курс</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">Сумма</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">Уроков</th>
-              <th className="w-4" />
+              <th className="w-20" />
             </tr>
           </thead>
           <tbody>
@@ -125,8 +164,25 @@ function PaymentsPageInner() {
                   <td className="px-4 py-3 font-medium">{courseMap[p.course_id] ?? '—'}</td>
                   <td className="px-4 py-3 text-right font-medium">{p.amount.toLocaleString()} ₸</td>
                   <td className="px-4 py-3 text-right text-muted-foreground">{p.lessons_count} ур.</td>
-                  <td className="pr-3 py-3 w-4">
-                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                  <td className="pr-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => openEdit(p)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(p)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -143,6 +199,23 @@ function PaymentsPageInner() {
           <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
         </div>
       )}
+
+      <PaymentForm
+        open={formOpen}
+        onClose={() => { setFormOpen(false); setEditingPayment(null) }}
+        onSubmit={handleEdit}
+        pricePerLesson={editingPayment ? (coursePriceMap[editingPayment.course_id] ?? 0) : 0}
+        initialValues={
+          editingPayment
+            ? {
+                amount:        editingPayment.amount,
+                lessons_count: editingPayment.lessons_count,
+                paid_at:       new Date(editingPayment.paid_at).toISOString().slice(0, 10),
+              }
+            : undefined
+        }
+        paymentId={editingPayment?.id}
+      />
     </>
   )
 }
