@@ -17,6 +17,8 @@ type Lesson struct {
 	Status          string    `json:"status"`
 	Notes           string    `json:"notes"`
 	SeriesID        *string   `json:"series_id,omitempty"`
+	CyclePosition   *int      `json:"cycle_position,omitempty"`
+	CycleSize       *int      `json:"cycle_size,omitempty"`
 }
 
 type CreateLessonRequest struct {
@@ -53,4 +55,6 @@ type CalendarLesson struct {
 	StudentName     *string   `json:"student_name"`
 	IsGroup         bool      `json:"is_group"`
 	SeriesID        *string   `json:"series_id,omitempty"`
+	CyclePosition   *int      `json:"cycle_position,omitempty"`
+	CycleSize       *int      `json:"cycle_size,omitempty"`
 }
