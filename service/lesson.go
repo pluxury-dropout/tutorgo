@@ -33,8 +33,8 @@ type lessonService struct {
 }
 
 func NewLessonService(
-	repo        repository.LessonRepository,
-	courseRepo  repository.CourseRepository,
+	repo repository.LessonRepository,
+	courseRepo repository.CourseRepository,
 	paymentRepo repository.PaymentRepository,
 ) LessonService {
 	return &lessonService{repo: repo, courseRepo: courseRepo, paymentRepo: paymentRepo}
