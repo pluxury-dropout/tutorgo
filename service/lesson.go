@@ -32,7 +32,11 @@ type lessonService struct {
 	paymentRepo repository.PaymentRepository
 }
 
-func NewLessonService(repo repository.LessonRepository, courseRepo repository.CourseRepository, paymentRepo repository.PaymentRepository) LessonService {
+func NewLessonService(
+	repo        repository.LessonRepository,
+	courseRepo  repository.CourseRepository,
+	paymentRepo repository.PaymentRepository,
+) LessonService {
 	return &lessonService{repo: repo, courseRepo: courseRepo, paymentRepo: paymentRepo}
 }
 
