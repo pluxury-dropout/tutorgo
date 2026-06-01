@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Menu, GraduationCap } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore()
@@ -41,7 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         <Sidebar mobileOpen={sidebarOpen} setMobileOpen={setSidebarOpen} />
         <main className={pathname === '/calendar' ? 'flex-1 overflow-hidden bg-background' : 'flex-1 overflow-y-auto bg-muted/20'}>
           <div
@@ -55,6 +56,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </main>
       </div>
+
+      <MobileBottomNav />
     </div>
   )
 }

@@ -1,11 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, CalendarDays, Users, CreditCard,
-  User, Plus, Search, ChevronLeft, ChevronRight,
+  Plus, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
@@ -34,14 +31,6 @@ const STATUS_STYLE: Record<LessonStatus, { bg: string; text: string }> = {
   cancelled: { bg: 'var(--cal-cancelled-bg)', text: 'var(--cal-cancelled-text)' },
   missed:    { bg: 'var(--cal-missed-bg)',    text: 'var(--cal-missed-text)'    },
 }
-
-const NAV_TABS = [
-  { href: '/dashboard', label: 'Главная',    Icon: LayoutDashboard },
-  { href: '/calendar',  label: 'Расписание', Icon: CalendarDays    },
-  { href: '/students',  label: 'Ученики',    Icon: Users           },
-  { href: '/payments',  label: 'Платежи',    Icon: CreditCard      },
-  { href: '/profile',   label: 'Профиль',    Icon: User            },
-]
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -72,8 +61,7 @@ function toMinutes(iso: string, durationMinutes?: number): number {
 // ─── MobileWeekCalendar ───────────────────────────────────────────────────────
 
 export function MobileWeekCalendar() {
-  const pathname = usePathname()
-  const today    = useMemo(() => new Date(), [])
+  const today = useMemo(() => new Date(), [])
 
   const [weekStart, setWeekStart] = useState(() => getWeekStart(today))
   const [selDay, setSelDay]       = useState<number>(() => {
@@ -380,35 +368,6 @@ export function MobileWeekCalendar() {
           <Plus size={22} strokeWidth={2} />
         </button>
 
-        {/* ── Bottom tab bar ── */}
-        <nav style={{
-          display: 'flex', alignItems: 'stretch', justifyContent: 'space-around',
-          borderTop: '1px solid var(--border)',
-          background: 'var(--background)',
-          padding: '6px 4px env(safe-area-inset-bottom, 16px)',
-          flexShrink: 0,
-        }}>
-          {NAV_TABS.map(({ href, label, Icon }) => {
-            const active = pathname === href
-            return (
-              <Link
-                key={href}
-                href={href}
-                style={{
-                  flex: 1, display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', gap: 3, padding: '4px 0',
-                  color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
-                  textDecoration: 'none',
-                }}
-              >
-                <Icon size={19} strokeWidth={2} />
-                <span style={{ fontSize: 10.5, fontWeight: active ? 600 : 500, lineHeight: 1 }}>
-                  {label}
-                </span>
-              </Link>
-            )
-          })}
-        </nav>
       </div>
     </>
   )
