@@ -99,6 +99,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 		auth.GET("/payments", paymentHandler.GetAll)
 		auth.POST("/payments", paymentHandler.Create)
+		auth.PUT("/payments/:id", paymentHandler.Update)
+		auth.DELETE("/payments/:id", paymentHandler.Delete)
 		auth.GET("/payments/recent", paymentHandler.GetRecent)
 		auth.GET("/payments/balance", paymentHandler.GetBalance)
 		auth.GET("/payments/monthly-income", paymentHandler.GetMonthlyIncome)

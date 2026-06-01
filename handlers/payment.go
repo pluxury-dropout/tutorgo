@@ -118,6 +118,41 @@ func (h *PaymentHandler) GetMonthlyExpected(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"total": total})
 }
 
+func (h *PaymentHandler) Delete(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
+	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *PaymentHandler) Update(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
+	var req models.UpdatePaymentRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	payment, err := h.service.Update(c.Request.Context(), id, tutorID, req)
+	if err != nil {
+		h.log.Error("Failed to update payment", slog.String("id", id), slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	h.log.Info("Payment updated", slog.String("id", id))
+	c.JSON(http.StatusOK, payment)
+}
+
 func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

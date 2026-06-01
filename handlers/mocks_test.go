@@ -231,6 +231,16 @@ func (m *mockPaymentService) GetMonthlyExpected(ctx context.Context, tutorID str
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *mockPaymentService) Delete(ctx context.Context, id string, tutorID string) error {
+	args := m.Called(ctx, id, tutorID)
+	return args.Error(0)
+}
+
+func (m *mockPaymentService) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {
+	args := m.Called(ctx, id, tutorID, req)
+	return args.Get(0).(models.Payment), args.Error(1)
+}
+
 // --- Mock: LessonService ---
 
 type mockLessonService struct{ mock.Mock }
