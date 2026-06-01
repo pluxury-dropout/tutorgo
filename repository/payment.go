@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"tutorgo/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,6 +17,8 @@ type PaymentRepository interface {
 	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
+	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
+	Delete(ctx context.Context, id string, tutorID string) error
 }
 
 type paymentRepository struct {
@@ -156,6 +160,36 @@ func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (mo
 		LessonsCompleted: completed,
 		LessonsRemaining: paid - completed,
 	}, nil
+}
+
+func (r *paymentRepository) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {
+	var payment models.Payment
+	err := r.conn.QueryRow(ctx,
+		`UPDATE payments SET amount=$1, lessons_count=$2, paid_at=$3
+		 WHERE id=$4 AND course_id IN (SELECT id FROM courses WHERE tutor_id=$5)
+		 RETURNING id, course_id, amount, lessons_count, paid_at`,
+		req.Amount, req.LessonsCount, req.PaidAt, id, tutorID,
+	).Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.Payment{}, errors.New("payment not found")
+	}
+	return payment, err
+}
+
+func (r *paymentRepository) Delete(ctx context.Context, id string, tutorID string) error {
+	tag, err := r.conn.Exec(ctx,
+		`DELETE FROM payments
+		 WHERE id = $1
+		   AND course_id IN (SELECT id FROM courses WHERE tutor_id = $2)`,
+		id, tutorID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("payment not found")
+	}
+	return nil
 }
 
 func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
