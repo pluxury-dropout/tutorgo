@@ -101,6 +101,11 @@ func (m *mockLessonRepo) GetRoomStatus(ctx context.Context, lessonID string) (st
 	return args.String(0), args.Error(1)
 }
 
+func (m *mockLessonRepo) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {
+	args := m.Called(ctx, courseIDs)
+	return args.Get(0).(map[string]map[string]int), args.Error(1)
+}
+
 // fixtures
 
 var (
@@ -133,7 +138,11 @@ var (
 )
 
 func newLessonSvc(lessonRepo *mockLessonRepo, courseRepo *mockCourseRepo) service.LessonService {
-	return service.NewLessonService(lessonRepo, courseRepo)
+	return service.NewLessonService(lessonRepo, courseRepo, new(mockPaymentRepo))
+}
+
+func newLessonSvcWithPayment(lessonRepo *mockLessonRepo, courseRepo *mockCourseRepo, paymentRepo *mockPaymentRepo) service.LessonService {
+	return service.NewLessonService(lessonRepo, courseRepo, paymentRepo)
 }
 
 // Create
@@ -407,7 +416,7 @@ func TestLessonStartRoom_NotFound(t *testing.T) {
 }
 func TestEndRoom_Success(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil)
+	svc := service.NewLessonService(repo, nil, nil)
 
 	repo.On("EndRoom", mock.Anything, lessonID, tutorID).Return(nil)
 
@@ -417,7 +426,7 @@ func TestEndRoom_Success(t *testing.T) {
 }
 func TestEndRoom_NotFound(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil)
+	svc := service.NewLessonService(repo, nil, nil)
 
 	repo.On("EndRoom", mock.Anything, lessonID, tutorID).Return(errors.New("lesson not found"))
 
@@ -428,7 +437,7 @@ func TestEndRoom_NotFound(t *testing.T) {
 
 func TestGetRoomStatus_Active(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil)
+	svc := service.NewLessonService(repo, nil, nil)
 
 	repo.On("GetRoomStatus", mock.Anything, lessonID).Return("active", nil)
 
@@ -440,7 +449,7 @@ func TestGetRoomStatus_Active(t *testing.T) {
 
 func TestGetRoomStatus_Ended(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil)
+	svc := service.NewLessonService(repo, nil, nil)
 
 	repo.On("GetRoomStatus", mock.Anything, lessonID).Return("ended", nil)
 
@@ -455,13 +464,16 @@ func TestGetRoomStatus_Ended(t *testing.T) {
 func TestLessonGetByPeriod_Success(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, courseRepo, paymentRepo)
 
 	from := "2026-05-19T00:00:00Z"
 	to := "2026-05-26T00:00:00Z"
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
 	lessonRepo.On("GetByPeriod", mock.Anything, courseID, tutorID, from, to).Return([]models.Lesson{expectedLesson}, nil)
+	lessonRepo.On("GetRanksForCourses", mock.Anything, []string{courseID}).Return(map[string]map[string]int{}, nil)
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, []string{courseID}).Return(map[string][]models.Payment{}, nil)
 
 	lessons, err := svc.GetByPeriod(context.Background(), courseID, tutorID, from, to)
 
@@ -470,12 +482,14 @@ func TestLessonGetByPeriod_Success(t *testing.T) {
 	assert.Equal(t, expectedLesson, lessons[0])
 	courseRepo.AssertExpectations(t)
 	lessonRepo.AssertExpectations(t)
+	paymentRepo.AssertExpectations(t)
 }
 
 func TestLessonGetByPeriod_CourseNotFound(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, courseRepo, paymentRepo)
 
 	from := "2026-05-19T00:00:00Z"
 	to := "2026-05-26T00:00:00Z"

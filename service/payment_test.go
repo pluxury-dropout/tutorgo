@@ -61,6 +61,11 @@ func (m *mockPaymentRepo) Delete(ctx context.Context, id string, tutorID string)
 	return args.Error(0)
 }
 
+func (m *mockPaymentRepo) GetByCoursesBatch(ctx context.Context, courseIDs []string) (map[string][]models.Payment, error) {
+	args := m.Called(ctx, courseIDs)
+	return args.Get(0).(map[string][]models.Payment), args.Error(1)
+}
+
 var (
 	tutorID  = "tutor-uuid-1"
 	courseID = "course-uuid-1"

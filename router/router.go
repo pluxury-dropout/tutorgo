@@ -33,7 +33,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	studentService := service.NewStudentService(studentRepo)
 	courseService := service.NewCourseService(courseRepo, studentRepo, lessonRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
-	lessonService := service.NewLessonService(lessonRepo, courseRepo)
+	lessonService := service.NewLessonService(lessonRepo, courseRepo, paymentRepo)
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
