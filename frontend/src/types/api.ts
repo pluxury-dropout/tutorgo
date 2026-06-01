@@ -41,6 +41,8 @@ export interface Lesson {
   status: LessonStatus
   notes: string
   series_id?: string
+  cycle_position?: number
+  cycle_size?: number
 }
 
 export interface CalendarLesson {
@@ -53,6 +55,8 @@ export interface CalendarLesson {
   subject: string
   student_name: string | null
   is_group: boolean
+  cycle_position?: number
+  cycle_size?: number
 }
 
 export interface Payment {
