@@ -23,10 +23,14 @@ export const paymentsApi = {
     api.get<PagedResponse<Payment>>('/payments', { params: p }).then((r) => r.data),
   listRecent: () =>
     api.get<Payment[]>('/payments/recent').then((r) => r.data ?? []),
-  create: (data: PaymentInput) =>
-    api.post<Payment>('/payments', data).then((r) => r.data),
-  update: (id: string, data: PaymentUpdateInput) =>
-    api.put<Payment>(`/payments/${id}`, data).then((r) => r.data),
+  create: (data: PaymentInput) => {
+    const payload = { ...data, paid_at: data.paid_at ? data.paid_at + 'T00:00:00Z' : undefined }
+    return api.post<Payment>('/payments', payload).then((r) => r.data)
+  },
+  update: (id: string, data: PaymentUpdateInput) => {
+    const payload = { ...data, paid_at: data.paid_at ? data.paid_at + 'T00:00:00Z' : undefined }
+    return api.put<Payment>(`/payments/${id}`, payload).then((r) => r.data)
+  },
   delete: (id: string) =>
     api.delete(`/payments/${id}`).then(() => id),
   getBalance: (courseId: string) =>

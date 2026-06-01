@@ -42,8 +42,8 @@ interface LessonRowProps {
 function LessonRow({ lesson }: LessonRowProps) {
   const dotColor = FC_COLORS[lesson.status].border
   return (
-    <div className="flex items-center gap-[14px] px-5 py-[13px] border-b border-border last:border-0 hover:bg-secondary transition-colors">
-      <span className="min-w-[46px] text-xs font-semibold text-muted-foreground">
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0 hover:bg-secondary transition-colors">
+      <span className="min-w-[46px] text-[10px] font-semibold text-muted-foreground">
         {formatTime(lesson.scheduled_at)}
       </span>
       <span
@@ -51,9 +51,9 @@ function LessonRow({ lesson }: LessonRowProps) {
         style={{ background: dotColor }}
       />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate">{lesson.subject}</p>
+        <p className="text-xs font-semibold truncate">{lesson.subject}</p>
         {lesson.student_name && (
-          <p className="text-xs text-muted-foreground truncate">{lesson.student_name}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{lesson.student_name}</p>
         )}
       </div>
       <StatusBadge status={lesson.status} />
@@ -122,16 +122,16 @@ export default function DashboardPage() {
         onSegmentChange={setActiveSegment}
       />
 
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6">
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_380px] gap-6 max-w-4xl">
         <div className="bg-card rounded-[var(--radius-lg)] border border-border shadow-[var(--shadow-card)] overflow-hidden">
           <div className="flex items-center justify-between px-5 py-[18px] border-b border-border">
-            <h2 className="text-sm font-semibold">Уроки сегодня</h2>
+            <h2 className="text-xs font-semibold">Уроки сегодня</h2>
             <Link href="/calendar" className="text-xs text-primary hover:underline">
               Расписание →
             </Link>
           </div>
           {sortedLessons.length === 0 ? (
-            <p className="px-5 py-8 text-sm text-muted-foreground text-center">
+            <p className="px-5 py-8 text-xs text-muted-foreground text-center">
               Уроков на сегодня нет
             </p>
           ) : (
@@ -141,23 +141,23 @@ export default function DashboardPage() {
 
         <div className="bg-card rounded-[var(--radius-lg)] border border-border shadow-[var(--shadow-card)] overflow-hidden">
           <div className="flex items-center justify-between px-5 py-[18px] border-b border-border">
-            <h2 className="text-sm font-semibold">Последние платежи</h2>
+            <h2 className="text-xs font-semibold">Последние платежи</h2>
             <Link href="/payments" className="text-xs text-primary hover:underline">
               Все →
             </Link>
           </div>
           {recentPayments.length === 0 ? (
-            <p className="px-5 py-8 text-sm text-muted-foreground text-center">
+            <p className="px-5 py-8 text-xs text-muted-foreground text-center">
               Платежей пока нет
             </p>
           ) : (
             recentPayments.map((p) => (
               <div key={p.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{formatAmount(p.amount)}</p>
-                  <p className="text-xs text-muted-foreground">{p.lessons_count} урок(ов)</p>
+                  <p className="text-xs font-semibold truncate">{formatAmount(p.amount)}</p>
+                  <p className="text-[10px] text-muted-foreground">{p.lessons_count} урок(ов)</p>
                 </div>
-                <span className="text-[11px] text-muted-foreground shrink-0">{formatDate(p.paid_at)}</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">{formatDate(p.paid_at)}</span>
               </div>
             ))
           )}

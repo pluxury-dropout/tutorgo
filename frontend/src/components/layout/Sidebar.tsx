@@ -300,7 +300,6 @@ function SidebarInner() {
   const pathname = usePathname()
   const { user, clearAuth } = useAuthStore()
   const { resolvedTheme, setTheme } = useTheme()
-  const isCalendar = pathname === '/calendar'
 
   return (
     <>
@@ -311,8 +310,7 @@ function SidebarInner() {
         <span className="font-heading text-[15px] font-bold tracking-tight">TutorGo</span>
       </div>
 
-      {/* Nav — не flex-1, когда снизу есть панель календаря */}
-      <nav className={cn('px-3 py-4 space-y-0.5 shrink-0', !isCalendar && 'flex-1')}>
+      <nav className="px-3 py-4 space-y-0.5 shrink-0">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'))
@@ -321,20 +319,20 @@ function SidebarInner() {
               key={href}
               href={href}
               className={cn(
-                'flex items-center gap-3 px-3 py-[9px] rounded-md text-sm transition-colors',
+                'flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs transition-colors',
                 active
                   ? 'bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-text)] font-semibold'
                   : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-foreground',
               )}
             >
-              <Icon className="h-[17px] w-[17px] shrink-0" strokeWidth={2} />
+              <Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={2} />
               {label}
             </Link>
           )
         })}
       </nav>
 
-      {isCalendar && <CalendarSidebarPanel />}
+      <CalendarSidebarPanel />
 
       {user && (
         <div className="px-4 py-4 border-t border-border flex items-center gap-3 shrink-0">

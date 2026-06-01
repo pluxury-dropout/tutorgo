@@ -33,9 +33,9 @@ export function HeaderPanel({
     <div className={cn('bg-card rounded-[16px] border border-border overflow-hidden', className)}>
       <div className="flex items-center px-[18px] py-[14px] pb-[12px] border-b border-border">
         <div>
-          <h1 className="text-[16px] font-bold tracking-[-0.3px]">{title}</h1>
+          <h1 className="text-xs font-bold tracking-[-0.3px]">{title}</h1>
           {subtitle && (
-            <p className="text-[11.5px] font-medium text-muted-foreground">{subtitle}</p>
+            <p className="text-[10px] font-medium text-muted-foreground">{subtitle}</p>
           )}
         </div>
       </div>
@@ -79,23 +79,23 @@ export function HeaderPanel({
                   className="w-1.5 h-1.5 rounded-full shrink-0"
                   style={{ background: seg.dotColor }}
                 />
-                <span className="text-[11px] font-medium text-muted-foreground">{seg.label}</span>
+                <span className="text-[10px] font-medium text-muted-foreground">{seg.label}</span>
               </div>
 
               {seg.loading ? (
                 <div className="h-5 w-14 bg-secondary animate-pulse rounded" />
               ) : (
-                <span className="text-[20px] font-bold tracking-[-0.4px] leading-none">
+                <span className="text-sm font-bold tracking-[-0.4px] leading-none">
                   {seg.value}
                 </span>
               )}
 
               {!seg.loading && seg.delta && (
-                <span className={cn('text-[11px]', deltaColor)}>{seg.delta.value}</span>
+                <span className={cn('text-[10px]', deltaColor)}>{seg.delta.value}</span>
               )}
 
               {!seg.loading && seg.meta && (
-                <span className="text-[11px] text-muted-foreground">{seg.meta}</span>
+                <span className="text-[10px] text-muted-foreground">{seg.meta}</span>
               )}
 
               {isActive && (
