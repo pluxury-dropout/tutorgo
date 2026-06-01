@@ -146,3 +146,39 @@ func (s *lessonService) EndRoom(ctx context.Context, lessonID string, tutorID st
 func (s *lessonService) GetRoomStatus(ctx context.Context, id string) (string, error) {
 	return s.repo.GetRoomStatus(ctx, id)
 }
+
+type cycleInfo struct {
+	Position int
+	Size     int
+}
+
+func computeCyclePositions(ranks map[string]int, payments []models.Payment) map[string]cycleInfo {
+	if len(payments) == 0 {
+		return nil
+	}
+
+	bounds := make([]int, len(payments))
+	cum := 0
+	for i, p := range payments {
+		cum += p.LessonsCount
+		bounds[i] = cum
+	}
+
+	result := make(map[string]cycleInfo)
+	for lessonID, rank := range ranks {
+		for i, bound := range bounds {
+			prev := 0
+			if i > 0 {
+				prev = bounds[i-1]
+			}
+			if rank > prev && rank <= bound {
+				result[lessonID] = cycleInfo{
+					Position: rank - prev,
+					Size:     payments[i].LessonsCount,
+				}
+				break
+			}
+		}
+	}
+	return result
+}
