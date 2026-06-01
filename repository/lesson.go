@@ -45,8 +45,9 @@ func NewLessonRepository(pool *pgxpool.Pool) LessonRepository {
 func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error) {
 	var lesson models.Lesson
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status)
+		 VALUES ($1, $2, $3, $4,
+		         CASE WHEN $2 + $3 * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
 		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
 		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
@@ -59,8 +60,9 @@ func (r *lessonRepository) CreateBulk(ctx context.Context, req models.CreateBulk
 	batch := &pgx.Batch{}
 	for _, sa := range req.ScheduledAts {
 		batch.Queue(
-			`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, series_id)
-			 VALUES ($1, $2, $3, $4, $5)
+			`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, series_id, status)
+			 VALUES ($1, $2, $3, $4, $5,
+			         CASE WHEN $2 + $3 * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
 			 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
 			req.CourseID, sa, req.DurationMinutes, req.Notes, seriesID,
 		)
