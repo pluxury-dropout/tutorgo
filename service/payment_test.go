@@ -51,6 +51,16 @@ func (m *mockPaymentRepo) GetMonthlyExpected(ctx context.Context, tutorID string
 	return args.Get(0).(float64), args.Error(1)
 }
 
+func (m *mockPaymentRepo) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {
+	args := m.Called(ctx, id, tutorID, req)
+	return args.Get(0).(models.Payment), args.Error(1)
+}
+
+func (m *mockPaymentRepo) Delete(ctx context.Context, id string, tutorID string) error {
+	args := m.Called(ctx, id, tutorID)
+	return args.Error(0)
+}
+
 var (
 	tutorID  = "tutor-uuid-1"
 	courseID = "course-uuid-1"

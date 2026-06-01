@@ -15,6 +15,8 @@ type PaymentService interface {
 	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
+	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
+	Delete(ctx context.Context, id string, tutorID string) error
 }
 
 type paymentService struct {
@@ -61,4 +63,19 @@ func (s *paymentService) GetMonthlyIncome(ctx context.Context, tutorID string) (
 
 func (s *paymentService) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
 	return s.repo.GetMonthlyExpected(ctx, tutorID)
+}
+
+func (s *paymentService) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {
+	payment, err := s.repo.Update(ctx, id, tutorID, req)
+	if err != nil {
+		return models.Payment{}, fmt.Errorf("payment: %w", ErrNotFound)
+	}
+	return payment, nil
+}
+
+func (s *paymentService) Delete(ctx context.Context, id string, tutorID string) error {
+	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
+		return fmt.Errorf("payment: %w", ErrNotFound)
+	}
+	return nil
 }
