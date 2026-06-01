@@ -24,7 +24,7 @@ import {
   useDeleteSeries,
   useUpdateSeries,
 } from '@/lib/hooks/useLessons'
-import { usePayments, useCreatePayment } from '@/lib/hooks/usePayments'
+import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment } from '@/lib/hooks/usePayments'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { LessonForm, RecurrenceOptions } from '@/components/lessons/LessonForm'
@@ -36,7 +36,7 @@ import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
 import { SeriesUpdateInput } from '@/lib/api/lessons'
 import { PaymentFormValues } from '@/schemas/payment'
-import { Lesson } from '@/types/api'
+import { Lesson, Payment } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
@@ -133,6 +133,7 @@ export default function CourseDetailPage() {
   const [seriesLesson, setSeriesLesson]         = useState<Lesson | undefined>()
   const [attendanceLesson, setAttendanceLesson] = useState<string | null>(null)
   const [paymentFormOpen, setPaymentFormOpen]   = useState(false)
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
   const [selectedStudent, setSelected]          = useState('')
 
   const updateCourse         = useUpdateCourse(id)
@@ -147,6 +148,8 @@ export default function CourseDetailPage() {
   const deleteSeries         = useDeleteSeries(id)
   const updateSeries         = useUpdateSeries(id)
   const createPayment        = useCreatePayment(id)
+  const updatePayment = useUpdatePayment(id)
+  const deletePayment = useDeletePayment(id)
 
   async function handleUpdateCourse(values: CourseFormValues) {
     const { type: _type, student_id: _sid, started_at, ended_at, ...rest } = values
@@ -225,13 +228,30 @@ export default function CourseDetailPage() {
   }
 
   async function handlePaymentSubmit(values: PaymentFormValues) {
-    await createPayment.mutateAsync({
-      course_id:     id,
-      amount:        values.amount,
-      lessons_count: values.lessons_count,
-      paid_at:       `${values.paid_at}T00:00:00Z`,
-    })
-    toast.success('Оплата добавлена')
+    if (editingPayment) {
+      await updatePayment.mutateAsync({
+        id:   editingPayment.id,
+        data: {
+          amount:        values.amount,
+          lessons_count: values.lessons_count,
+          paid_at:       values.paid_at,
+        },
+      })
+      toast.success('Платёж обновлён')
+    } else {
+      await createPayment.mutateAsync({
+        course_id:     id,
+        amount:        values.amount,
+        lessons_count: values.lessons_count,
+        paid_at:       values.paid_at,
+      })
+    }
+  }
+
+  async function handlePaymentDelete(p: Payment) {
+    if (!confirm(`Удалить платёж на ${p.amount.toLocaleString()} ₸?`)) return
+    await deletePayment.mutateAsync(p.id)
+    toast.success('Платёж удалён')
   }
 
   function openCreateLesson() {
@@ -338,12 +358,33 @@ export default function CourseDetailPage() {
         ) : (
           <div className="space-y-1">
             {payments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between py-2 border-b last:border-0 text-sm">
+              <div
+                key={p.id}
+                className="flex items-center justify-between py-2 border-b last:border-0 text-sm group"
+              >
                 <span className="text-muted-foreground">
                   {new Date(p.paid_at).toLocaleDateString('ru-RU')}
                 </span>
                 <span className="font-medium">{p.amount.toLocaleString()} ₸</span>
                 <span className="text-muted-foreground">{p.lessons_count} ур.</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => { setEditingPayment(p); setPaymentFormOpen(true) }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handlePaymentDelete(p)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -493,9 +534,19 @@ export default function CourseDetailPage() {
 
       <PaymentForm
         open={paymentFormOpen}
-        onClose={() => setPaymentFormOpen(false)}
+        onClose={() => { setPaymentFormOpen(false); setEditingPayment(null) }}
         onSubmit={handlePaymentSubmit}
-        pricePerLesson={course.price_per_lesson}
+        pricePerLesson={course?.price_per_lesson ?? 0}
+        initialValues={
+          editingPayment
+            ? {
+                amount:        editingPayment.amount,
+                lessons_count: editingPayment.lessons_count,
+                paid_at:       new Date(editingPayment.paid_at).toISOString().slice(0, 10),
+              }
+            : undefined
+        }
+        paymentId={editingPayment?.id}
       />
 
       {attendanceLesson && (
