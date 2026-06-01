@@ -27,12 +27,82 @@ type LessonService interface {
 }
 
 type lessonService struct {
-	repo       repository.LessonRepository
-	courseRepo repository.CourseRepository
+	repo        repository.LessonRepository
+	courseRepo  repository.CourseRepository
+	paymentRepo repository.PaymentRepository
 }
 
-func NewLessonService(repo repository.LessonRepository, courseRepo repository.CourseRepository) LessonService {
-	return &lessonService{repo: repo, courseRepo: courseRepo}
+func NewLessonService(repo repository.LessonRepository, courseRepo repository.CourseRepository, paymentRepo repository.PaymentRepository) LessonService {
+	return &lessonService{repo: repo, courseRepo: courseRepo, paymentRepo: paymentRepo}
+}
+
+func (s *lessonService) enrichCalendarLessons(ctx context.Context, lessons []models.CalendarLesson) error {
+	if len(lessons) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	courseIDs := make([]string, 0)
+	for _, l := range lessons {
+		if !seen[l.CourseID] {
+			seen[l.CourseID] = true
+			courseIDs = append(courseIDs, l.CourseID)
+		}
+	}
+	ranks, err := s.repo.GetRanksForCourses(ctx, courseIDs)
+	if err != nil {
+		return err
+	}
+	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, courseIDs)
+	if err != nil {
+		return err
+	}
+	cycleInfosByCourse := make(map[string]map[string]cycleInfo)
+	for _, courseID := range courseIDs {
+		coursePayments := paymentsMap[courseID]
+		if len(coursePayments) == 0 {
+			continue
+		}
+		cycleInfosByCourse[courseID] = computeCyclePositions(ranks[courseID], coursePayments)
+	}
+	for i, l := range lessons {
+		infos := cycleInfosByCourse[l.CourseID]
+		if infos == nil {
+			continue
+		}
+		if info, ok := infos[l.ID]; ok {
+			pos, size := info.Position, info.Size
+			lessons[i].CyclePosition = &pos
+			lessons[i].CycleSize = &size
+		}
+	}
+	return nil
+}
+
+func (s *lessonService) enrichLessons(ctx context.Context, courseID string, lessons []models.Lesson) error {
+	if len(lessons) == 0 {
+		return nil
+	}
+	ranks, err := s.repo.GetRanksForCourses(ctx, []string{courseID})
+	if err != nil {
+		return err
+	}
+	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, []string{courseID})
+	if err != nil {
+		return err
+	}
+	coursePayments := paymentsMap[courseID]
+	if len(coursePayments) == 0 {
+		return nil
+	}
+	infos := computeCyclePositions(ranks[courseID], coursePayments)
+	for i, l := range lessons {
+		if info, ok := infos[l.ID]; ok {
+			pos, size := info.Position, info.Size
+			lessons[i].CyclePosition = &pos
+			lessons[i].CycleSize = &size
+		}
+	}
+	return nil
 }
 
 func (s *lessonService) Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
@@ -64,7 +134,14 @@ func (s *lessonService) GetByPeriod(ctx context.Context, courseID string, tutorI
 	if err != nil {
 		return nil, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.GetByPeriod(ctx, courseID, tutorID, from, to)
+	lessons, err := s.repo.GetByPeriod(ctx, courseID, tutorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.enrichLessons(ctx, courseID, lessons); err != nil {
+		return nil, err
+	}
+	return lessons, nil
 }
 
 func (s *lessonService) GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error) {
@@ -128,7 +205,14 @@ func (s *lessonService) UpdateSeries(ctx context.Context, seriesID string, tutor
 }
 
 func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
-	return s.repo.GetCalendar(ctx, tutorID, from, to)
+	lessons, err := s.repo.GetCalendar(ctx, tutorID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.enrichCalendarLessons(ctx, lessons); err != nil {
+		return nil, err
+	}
+	return lessons, nil
 }
 
 func (s *lessonService) ExistsPublic(ctx context.Context, id string) error {
