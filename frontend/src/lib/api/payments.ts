@@ -8,6 +8,8 @@ export interface PaymentInput {
   paid_at?: string
 }
 
+export type PaymentUpdateInput = Omit<PaymentInput, 'course_id'>
+
 export interface PaymentListParams {
   page:  number
   limit: number
@@ -23,6 +25,10 @@ export const paymentsApi = {
     api.get<Payment[]>('/payments/recent').then((r) => r.data ?? []),
   create: (data: PaymentInput) =>
     api.post<Payment>('/payments', data).then((r) => r.data),
+  update: (id: string, data: PaymentUpdateInput) =>
+    api.put<Payment>(`/payments/${id}`, data).then((r) => r.data),
+  delete: (id: string) =>
+    api.delete(`/payments/${id}`).then(() => id),
   getBalance: (courseId: string) =>
     api.get<PaymentBalance>('/payments/balance', { params: { course_id: courseId } })
       .then((r) => r.data),
