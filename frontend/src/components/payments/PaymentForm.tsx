@@ -14,13 +14,24 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface PaymentFormProps {
-  open:          boolean
-  onClose:       () => void
-  onSubmit:      (data: PaymentFormValues) => Promise<void>
+  open:           boolean
+  onClose:        () => void
+  onSubmit:       (data: PaymentFormValues) => Promise<void>
   pricePerLesson: number
+  initialValues?: PaymentFormValues
+  paymentId?:     string
 }
 
-export function PaymentForm({ open, onClose, onSubmit, pricePerLesson }: PaymentFormProps) {
+export function PaymentForm({
+  open,
+  onClose,
+  onSubmit,
+  pricePerLesson,
+  initialValues,
+  paymentId,
+}: PaymentFormProps) {
+  const isEdit = !!paymentId
+
   const {
     register,
     handleSubmit,
@@ -36,14 +47,20 @@ export function PaymentForm({ open, onClose, onSubmit, pricePerLesson }: Payment
   const amount = watch('amount')
 
   useEffect(() => {
-    if (open) reset({ amount: 0, lessons_count: 0, paid_at: new Date().toISOString().slice(0, 10) })
-  }, [open, reset])
+    if (open) {
+      if (initialValues) {
+        reset(initialValues)
+      } else {
+        reset({ amount: 0, lessons_count: 0, paid_at: new Date().toISOString().slice(0, 10) })
+      }
+    }
+  }, [open, reset, initialValues])
 
   useEffect(() => {
-    if (pricePerLesson > 0 && amount > 0) {
+    if (!isEdit && pricePerLesson > 0 && amount > 0) {
       setValue('lessons_count', Math.floor(amount / pricePerLesson))
     }
-  }, [amount, pricePerLesson, setValue])
+  }, [amount, pricePerLesson, setValue, isEdit])
 
   async function submit(values: PaymentFormValues) {
     try {
@@ -59,7 +76,7 @@ export function PaymentForm({ open, onClose, onSubmit, pricePerLesson }: Payment
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Новая оплата</DialogTitle>
+          <DialogTitle>{isEdit ? 'Редактировать оплату' : 'Новая оплата'}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
