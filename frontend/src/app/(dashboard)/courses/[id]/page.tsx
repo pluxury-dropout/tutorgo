@@ -39,6 +39,7 @@ import { PaymentFormValues } from '@/schemas/payment'
 import { Lesson, Payment } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
+import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { PeriodPicker } from '@/components/lessons/PeriodPicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -480,6 +481,9 @@ export default function CourseDetailPage() {
                   <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[lesson.status] ?? ''}`}>
                     {STATUS_LABELS[lesson.status] ?? lesson.status}
                   </span>
+                  {lesson.cycle_position != null && lesson.cycle_size != null && (
+                    <CycleBadge position={lesson.cycle_position} size={lesson.cycle_size} />
+                  )}
                   {lesson.notes && (
                     <span className="text-muted-foreground truncate">{lesson.notes}</span>
                   )}

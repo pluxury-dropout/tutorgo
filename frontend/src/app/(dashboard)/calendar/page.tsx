@@ -13,6 +13,7 @@ import { Circle, CheckCircle2 } from 'lucide-react'
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { useTasks, useToggleTask, useRescheduleTask } from '@/lib/hooks/useTasks'
 import { FC_COLORS } from '@/lib/lessonStatus'
+import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import { TaskCreateDialog } from '@/components/tasks/TaskCreateDialog'
 import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
@@ -91,6 +92,8 @@ export default function CalendarPage() {
       isGroup:         l.is_group,
       scheduledAt:     l.scheduled_at,
       durationMinutes: l.duration_minutes,
+      cyclePosition:   l.cycle_position ?? null,
+      cycleSize:       l.cycle_size ?? null,
     },
   }))
 
@@ -325,9 +328,11 @@ export default function CalendarPage() {
               )
             }
 
-            const cancelled = arg.event.extendedProps.status === 'cancelled'
+            const cyclePosition = arg.event.extendedProps.cyclePosition as number | null
+            const cycleSize     = arg.event.extendedProps.cycleSize as number | null
+            const cancelled     = arg.event.extendedProps.status === 'cancelled'
             return (
-              <>
+              <div className="relative h-full w-full overflow-hidden">
                 <div className="fc-event-time">{arg.timeText}</div>
                 <div
                   className="fc-event-title"
@@ -335,7 +340,12 @@ export default function CalendarPage() {
                 >
                   {arg.event.title}
                 </div>
-              </>
+                {cyclePosition != null && cycleSize != null && (
+                  <div className="absolute bottom-0.5 right-0.5">
+                    <CycleBadge position={cyclePosition} size={cycleSize} />
+                  </div>
+                )}
+              </div>
             )
           }}
           snapDuration="00:15:00"
