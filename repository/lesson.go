@@ -32,6 +32,7 @@ type LessonRepository interface {
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
 	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
+	GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error)
 }
 
 type lessonRepository struct {
@@ -381,4 +382,35 @@ func (r *lessonRepository) GetRoomStatus(ctx context.Context, lessonID string) (
 		return "active", nil
 	}
 	return "waiting", nil
+}
+
+func (r *lessonRepository) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {
+	if len(courseIDs) == 0 {
+		return map[string]map[string]int{}, nil
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, course_id,
+		        ROW_NUMBER() OVER (PARTITION BY course_id ORDER BY scheduled_at)::int AS rank
+		 FROM lessons
+		 WHERE course_id = ANY($1)
+		   AND status != 'cancelled'`,
+		courseIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string]map[string]int{}
+	for rows.Next() {
+		var lessonID, courseID string
+		var rank int
+		if err := rows.Scan(&lessonID, &courseID, &rank); err != nil {
+			return nil, err
+		}
+		if result[courseID] == nil {
+			result[courseID] = map[string]int{}
+		}
+		result[courseID][lessonID] = rank
+	}
+	return result, rows.Err()
 }
