@@ -15,6 +15,7 @@ type Config struct {
 	LiveKitURL       string
 	LiveKitAPIKey    string
 	LiveKitAPISecret string
+	Env              string
 }
 
 func Load(log *slog.Logger) Config {
@@ -33,6 +34,7 @@ func Load(log *slog.Logger) Config {
 		LiveKitURL:       os.Getenv("LIVEKIT_URL"),
 		LiveKitAPIKey:    os.Getenv("LIVEKIT_API_KEY"),
 		LiveKitAPISecret: os.Getenv("LIVEKIT_API_SECRET"),
+		Env:              os.Getenv("APP_ENV"),
 	}
 
 	if cfg.DBUrl == "" {
