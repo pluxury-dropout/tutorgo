@@ -55,6 +55,7 @@ type CalendarLesson struct {
 	StudentName     *string   `json:"student_name"`
 	IsGroup         bool      `json:"is_group"`
 	SeriesID        *string   `json:"series_id,omitempty"`
+	Rank            *int      `json:"-"` // global rank within course, used to compute cycle position
 	CyclePosition   *int      `json:"cycle_position,omitempty"`
 	CycleSize       *int      `json:"cycle_size,omitempty"`
 }

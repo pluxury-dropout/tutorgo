@@ -32,7 +32,11 @@ func (s *paymentService) Create(ctx context.Context, req models.CreatePaymentReq
 	if _, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID); err != nil {
 		return models.Payment{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.Create(ctx, req)
+	payment, err := s.repo.Create(ctx, req)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return payment, err
 }
 
 func (s *paymentService) GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error) {
@@ -70,6 +74,7 @@ func (s *paymentService) Update(ctx context.Context, id string, tutorID string, 
 	if err != nil {
 		return models.Payment{}, fmt.Errorf("payment: %w", ErrNotFound)
 	}
+	globalCalendarCache.Invalidate(tutorID)
 	return payment, nil
 }
 
@@ -77,5 +82,6 @@ func (s *paymentService) Delete(ctx context.Context, id string, tutorID string) 
 	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
 		return fmt.Errorf("payment: %w", ErrNotFound)
 	}
+	globalCalendarCache.Invalidate(tutorID)
 	return nil
 }

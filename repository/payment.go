@@ -13,6 +13,7 @@ type PaymentRepository interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error)
 	GetByCoursesBatch(ctx context.Context, courseIDs []string) (map[string][]models.Payment, error)
+	GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
@@ -81,6 +82,36 @@ func (r *paymentRepository) GetByCoursesBatch(ctx context.Context, courseIDs []s
 		 WHERE course_id = ANY($1)
 		 ORDER BY course_id, paid_at ASC`,
 		courseIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string][]models.Payment{}
+	for rows.Next() {
+		var p models.Payment
+		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt); err != nil {
+			return nil, err
+		}
+		result[p.CourseID] = append(result[p.CourseID], p)
+	}
+	return result, rows.Err()
+}
+
+func (r *paymentRepository) GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at
+		 FROM payments p
+		 WHERE p.course_id IN (
+		   SELECT DISTINCT l.course_id
+		   FROM lessons l
+		   JOIN courses c ON c.id = l.course_id
+		   WHERE c.tutor_id = $1
+		     AND l.scheduled_at >= $2::timestamptz
+		     AND l.scheduled_at < $3::timestamptz
+		 )
+		 ORDER BY p.course_id, p.paid_at ASC`,
+		tutorID, from, to)
 	if err != nil {
 		return nil, err
 	}

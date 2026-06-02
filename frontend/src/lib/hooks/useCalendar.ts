@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { calendarApi } from '@/lib/api/calendar'
 import { lessonsApi, LessonUpdateInput } from '@/lib/api/lessons'
 
@@ -12,9 +12,10 @@ export function useUpdateLessonStatus(id: string) {
 
 export function useCalendar(from: string, to: string) {
   return useQuery({
-    queryKey: ['calendar', from, to],
-    queryFn:  () => calendarApi.list(from, to),
-    enabled:  !!from && !!to,
+    queryKey:        ['calendar', from, to],
+    queryFn:         () => calendarApi.list(from, to),
+    enabled:         !!from && !!to,
+    placeholderData: keepPreviousData,
   })
 }
 

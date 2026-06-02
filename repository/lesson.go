@@ -246,17 +246,36 @@ func (r *lessonRepository) UpdateSeries(ctx context.Context, seriesID string, tu
 
 func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
+		// ranked CTE computes global lesson rank inside the DB — eliminates a separate GetRanksForCourses round-trip.
+		// cal_courses is materialized so the subquery runs once and is reused by ranked.
+		`WITH cal_courses AS MATERIALIZED (
+		   SELECT DISTINCT l.course_id
+		   FROM lessons l
+		   JOIN courses c ON c.id = l.course_id
+		   WHERE c.tutor_id = $1
+		     AND l.scheduled_at >= $2::timestamptz
+		     AND l.scheduled_at < $3::timestamptz
+		 ),
+		 ranked AS (
+		   SELECT l.id,
+		          ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
+		   FROM lessons l
+		   WHERE l.course_id IN (SELECT course_id FROM cal_courses)
+		     AND l.status != 'cancelled'
+		 )
+		 SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
 		        c.subject,
 		        CASE WHEN c.student_id IS NOT NULL
 		             THEN CASE WHEN s.last_name = '' THEN s.first_name ELSE s.first_name || ' ' || s.last_name END
 		             ELSE NULL
 		        END AS student_name,
 		        (c.student_id IS NULL) AS is_group,
-		        l.series_id
+		        l.series_id,
+		        r.rank
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 LEFT JOIN students s ON s.id = c.student_id
+		 LEFT JOIN ranked r ON r.id = l.id
 		 WHERE c.tutor_id = $1
 		   AND l.scheduled_at >= $2::timestamptz
 		   AND l.scheduled_at < $3::timestamptz
@@ -271,7 +290,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 	for rows.Next() {
 		var cl models.CalendarLesson
 		if err := rows.Scan(&cl.ID, &cl.CourseID, &cl.ScheduledAt, &cl.DurationMinutes,
-			&cl.Status, &cl.Notes, &cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.SeriesID); err != nil {
+			&cl.Status, &cl.Notes, &cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.SeriesID, &cl.Rank); err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, cl)

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -40,46 +41,17 @@ func NewLessonService(
 	return &lessonService{repo: repo, courseRepo: courseRepo, paymentRepo: paymentRepo}
 }
 
-func (s *lessonService) enrichCalendarLessons(ctx context.Context, lessons []models.CalendarLesson) error {
-	if len(lessons) == 0 {
-		return nil
-	}
-	seen := make(map[string]bool)
-	courseIDs := make([]string, 0)
-	for _, l := range lessons {
-		if !seen[l.CourseID] {
-			seen[l.CourseID] = true
-			courseIDs = append(courseIDs, l.CourseID)
+// cyclePositionFromRank computes a lesson's position and size within its payment cycle.
+// rank is the lesson's 1-based global position among non-cancelled lessons in the course.
+func cyclePositionFromRank(rank int, payments []models.Payment) (position, size int) {
+	cum := 0
+	for _, p := range payments {
+		cum += p.LessonsCount
+		if rank <= cum {
+			return rank - (cum - p.LessonsCount), p.LessonsCount
 		}
 	}
-	ranks, err := s.repo.GetRanksForCourses(ctx, courseIDs)
-	if err != nil {
-		return err
-	}
-	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, courseIDs)
-	if err != nil {
-		return err
-	}
-	cycleInfosByCourse := make(map[string]map[string]cycleInfo)
-	for _, courseID := range courseIDs {
-		coursePayments := paymentsMap[courseID]
-		if len(coursePayments) == 0 {
-			continue
-		}
-		cycleInfosByCourse[courseID] = computeCyclePositions(ranks[courseID], coursePayments)
-	}
-	for i, l := range lessons {
-		infos := cycleInfosByCourse[l.CourseID]
-		if infos == nil {
-			continue
-		}
-		if info, ok := infos[l.ID]; ok {
-			pos, size := info.Position, info.Size
-			lessons[i].CyclePosition = &pos
-			lessons[i].CycleSize = &size
-		}
-	}
-	return nil
+	return 0, 0
 }
 
 func (s *lessonService) enrichLessons(ctx context.Context, courseID string, lessons []models.Lesson) error {
@@ -114,7 +86,11 @@ func (s *lessonService) Create(ctx context.Context, req models.CreateLessonReque
 	if err != nil {
 		return models.Lesson{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.Create(ctx, req)
+	lesson, err := s.repo.Create(ctx, req)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return lesson, err
 }
 
 func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {
@@ -122,7 +98,11 @@ func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLes
 	if err != nil {
 		return nil, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.CreateBulk(ctx, req)
+	lessons, err := s.repo.CreateBulk(ctx, req)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return lessons, err
 }
 
 func (s *lessonService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error) {
@@ -178,7 +158,11 @@ func (s *lessonService) Update(ctx context.Context, id string, req models.Update
 	if err != nil {
 		return models.Lesson{}, fmt.Errorf("lesson: %w", ErrNotFound)
 	}
-	return s.repo.Update(ctx, id, req)
+	lesson, err := s.repo.Update(ctx, id, req)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return lesson, err
 }
 
 func (s *lessonService) Delete(ctx context.Context, id string, tutorID string) error {
@@ -186,7 +170,11 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID string) e
 	if err != nil {
 		return fmt.Errorf("lesson: %w", ErrNotFound)
 	}
-	return s.repo.Delete(ctx, id)
+	err = s.repo.Delete(ctx, id)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return err
 }
 
 func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
@@ -194,28 +182,79 @@ func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tut
 	if err != nil {
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.DeleteByCourse(ctx, courseID, tutorID)
+	err = s.repo.DeleteByCourse(ctx, courseID, tutorID)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return err
 }
 
 func (s *lessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
-	return s.repo.DeleteSeries(ctx, seriesID, tutorID, fromDate)
+	err := s.repo.DeleteSeries(ctx, seriesID, tutorID, fromDate)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return err
 }
 
 func (s *lessonService) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
 	if req.NewTime == nil && req.DurationMinutes == nil && req.Notes == nil {
 		return fmt.Errorf("update requires at least one field: %w", ErrBadRequest)
 	}
-	return s.repo.UpdateSeries(ctx, seriesID, tutorID, req)
+	err := s.repo.UpdateSeries(ctx, seriesID, tutorID, req)
+	if err == nil {
+		globalCalendarCache.Invalidate(tutorID)
+	}
+	return err
 }
 
 func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
-	lessons, err := s.repo.GetCalendar(ctx, tutorID, from, to)
-	if err != nil {
-		return nil, err
+	if cached, ok := globalCalendarCache.get(tutorID, from, to); ok {
+		return cached, nil
 	}
-	if err := s.enrichCalendarLessons(ctx, lessons); err != nil {
-		return nil, err
+
+	var (
+		lessons     []models.CalendarLesson
+		paymentsMap map[string][]models.Payment
+		lessonsErr  error
+		paymentsErr error
+	)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		lessons, lessonsErr = s.repo.GetCalendar(ctx, tutorID, from, to)
+	}()
+	go func() {
+		defer wg.Done()
+		paymentsMap, paymentsErr = s.paymentRepo.GetPaymentsForCalendar(ctx, tutorID, from, to)
+	}()
+	wg.Wait()
+
+	if lessonsErr != nil {
+		return nil, lessonsErr
 	}
+	if paymentsErr != nil {
+		return nil, paymentsErr
+	}
+
+	for i, l := range lessons {
+		if l.Rank == nil {
+			continue
+		}
+		coursePayments := paymentsMap[l.CourseID]
+		if len(coursePayments) == 0 {
+			continue
+		}
+		pos, size := cyclePositionFromRank(*l.Rank, coursePayments)
+		if pos > 0 {
+			p, sz := pos, size
+			lessons[i].CyclePosition = &p
+			lessons[i].CycleSize = &sz
+		}
+	}
+
+	globalCalendarCache.set(tutorID, from, to, lessons)
 	return lessons, nil
 }
 

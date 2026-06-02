@@ -1,11 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { tasksApi, TaskInput, TaskUpdateInput } from '@/lib/api/tasks'
 
 export function useTasks(from: string, to: string) {
   return useQuery({
-    queryKey: ['tasks', from, to],
-    queryFn:  () => tasksApi.list(from, to),
-    enabled:  !!from && !!to,
+    queryKey:        ['tasks', from, to],
+    queryFn:         () => tasksApi.list(from, to),
+    enabled:         !!from && !!to,
+    placeholderData: keepPreviousData,
   })
 }
 

@@ -67,10 +67,14 @@ export default function CalendarPage() {
 
   const [range, setRange] = useState(() => {
     const n = new Date()
-    return {
-      from: new Date(n.getFullYear(), n.getMonth(), 1).toISOString(),
-      to:   new Date(n.getFullYear(), n.getMonth() + 1, 0, 23, 59, 59).toISOString(),
-    }
+    // Match FullCalendar's timeGridWeek initial range (firstDay=1 → Mon–Sun)
+    const daysFromMonday = n.getDay() === 0 ? 6 : n.getDay() - 1
+    const start = new Date(n)
+    start.setDate(n.getDate() - daysFromMonday)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(start.getDate() + 7)
+    return { from: start.toISOString(), to: end.toISOString() }
   })
 
   const { data: lessons = [] } = useCalendar(range.from, range.to)
@@ -255,10 +259,12 @@ export default function CalendarPage() {
 
   return (
     <>
-      {/* Mobile: full-screen compact week (M1) */}
-      <div className="block md:hidden h-full">
-        <MobileWeekCalendar />
-      </div>
+      {/* Mobile: full-screen compact week */}
+      {isTouch && (
+        <div className="h-full">
+          <MobileWeekCalendar />
+        </div>
+      )}
 
       {/* Desktop: FullCalendar */}
       <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
@@ -267,7 +273,7 @@ export default function CalendarPage() {
         end={newTaskSlot?.end ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
-      <div className="hidden md:block h-full min-h-0 overflow-hidden">
+      <div className={`${isTouch ? 'hidden' : 'block'} h-full min-h-0 overflow-hidden`}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
