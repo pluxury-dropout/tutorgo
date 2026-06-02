@@ -29,8 +29,8 @@ func newCourseRouter(svc *mockCourseService, tutorID string) *gin.Engine {
 }
 
 var (
-	testEndedAt          = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
-	testCreateCourseReq  = models.CreateCourseRequest{
+	testEndedAt         = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
+	testCreateCourseReq = models.CreateCourseRequest{
 		StudentID:      testStudentIDPtr,
 		Subject:        "Mathematics",
 		PricePerLesson: 5000,
