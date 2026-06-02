@@ -36,16 +36,16 @@ export default function LoginPage() {
         ? { email: values.credential, password: values.password }
         : { phone: values.credential, password: values.password }
 
-      const { token } = await authApi.login(payload)
+      const { access_token } = await authApi.login(payload)
 
       // Store token first so axios interceptor can use it for the profile request
-      localStorage.setItem('tg_token', token)
+      localStorage.setItem('tg_token', access_token)
 
-      const payloadPart = token.split('.')[1]
+      const payloadPart = access_token.split('.')[1]
       const { id } = JSON.parse(atob(payloadPart))
       const user = await tutorsApi.get(id)
 
-      setAuth(token, user)
+      setAuth(access_token, user)
       router.replace('/dashboard')
     } catch (err) {
       const e = err as ApiError

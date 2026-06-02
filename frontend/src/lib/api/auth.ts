@@ -17,8 +17,11 @@ export interface RegisterInput {
 
 export const authApi = {
   login: (data: LoginInput) =>
-    api.post<{ token: string }>('/auth/login', data).then((r) => r.data),
+    api.post<{ access_token: string }>('/auth/login', data).then((r) => r.data),
 
   register: (data: RegisterInput) =>
     api.post<Tutor>('/auth/register', data).then((r) => r.data),
+
+  logout: () =>
+    api.post('/auth/logout', {}, { withCredentials: true }).catch(() => {}),
 }

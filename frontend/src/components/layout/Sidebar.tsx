@@ -19,6 +19,7 @@ import {
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/lib/api/auth'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import type { LessonStatus, CalendarLesson } from '@/types/api'
@@ -301,6 +302,11 @@ function SidebarInner() {
   const { user, clearAuth } = useAuthStore()
   const { resolvedTheme, setTheme } = useTheme()
 
+  async function handleLogout() {
+    await authApi.logout()
+    clearAuth()
+  }
+
   return (
     <>
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-border shrink-0">
@@ -347,7 +353,7 @@ function SidebarInner() {
               {user.first_name} {user.last_name}
             </p>
             <button
-              onClick={clearAuth}
+              onClick={handleLogout}
               className="text-[11px] text-[var(--sidebar-text)] hover:text-foreground transition-colors"
             >
               Выйти

@@ -1,8 +1,10 @@
 import axios, { AxiosError } from 'axios'
 import { ApiError } from '@/types/api'
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
+
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080',
+  baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -13,14 +15,35 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+let isRefreshing = false
+
 api.interceptors.response.use(
   (r) => r,
-  (error: AxiosError<{ error: string } | Record<string, string>>) => {
+  async (error: AxiosError<{ error: string } | Record<string, string>>) => {
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
-    if (error.response?.status === 401 && !isAuthRoute) {
-      localStorage.removeItem('tg_token')
-      localStorage.removeItem('tg_user')
-      if (typeof window !== 'undefined') window.location.href = '/login'
+
+    if (error.response?.status === 401 && !isAuthRoute && !isRefreshing) {
+      isRefreshing = true
+      try {
+        const { data } = await axios.post<{ access_token: string }>(
+          `${BASE_URL}/auth/refresh`,
+          {},
+          { withCredentials: true },
+        )
+        localStorage.setItem('tg_token', data.access_token)
+        isRefreshing = false
+
+        if (error.config) {
+          error.config.headers = error.config.headers ?? {}
+          error.config.headers['Authorization'] = `Bearer ${data.access_token}`
+          return api.request(error.config)
+        }
+      } catch {
+        isRefreshing = false
+        localStorage.removeItem('tg_token')
+        localStorage.removeItem('tg_user')
+        if (typeof window !== 'undefined') window.location.href = '/login'
+      }
     }
 
     const status = error.response?.status ?? 0
