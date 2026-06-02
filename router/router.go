@@ -20,6 +20,7 @@ import (
 func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine {
 	// Repositories
 	tutorRepo := repository.NewTutorRepository(pool)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
 	studentRepo := repository.NewStudentRepository(pool)
 	courseRepo := repository.NewCourseRepository(pool)
 	paymentRepo := repository.NewPaymentRepository(pool)
@@ -30,6 +31,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo)
+	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
 	studentService := service.NewStudentService(studentRepo)
 	courseService := service.NewCourseService(courseRepo, studentRepo, lessonRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
@@ -39,8 +41,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	taskService := service.NewTaskService(taskRepo)
 
 	// Handlers
-	tutorHandler := handlers.NewTutorHandler(tutorService, log)
-	authHandler := handlers.NewAuthHandler(tutorService, log, cfg.JWTSecret)
+	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
+	authHandler := handlers.NewAuthHandler(tutorService, refreshTokenService, log, cfg.JWTSecret, cfg.Env == "production")
 	studentHandler := handlers.NewStudentHandler(studentService, log)
 	courseHandler := handlers.NewCourseHandler(courseService, log)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
@@ -72,6 +74,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	authLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
 	r.POST("/auth/register", authLimiter, authHandler.Register)
 	r.POST("/auth/login", authLimiter, authHandler.Login)
+	r.POST("/auth/refresh", authLimiter, authHandler.Refresh)
+	r.POST("/auth/logout", authLimiter, authHandler.Logout)
 	r.GET("/public/lessons/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetGuestToken)
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
 

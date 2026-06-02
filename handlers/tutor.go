@@ -12,12 +12,13 @@ import (
 )
 
 type TutorHandler struct {
-	service service.TutorService
-	log     *slog.Logger
+	service         service.TutorService
+	refreshTokenSvc service.RefreshTokenService
+	log             *slog.Logger
 }
 
-func NewTutorHandler(svc service.TutorService, log *slog.Logger) *TutorHandler {
-	return &TutorHandler{service: svc, log: log}
+func NewTutorHandler(svc service.TutorService, refreshTokenSvc service.RefreshTokenService, log *slog.Logger) *TutorHandler {
+	return &TutorHandler{service: svc, refreshTokenSvc: refreshTokenSvc, log: log}
 }
 
 func (h *TutorHandler) GetByID(c *gin.Context) {
@@ -87,6 +88,9 @@ func (h *TutorHandler) ChangePassword(c *gin.Context) {
 		h.log.Error("Failed to update password", slog.String("id", id), slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
 		return
+	}
+	if err := h.refreshTokenSvc.RevokeAll(c.Request.Context(), id); err != nil {
+		h.log.Error("Failed to revoke sessions", slog.String("id", id), slog.String("error", err.Error()))
 	}
 	c.Status(http.StatusNoContent)
 }

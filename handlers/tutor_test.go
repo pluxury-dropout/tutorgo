@@ -15,7 +15,7 @@ import (
 
 func newTutorRouter(svc *mockTutorService, tutorID string) *gin.Engine {
 	r := gin.New()
-	h := handlers.NewTutorHandler(svc, slog.Default())
+	h := handlers.NewTutorHandler(svc, new(mockRefreshTokenService), slog.Default())
 	r.Use(withTutorID(tutorID))
 	r.GET("/tutors/:id", h.GetByID)
 	r.PUT("/tutors/:id", h.Update)

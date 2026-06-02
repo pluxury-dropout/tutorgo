@@ -14,9 +14,9 @@ import (
 	"log/slog"
 )
 
-func newAuthRouter(svc *mockTutorService) *gin.Engine {
+func newAuthRouter(svc *mockTutorService, refreshSvc *mockRefreshTokenService) *gin.Engine {
 	r := gin.New()
-	h := handlers.NewAuthHandler(svc, slog.Default(), "test-secret")
+	h := handlers.NewAuthHandler(svc, refreshSvc, slog.Default(), "test-secret", false)
 	r.POST("/auth/register", h.Register)
 	r.POST("/auth/login", h.Login)
 	return r
@@ -26,7 +26,8 @@ func newAuthRouter(svc *mockTutorService) *gin.Engine {
 
 func TestAuthRegister_Success(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	req := models.RegisterRequest{
 		Email:     "tutor@example.com",
@@ -48,7 +49,8 @@ func TestAuthRegister_Success(t *testing.T) {
 
 func TestAuthRegister_ValidationError(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	// password is too short (min=6)
 	w := makeRequest(t, r, http.MethodPost, "/auth/register", map[string]string{
@@ -64,7 +66,8 @@ func TestAuthRegister_ValidationError(t *testing.T) {
 
 func TestAuthRegister_ServiceError(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	req := models.RegisterRequest{
 		Email:     "tutor@example.com",
@@ -85,12 +88,14 @@ func TestAuthRegister_ServiceError(t *testing.T) {
 
 func TestAuthLogin_Success(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	password := "password123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	svc.On("GetByEmail", mock.Anything, "tutor@example.com").Return(testTutorID, string(hash), nil)
+	refreshSvc.On("Create", mock.Anything, testTutorID).Return("refresh-token-value", nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
 		Email:    "tutor@example.com",
@@ -100,13 +105,15 @@ func TestAuthLogin_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var got models.LoginResponse
 	decodeJSON(t, w, &got)
-	assert.NotEmpty(t, got.Token)
+	assert.NotEmpty(t, got.AccessToken)
 	svc.AssertExpectations(t)
+	refreshSvc.AssertExpectations(t)
 }
 
 func TestAuthLogin_WrongPassword(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
 	svc.On("GetByEmail", mock.Anything, "tutor@example.com").Return(testTutorID, string(hash), nil)
@@ -122,7 +129,8 @@ func TestAuthLogin_WrongPassword(t *testing.T) {
 
 func TestAuthLogin_EmailNotFound(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	svc.On("GetByEmail", mock.Anything, "unknown@example.com").Return("", "", errors.New("not found"))
 
@@ -137,12 +145,14 @@ func TestAuthLogin_EmailNotFound(t *testing.T) {
 
 func TestAuthLogin_ByPhone_Success(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	password := "password123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 
 	svc.On("GetByPhone", mock.Anything, "+77001234567").Return(testTutorID, string(hash), nil)
+	refreshSvc.On("Create", mock.Anything, testTutorID).Return("refresh-token-value", nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/login", models.LoginRequest{
 		Phone:    "+77001234567",
@@ -152,13 +162,15 @@ func TestAuthLogin_ByPhone_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var got models.LoginResponse
 	decodeJSON(t, w, &got)
-	assert.NotEmpty(t, got.Token)
+	assert.NotEmpty(t, got.AccessToken)
 	svc.AssertExpectations(t)
+	refreshSvc.AssertExpectations(t)
 }
 
 func TestAuthLogin_PhoneNotFound(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	svc.On("GetByPhone", mock.Anything, "+70000000000").Return("", "", errors.New("not found"))
 
@@ -173,7 +185,8 @@ func TestAuthLogin_PhoneNotFound(t *testing.T) {
 
 func TestAuthLogin_ValidationError(t *testing.T) {
 	svc := new(mockTutorService)
-	r := newAuthRouter(svc)
+	refreshSvc := new(mockRefreshTokenService)
+	r := newAuthRouter(svc, refreshSvc)
 
 	// email is invalid format
 	w := makeRequest(t, r, http.MethodPost, "/auth/login", map[string]string{

@@ -241,6 +241,25 @@ func (m *mockPaymentService) Update(ctx context.Context, id string, tutorID stri
 	return args.Get(0).(models.Payment), args.Error(1)
 }
 
+// --- Mock: RefreshTokenService ---
+
+type mockRefreshTokenService struct{ mock.Mock }
+
+func (m *mockRefreshTokenService) Create(ctx context.Context, tutorID string) (string, error) {
+	args := m.Called(ctx, tutorID)
+	return args.String(0), args.Error(1)
+}
+func (m *mockRefreshTokenService) Validate(ctx context.Context, token string) (string, error) {
+	args := m.Called(ctx, token)
+	return args.String(0), args.Error(1)
+}
+func (m *mockRefreshTokenService) Revoke(ctx context.Context, token string) error {
+	return m.Called(ctx, token).Error(0)
+}
+func (m *mockRefreshTokenService) RevokeAll(ctx context.Context, tutorID string) error {
+	return m.Called(ctx, tutorID).Error(0)
+}
+
 // --- Mock: LessonService ---
 
 type mockLessonService struct{ mock.Mock }
