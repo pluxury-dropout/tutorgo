@@ -4,15 +4,22 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	lkauth "github.com/livekit/protocol/auth"
 	livekit "github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
+
+type quickRoom struct {
+	tutorID string
+	active  bool
+}
 
 type CallHandler struct {
 	lessonService service.LessonService
@@ -21,6 +28,9 @@ type CallHandler struct {
 	apiKey        string
 	apiSecret     string
 	roomClient    *lksdk.RoomServiceClient
+
+	quickMu    sync.RWMutex
+	quickRooms map[string]*quickRoom
 }
 
 func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string) *CallHandler {
@@ -35,6 +45,7 @@ func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secre
 		apiKey:        key,
 		apiSecret:     secret,
 		roomClient:    roomClient,
+		quickRooms:    make(map[string]*quickRoom),
 	}
 }
 
@@ -175,4 +186,142 @@ func (h *CallHandler) GetRoomStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": status})
+}
+
+// POST /calls/quick
+func (h *CallHandler) StartQuickRoom(c *gin.Context) {
+	if h.apiKey == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
+		return
+	}
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	roomID := uuid.New().String()
+	roomName := "quick-" + roomID
+
+	h.quickMu.Lock()
+	h.quickRooms[roomID] = &quickRoom{tutorID: tutorID, active: true}
+	h.quickMu.Unlock()
+
+	canPublish := true
+	canSubscribe := true
+	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
+	grant := &lkauth.VideoGrant{
+		RoomJoin:     true,
+		Room:         roomName,
+		CanPublish:   &canPublish,
+		CanSubscribe: &canSubscribe,
+	}
+	at.SetVideoGrant(grant).
+		SetIdentity("tutor-" + tutorID).
+		SetName("Репетитор").
+		SetValidFor(3 * time.Hour)
+
+	token, err := at.ToJWT()
+	if err != nil {
+		h.log.Error("Failed to generate quick room token", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"room_id":    roomID,
+		"token":      token,
+		"server_url": h.livekitURL,
+	})
+}
+
+// POST /calls/quick/:id/end
+func (h *CallHandler) EndQuickRoom(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	roomID := c.Param("id")
+
+	h.quickMu.Lock()
+	room, ok := h.quickRooms[roomID]
+	if ok && room.tutorID == tutorID {
+		room.active = false
+	}
+	h.quickMu.Unlock()
+
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
+
+	if h.roomClient != nil {
+		roomName := "quick-" + roomID
+		_, _ = h.roomClient.DeleteRoom(c.Request.Context(), &livekit.DeleteRoomRequest{Room: roomName})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "room ended"})
+}
+
+// GET /public/quick/:id/status
+func (h *CallHandler) GetQuickRoomStatus(c *gin.Context) {
+	roomID := c.Param("id")
+
+	h.quickMu.RLock()
+	room, ok := h.quickRooms[roomID]
+	h.quickMu.RUnlock()
+
+	if !ok || !room.active {
+		c.JSON(http.StatusOK, gin.H{"status": "ended"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "active"})
+}
+
+// GET /public/quick/:id/guest-token
+func (h *CallHandler) GetQuickGuestToken(c *gin.Context) {
+	if h.apiKey == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
+		return
+	}
+	roomID := c.Param("id")
+
+	h.quickMu.RLock()
+	room, ok := h.quickRooms[roomID]
+	h.quickMu.RUnlock()
+
+	if !ok || !room.active {
+		c.JSON(http.StatusNotFound, gin.H{"error": "room not found or ended"})
+		return
+	}
+
+	roomName := "quick-" + roomID
+	canPublish := true
+	canSubscribe := true
+	identity := fmt.Sprintf("guest-%d", time.Now().UnixMilli())
+	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
+	grant := &lkauth.VideoGrant{
+		RoomJoin:     true,
+		Room:         roomName,
+		CanPublish:   &canPublish,
+		CanSubscribe: &canSubscribe,
+	}
+	at.SetVideoGrant(grant).
+		SetIdentity(identity).
+		SetName("Ученик").
+		SetValidFor(3 * time.Hour)
+
+	token, err := at.ToJWT()
+	if err != nil {
+		h.log.Error("Failed to generate quick guest token", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":      token,
+		"room_name":  roomName,
+		"server_url": h.livekitURL,
+	})
 }
