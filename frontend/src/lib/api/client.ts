@@ -8,14 +8,50 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-api.interceptors.request.use((config) => {
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('tg_token') : null
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+function getTokenExp(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return typeof payload.exp === 'number' ? payload.exp : null
+  } catch {
+    return null
+  }
+}
 
 let isRefreshing = false
+
+async function proactiveRefresh(): Promise<void> {
+  if (isRefreshing) return
+  try {
+    isRefreshing = true
+    const { data } = await axios.post<{ access_token: string }>(
+      `${BASE_URL}/auth/refresh`,
+      {},
+      { withCredentials: true },
+    )
+    localStorage.setItem('tg_token', data.access_token)
+  } catch {
+    // silently ignore — reactive 401 handler will log out if needed
+  } finally {
+    isRefreshing = false
+  }
+}
+
+api.interceptors.request.use(async (config) => {
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('tg_token') : null
+  if (token) {
+    const exp = getTokenExp(token)
+    // refresh if less than 7 days remain
+    if (exp && exp - Date.now() / 1000 < 7 * 24 * 60 * 60) {
+      await proactiveRefresh()
+      const fresh = localStorage.getItem('tg_token')
+      config.headers.Authorization = `Bearer ${fresh ?? token}`
+    } else {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+  }
+  return config
+})
 
 api.interceptors.response.use(
   (r) => r,

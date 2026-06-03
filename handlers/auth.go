@@ -152,7 +152,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) newAccessToken(tutorID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":  tutorID,
-		"exp": time.Now().Add(15 * time.Minute).Unix(),
+		"exp": time.Now().Add(30 * 24 * time.Hour).Unix(),
 	})
 	return token.SignedString([]byte(h.jwtSecret))
 }
