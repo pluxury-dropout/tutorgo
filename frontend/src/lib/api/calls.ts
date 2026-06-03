@@ -10,6 +10,12 @@ export interface RoomStatusResponse {
   status: 'waiting' | 'active' | 'ended'
 }
 
+export interface QuickRoomResponse {
+  room_id:    string
+  token:      string
+  server_url: string
+}
+
 export const callsApi = {
   getRoomToken: (lessonId: string) =>
     api.post<RoomTokenResponse>(`/lessons/${lessonId}/room-token`).then((r) => r.data),
@@ -27,4 +33,18 @@ export const callsApi = {
   getRoomStatus: (lessonId: string) =>
     fetch(`/api/room-status/${lessonId}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<RoomStatusResponse> }),
+
+  startQuickRoom: () =>
+    api.post<QuickRoomResponse>('/calls/quick').then((r) => r.data),
+
+  endQuickRoom: (roomId: string) =>
+    api.post(`/calls/quick/${roomId}/end`).then((r) => r.data),
+
+  getQuickRoomStatus: (roomId: string) =>
+    fetch(`/api/quick-status/${roomId}`)
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<RoomStatusResponse> }),
+
+  getQuickGuestToken: (roomId: string) =>
+    fetch(`/api/quick-guest-token/${roomId}`)
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<RoomTokenResponse> }),
 }
