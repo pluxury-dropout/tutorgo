@@ -18,7 +18,6 @@ import (
 
 type quickRoom struct {
 	tutorID string
-	active  bool
 }
 
 type CallHandler struct {
@@ -203,10 +202,6 @@ func (h *CallHandler) StartQuickRoom(c *gin.Context) {
 	roomID := uuid.New().String()
 	roomName := "quick-" + roomID
 
-	h.quickMu.Lock()
-	h.quickRooms[roomID] = &quickRoom{tutorID: tutorID, active: true}
-	h.quickMu.Unlock()
-
 	canPublish := true
 	canSubscribe := true
 	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
@@ -228,6 +223,11 @@ func (h *CallHandler) StartQuickRoom(c *gin.Context) {
 		return
 	}
 
+	// Only insert if token generation succeeded
+	h.quickMu.Lock()
+	h.quickRooms[roomID] = &quickRoom{tutorID: tutorID}
+	h.quickMu.Unlock()
+
 	c.JSON(http.StatusOK, gin.H{
 		"room_id":    roomID,
 		"token":      token,
@@ -246,8 +246,13 @@ func (h *CallHandler) EndQuickRoom(c *gin.Context) {
 
 	h.quickMu.Lock()
 	room, ok := h.quickRooms[roomID]
-	if ok && room.tutorID == tutorID {
-		room.active = false
+	if ok {
+		if room.tutorID != tutorID {
+			h.quickMu.Unlock()
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		delete(h.quickRooms, roomID)
 	}
 	h.quickMu.Unlock()
 
@@ -269,11 +274,11 @@ func (h *CallHandler) GetQuickRoomStatus(c *gin.Context) {
 	roomID := c.Param("id")
 
 	h.quickMu.RLock()
-	room, ok := h.quickRooms[roomID]
+	_, ok := h.quickRooms[roomID]
 	h.quickMu.RUnlock()
 
-	if !ok || !room.active {
-		c.JSON(http.StatusOK, gin.H{"status": "ended"})
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"status": "ended"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "active"})
@@ -288,10 +293,10 @@ func (h *CallHandler) GetQuickGuestToken(c *gin.Context) {
 	roomID := c.Param("id")
 
 	h.quickMu.RLock()
-	room, ok := h.quickRooms[roomID]
+	_, ok := h.quickRooms[roomID]
 	h.quickMu.RUnlock()
 
-	if !ok || !room.active {
+	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "room not found or ended"})
 		return
 	}
