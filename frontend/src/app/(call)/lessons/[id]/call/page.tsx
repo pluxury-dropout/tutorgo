@@ -98,7 +98,7 @@ export default function CallPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 64px)', position: 'relative' }}>
+    <div style={{ height: '100dvh', position: 'relative' }}>
       <LiveKitRoom
         key={room.token}
         serverUrl={room.server_url}
