@@ -293,6 +293,12 @@ function CalendarSidebarPanel() {
       <div className="border-t border-border" />
       <TodayList lessons={todayLessons} />
       <div className="px-2 py-2 border-t border-border shrink-0">
+        <style>{`
+          @keyframes liveDot {
+            0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+            50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+          }
+        `}</style>
         <button
           onClick={handleStartLesson}
           disabled={starting}
@@ -306,12 +312,6 @@ function CalendarSidebarPanel() {
               animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
             }}
           />
-          <style>{`
-            @keyframes liveDot {
-              0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-              50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
-            }
-          `}</style>
           <span style={{ flex: 1, textAlign: 'left', color: 'var(--foreground)', fontWeight: 600 }}>
             {starting ? 'Подключение...' : 'Начать урок'}
           </span>
