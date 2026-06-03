@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -20,6 +20,7 @@ import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/lib/api/auth'
+import { callsApi } from '@/lib/api/calls'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import type { LessonStatus, CalendarLesson } from '@/types/api'
@@ -240,6 +241,21 @@ function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
 // Отдельный компонент — чтобы хуки вызывались безусловно (Rules of Hooks)
 
 function CalendarSidebarPanel() {
+  const router = useRouter()
+  const [starting, setStarting] = useState(false)
+
+  async function handleStartLesson() {
+    if (starting) return
+    setStarting(true)
+    try {
+      const { room_id, token, server_url } = await callsApi.startQuickRoom()
+      sessionStorage.setItem(`quick-room-${room_id}`, JSON.stringify({ token, server_url }))
+      router.push(`/room/${room_id}`)
+    } catch {
+      setStarting(false)
+    }
+  }
+
   const todayRange = useMemo(() => {
     const n     = new Date()
     const start = new Date(n.getFullYear(), n.getMonth(), n.getDate())
@@ -276,6 +292,34 @@ function CalendarSidebarPanel() {
       <MiniCalendar displayedDates={displayedDates} onNavigate={handleNavigate} />
       <div className="border-t border-border" />
       <TodayList lessons={todayLessons} />
+      <div className="px-2 py-2 border-t border-border shrink-0">
+        <button
+          onClick={handleStartLesson}
+          disabled={starting}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors border border-border hover:bg-[var(--sidebar-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: 'var(--sidebar-bg, transparent)' }}
+        >
+          <span
+            style={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              background: starting ? '#888' : '#22c55e',
+              animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
+            }}
+          />
+          <style>{`
+            @keyframes liveDot {
+              0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+              50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+            }
+          `}</style>
+          <span style={{ flex: 1, textAlign: 'left', color: 'var(--foreground)', fontWeight: 600 }}>
+            {starting ? 'Подключение...' : 'Начать урок'}
+          </span>
+          {!starting && (
+            <span style={{ color: 'var(--muted-foreground)', fontSize: 11 }}>→</span>
+          )}
+        </button>
+      </div>
     </div>
   )
 }
