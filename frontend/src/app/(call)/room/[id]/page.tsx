@@ -1,22 +1,12 @@
 'use client'
 
-import { Component, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
 
 import { callsApi } from '@/lib/api/calls'
 import { Check, Copy, Loader2 } from 'lucide-react'
-
-class VideoConferenceBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false }
-  static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch() { setTimeout(() => this.setState({ hasError: false }), 0) }
-  render() { return this.state.hasError ? null : this.props.children }
-}
 
 type Stage = 'loading' | 'in-room' | 'error'
 
@@ -40,6 +30,16 @@ export default function QuickRoomPage() {
   }
 
   useEffect(() => {
+    // LiveKit bug: placeholder→real track transition triggers a spurious console.error
+    const orig = console.error.bind(console)
+    console.error = (...args: unknown[]) => {
+      if (typeof args[0] === 'string' && args[0].includes('Element not part of the array')) return
+      orig(...args)
+    }
+    return () => { console.error = orig }
+  }, [])
+
+  useEffect(() => {
     const raw = sessionStorage.getItem(`quick-room-${id}`)
     if (!raw) { router.replace('/dashboard'); return }
     try {
@@ -60,7 +60,7 @@ export default function QuickRoomPage() {
 
   if (stage === 'loading') {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh' }}>
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     )
@@ -68,7 +68,7 @@ export default function QuickRoomPage() {
 
   if (stage === 'error' || !token || !serverUrl) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80vh', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', gap: 16 }}>
         <p className="text-muted-foreground text-sm">Не удалось подключиться к комнате</p>
         <button
           onClick={() => router.replace('/dashboard')}
@@ -81,7 +81,7 @@ export default function QuickRoomPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 64px)', position: 'relative' }}>
+    <div style={{ height: '100dvh', position: 'relative' }}>
       <LiveKitRoom
         key={token}
         serverUrl={serverUrl}
@@ -90,9 +90,7 @@ export default function QuickRoomPage() {
         data-lk-theme="default"
         style={{ height: '100%' }}
       >
-        <VideoConferenceBoundary>
-          <VideoConference />
-        </VideoConferenceBoundary>
+        <VideoConference />
       </LiveKitRoom>
 
       <button
