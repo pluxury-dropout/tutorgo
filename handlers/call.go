@@ -228,6 +228,13 @@ func (h *CallHandler) StartQuickRoom(c *gin.Context) {
 	h.quickRooms[roomID] = &quickRoom{tutorID: tutorID}
 	h.quickMu.Unlock()
 
+	// Auto-evict after token validity window (3h)
+	time.AfterFunc(3*time.Hour, func() {
+		h.quickMu.Lock()
+		delete(h.quickRooms, roomID)
+		h.quickMu.Unlock()
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"room_id":    roomID,
 		"token":      token,
@@ -290,6 +297,7 @@ func (h *CallHandler) GetQuickGuestToken(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
 		return
 	}
+
 	roomID := c.Param("id")
 
 	h.quickMu.RLock()
