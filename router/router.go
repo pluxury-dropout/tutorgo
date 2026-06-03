@@ -78,6 +78,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	r.POST("/auth/logout", authLimiter, authHandler.Logout)
 	r.GET("/public/lessons/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetGuestToken)
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
+	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
+	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
 
 	// Protected routes
 	auth := r.Group("/")
@@ -138,6 +140,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.POST("/lessons/:id/room-token", callHandler.GetToken)
 		auth.POST("/lessons/:id/start-room", callHandler.StartRoom)
 		auth.POST("/lessons/:id/end-room", callHandler.EndRoom)
+		auth.POST("/calls/quick", callHandler.StartQuickRoom)
+		auth.POST("/calls/quick/:id/end", callHandler.EndQuickRoom)
 	}
 
 	return r
