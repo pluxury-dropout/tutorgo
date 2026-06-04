@@ -8,24 +8,24 @@ import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
 import type { CalendarLesson } from '@/types/api'
 
-const now = new Date()
-const y = now.getFullYear()
-const m = now.getMonth()
-const d = now.getDate()
-
-const todayFrom   = new Date(y, m, d).toISOString()
-const todayTo     = new Date(y, m, d, 23, 59, 59).toISOString()
-
-const dow         = now.getDay() === 0 ? 6 : now.getDay() - 1
-const weekStart   = new Date(y, m, d - dow)
-const weekEnd     = new Date(y, m, d - dow + 6, 23, 59, 59)
-
-const monthStart  = new Date(y, m, 1)
-const monthEnd    = new Date(y, m + 1, 0, 23, 59, 59)
-
-const DATE_LABEL  = now.toLocaleDateString('ru-RU', {
-  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-})
+function buildDateRanges() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth()
+  const d = now.getDate()
+  const dow = now.getDay() === 0 ? 6 : now.getDay() - 1
+  return {
+    todayFrom:  new Date(y, m, d).toISOString(),
+    todayTo:    new Date(y, m, d, 23, 59, 59).toISOString(),
+    weekStart:  new Date(y, m, d - dow).toISOString(),
+    weekEnd:    new Date(y, m, d - dow + 6, 23, 59, 59).toISOString(),
+    monthStart: new Date(y, m, 1).toISOString(),
+    monthEnd:   new Date(y, m + 1, 0, 23, 59, 59).toISOString(),
+    dateLabel:  now.toLocaleDateString('ru-RU', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    }),
+  }
+}
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -46,8 +46,24 @@ const DOT_STYLE: React.CSSProperties = {
 
 const MONO = 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace'
 
+const STATUS_LABEL: Record<string, string> = {
+  scheduled: 'Запланирован',
+  completed: 'Завершён',
+  cancelled: 'Отменён',
+  missed:    'Пропущен',
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  scheduled: 'var(--primary)',
+  completed: 'var(--success)',
+  cancelled: 'var(--muted-foreground)',
+  missed:    'var(--warning)',
+}
+
 function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boolean }) {
   const cancelled = lesson.status === 'cancelled'
+  const statusColor = STATUS_COLOR[lesson.status] ?? 'var(--muted-foreground)'
+  const statusLabel = STATUS_LABEL[lesson.status] ?? lesson.status
   return (
     <div
       style={{
@@ -57,7 +73,6 @@ function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boole
         gap: 12,
         padding: '8px 0',
         borderTop: isFirst ? 'none' : '1px solid var(--border)',
-
       }}
     >
       <span style={{ fontFamily: MONO, fontSize: 12.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
@@ -80,10 +95,10 @@ function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boole
       </span>
       <span style={{
         fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-        color: cancelled ? 'var(--muted-foreground)' : 'var(--primary)',
+        color: statusColor,
         whiteSpace: 'nowrap',
       }}>
-        {cancelled ? 'Отменён' : 'Запланирован'}
+        {statusLabel}
       </span>
     </div>
   )
@@ -105,11 +120,12 @@ const EMPTY: React.CSSProperties = {
 }
 
 export default function DashboardPage() {
+  const { todayFrom, todayTo, weekStart, weekEnd, monthStart, monthEnd, dateLabel } = useMemo(buildDateRanges, [])
   const { data: studentCount  = 0  } = useStudentCount()
   const { data: courseCount   = 0  } = useCourseCount()
   const { data: todayLessons  = [] } = useCalendar(todayFrom, todayTo)
-  const { data: weekLessons   = [] } = useCalendar(weekStart.toISOString(), weekEnd.toISOString())
-  const { data: monthLessons  = [] } = useCalendar(monthStart.toISOString(), monthEnd.toISOString())
+  const { data: weekLessons   = [] } = useCalendar(weekStart, weekEnd)
+  const { data: monthLessons  = [] } = useCalendar(monthStart, monthEnd)
   const { data: recentPayments = [] } = useRecentPayments()
   const { data: monthlyIncome  = 0  } = useMonthlyIncome()
   const { data: monthlyExpected = 0 } = useMonthlyExpected()
@@ -137,7 +153,7 @@ export default function DashboardPage() {
             <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--foreground)' }}>
               Главная
             </span>
-            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{DATE_LABEL}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{dateLabel}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 18, flexWrap: 'wrap' }}>
             {metrics.map((m, i) => (
