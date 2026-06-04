@@ -16,7 +16,8 @@ func Connect(dbURL string, log *slog.Logger) *pgxpool.Pool {
 		os.Exit(1)
 	}
 
-	cfg.MaxConns = 10
+	cfg.MinConns = 2
+	cfg.MaxConns = 7
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.HealthCheckPeriod = 1 * time.Minute
