@@ -115,6 +115,7 @@ export default function ColorsPage() {
           <button
             onClick={toggleTheme}
             className="px-3 py-1.5 rounded-md border border-border text-sm text-foreground hover:bg-muted transition-colors"
+            aria-label="Toggle dark theme"
           >
             {dark ? "☀ Light" : "🌙 Dark"}
           </button>
