@@ -125,48 +125,66 @@ function StudentsPageInner() {
         />
       ) : (
         <>
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Имя</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Телефон</th>
-                  <th className="w-4" />
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((student) => (
-                  <tr
-                    key={student.id}
-                    className="border-b last:border-0 hover:bg-muted/30 cursor-pointer group"
-                    onClick={() => router.push(`/students/${student.id}`)}
-                  >
-                    <td className="px-4 py-3 font-medium">
-                      {student.first_name}{student.last_name ? ` ${student.last_name}` : ''}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{student.email}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{student.phone || '—'}</td>
-                    <td className="pr-1 py-3 w-4">
-                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(student)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(student)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            {/* Column headers */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr 16px auto',
+              alignItems: 'baseline',
+              gap: 12,
+              paddingBottom: 8,
+              borderBottom: '1px solid var(--border)',
+            }}>
+              {(['Имя', 'Email', 'Телефон', '', ''] as const).map((label, i) => (
+                <span key={i} style={{
+                  fontSize: 11.5, fontWeight: 500,
+                  color: 'var(--muted-foreground)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                }}>{label}</span>
+              ))}
+            </div>
+            {/* Rows */}
+            {students.map((student, i) => (
+              <div
+                key={student.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr 16px auto',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '8px 0',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  cursor: 'pointer',
+                }}
+                className="hover:bg-muted/30 group"
+                onClick={() => router.push(`/students/${student.id}`)}
+              >
+                <span style={{
+                  fontSize: 14, fontWeight: 600, color: 'var(--foreground)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {student.first_name}{student.last_name ? ` ${student.last_name}` : ''}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {student.email}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
+                  {student.phone || '—'}
+                </span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(student)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(student)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-3 px-1">

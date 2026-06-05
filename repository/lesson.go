@@ -63,7 +63,7 @@ func (r *lessonRepository) CreateBulk(ctx context.Context, req models.CreateBulk
 		batch.Queue(
 			`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, series_id, status)
 			 VALUES ($1, $2, $3, $4, $5,
-			         CASE WHEN $2 + $3 * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
+			         CASE WHEN $2::timestamptz + $3 * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
 			 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
 			req.CourseID, sa, req.DurationMinutes, req.Notes, seriesID,
 		)
