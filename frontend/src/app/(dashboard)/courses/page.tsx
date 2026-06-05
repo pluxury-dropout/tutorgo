@@ -150,7 +150,7 @@ function CoursesPageInner() {
             {/* Column headers */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1.5fr 80px 1fr 160px 90px 16px auto',
+              gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
               alignItems: 'baseline',
               gap: 12,
               paddingBottom: 8,
@@ -173,7 +173,7 @@ function CoursesPageInner() {
                 tabIndex={0}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1.5fr 80px 1fr 160px 90px 16px auto',
+                  gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
                   alignItems: 'center',
                   gap: 12,
                   padding: '8px 0',

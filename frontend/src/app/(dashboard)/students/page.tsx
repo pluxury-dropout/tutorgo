@@ -129,7 +129,7 @@ function StudentsPageInner() {
             {/* Column headers */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr 16px auto',
+              gridTemplateColumns: '1fr 1fr 1fr 16px 72px',
               alignItems: 'baseline',
               gap: 12,
               paddingBottom: 8,
@@ -150,7 +150,7 @@ function StudentsPageInner() {
                 key={student.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr 16px auto',
+                  gridTemplateColumns: '1fr 1fr 1fr 16px 72px',
                   alignItems: 'center',
                   gap: 12,
                   padding: '8px 0',

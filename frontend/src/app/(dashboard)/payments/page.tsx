@@ -116,7 +116,7 @@ function PaymentsPageInner() {
   ]
 
   return (
-    <>
+    <div style={{ maxWidth: 900 }}>
       <HeaderPanel
         title="Платежи"
         subtitle={`${total} записей`}
@@ -125,70 +125,84 @@ function PaymentsPageInner() {
         onSegmentChange={setActiveSegment}
       />
 
-      <div className="border rounded-lg mt-4 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/40">
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Дата</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Курс</th>
-              <th className="text-right px-4 py-3 font-medium text-muted-foreground">Сумма</th>
-              <th className="text-right px-4 py-3 font-medium text-muted-foreground">Уроков</th>
-              <th className="w-20" />
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              [...Array(4)].map((_, i) => (
-                <tr key={i}>
-                  <td colSpan={5} className="px-4 py-3">
-                    <div className="h-4 rounded bg-muted animate-pulse" />
-                  </td>
-                </tr>
-              ))
-            ) : payments.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                  Нет оплат
-                </td>
-              </tr>
-            ) : (
-              payments.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-b last:border-0 hover:bg-muted/30 cursor-pointer group"
-                  onClick={() => router.push(`/courses/${p.course_id}`)}
-                >
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {new Date(p.paid_at).toLocaleDateString('ru-RU')}
-                  </td>
-                  <td className="px-4 py-3 font-medium">{courseMap[p.course_id] ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-medium">{p.amount.toLocaleString()} ₸</td>
-                  <td className="px-4 py-3 text-right text-muted-foreground">{p.lessons_count} ур.</td>
-                  <td className="pr-2 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() => openEdit(p)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(p)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div style={{ marginTop: 16 }}>
+        {/* Column headers */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '90px 1fr 110px 70px 64px',
+          alignItems: 'baseline',
+          gap: 12,
+          paddingBottom: 8,
+          borderBottom: '1px solid var(--border)',
+        }}>
+          {(['Дата', 'Курс', 'Сумма', 'Уроков', ''] as const).map((label, i) => (
+            <span key={i} style={{
+              fontSize: 11.5, fontWeight: 500,
+              color: 'var(--muted-foreground)',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              ...(i === 2 || i === 3 ? { textAlign: 'right' } : {}),
+            }}>{label}</span>
+          ))}
+        </div>
+        {/* Rows */}
+        {isLoading ? (
+          <div className="space-y-2" style={{ paddingTop: 8 }}>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-4 rounded bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : payments.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', padding: '24px 0' }}>
+            Нет оплат
+          </p>
+        ) : (
+          payments.map((p, i) => (
+            <div
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '90px 1fr 110px 70px 64px',
+                alignItems: 'center',
+                gap: 12,
+                padding: '8px 0',
+                borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                cursor: 'pointer',
+              }}
+              className="hover:bg-muted/30 group"
+              onClick={() => router.push(`/courses/${p.course_id}`)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/courses/${p.course_id}`) } }}
+            >
+              <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                {new Date(p.paid_at).toLocaleDateString('ru-RU')}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {courseMap[p.course_id] ?? '—'}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {p.amount.toLocaleString()} ₸
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {p.lessons_count} ур.
+              </span>
+              <div
+                className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(p)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost"
+                  className="h-7 w-7 text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(p)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {totalPages > 1 && (
@@ -216,7 +230,7 @@ function PaymentsPageInner() {
         }
         paymentId={editingPayment?.id}
       />
-    </>
+    </div>
   )
 }
 
