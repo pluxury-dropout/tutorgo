@@ -146,52 +146,73 @@ function CoursesPageInner() {
         />
       ) : (
         <>
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Предмет</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Тип</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ученик</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Цена за цикл</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Начало</th>
-                  <th className="w-4" />
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {courses.map((course) => (
-                  <tr
-                    key={course.id}
-                    className="border-b last:border-0 hover:bg-muted/30 cursor-pointer group"
-                    onClick={() => router.push(`/courses/${course.id}`)}
-                  >
-                    <td className="px-4 py-3 font-medium">{course.subject}</td>
-                    <td className="px-4 py-3"><CourseTypeBadge isGroup={!course.student_id} /></td>
-                    <td className="px-4 py-3 text-muted-foreground">{studentName(course) ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{course.price_per_cycle.toLocaleString()} ₸ / {course.lessons_per_cycle} ур.</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {new Date(course.started_at).toLocaleDateString('ru-RU')}
-                    </td>
-                    <td className="pr-1 py-3 w-4">
-                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(course)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(course)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            {/* Column headers */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1.5fr 80px 1fr 160px 90px 16px auto',
+              alignItems: 'baseline',
+              gap: 12,
+              paddingBottom: 8,
+              borderBottom: '1px solid var(--border)',
+            }}>
+              {(['Предмет', 'Тип', 'Ученик', 'Цена за цикл', 'Начало', '', ''] as const).map((label, i) => (
+                <span key={i} style={{
+                  fontSize: 11.5, fontWeight: 500,
+                  color: 'var(--muted-foreground)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                }}>{label}</span>
+              ))}
+            </div>
+            {/* Rows */}
+            {courses.map((course, i) => (
+              <div
+                key={course.id}
+                role="button"
+                tabIndex={0}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1.5fr 80px 1fr 160px 90px 16px auto',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '8px 0',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  cursor: 'pointer',
+                }}
+                className="hover:bg-muted/30 group"
+                onClick={() => router.push(`/courses/${course.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/courses/${course.id}`) } }}
+              >
+                <span style={{
+                  fontSize: 14, fontWeight: 600, color: 'var(--foreground)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {course.subject}
+                </span>
+                <span><CourseTypeBadge isGroup={!course.student_id} /></span>
+                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {studentName(course) ?? '—'}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                  {course.price_per_cycle.toLocaleString()} ₸ / {course.lessons_per_cycle} ур.
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                  {new Date(course.started_at).toLocaleDateString('ru-RU')}
+                </span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(course)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(course)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-3 px-1">
