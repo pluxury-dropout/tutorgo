@@ -220,8 +220,8 @@ export default function CourseDetailPage() {
     toast.success('Все уроки удалены')
   }
 
-  async function handleSeriesDelete(seriesId: string, fromDate?: string) {
-    await deleteSeries.mutateAsync({ seriesId, fromDate })
+  async function handleSeriesDelete(seriesId: string, fromDate?: string, toDate?: string) {
+    await deleteSeries.mutateAsync({ seriesId, fromDate, toDate })
   }
 
   async function handleSeriesUpdate(seriesId: string, data: SeriesUpdateInput) {
