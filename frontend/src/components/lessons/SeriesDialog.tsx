@@ -41,7 +41,9 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
   }, [open])
 
   const fromDate = scope === 'from' ? lesson.scheduled_at : undefined
-  const toDateISO = toDate ? `${toDate}T23:59:59Z` : undefined
+  const toDateISO = (scope === 'from' && toDate)
+    ? new Date(`${toDate}T23:59:59`).toISOString()
+    : undefined
 
   const lessonDate = new Date(lesson.scheduled_at).toLocaleString('ru-RU', {
     day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
