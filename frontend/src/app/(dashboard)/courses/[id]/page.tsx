@@ -404,11 +404,14 @@ export default function CourseDetailPage() {
                   <SelectValue placeholder="Выберите ученика..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableStudents.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.first_name}{s.last_name ? ` ${s.last_name}` : ''}
-                    </SelectItem>
-                  ))}
+                  {availableStudents.map((s) => {
+                    const name = s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name
+                    return (
+                      <SelectItem key={s.id} value={s.id} label={name}>
+                        {name}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
               <Button size="sm" onClick={handleAddEnrollment} disabled={!selectedStudent}>

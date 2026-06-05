@@ -23,7 +23,7 @@ export function TimePicker({ hour, minute, onHourChange, onMinuteChange, hourPla
         </SelectTrigger>
         <SelectContent className="max-h-48" alignItemWithTrigger={false}>
           {HOURS.map((h) => (
-            <SelectItem key={h} value={String(h)} className="focus:bg-primary-light focus:text-primary">{pad(h)}</SelectItem>
+            <SelectItem key={h} value={String(h)} label={pad(h)} className="focus:bg-primary-light focus:text-primary">{pad(h)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -33,7 +33,7 @@ export function TimePicker({ hour, minute, onHourChange, onMinuteChange, hourPla
         </SelectTrigger>
         <SelectContent className="max-h-48" alignItemWithTrigger={false}>
           {MINUTES.map((m) => (
-            <SelectItem key={m} value={String(m)} className="focus:bg-primary-light focus:text-primary">{pad(m)}</SelectItem>
+            <SelectItem key={m} value={String(m)} label={pad(m)} className="focus:bg-primary-light focus:text-primary">{pad(m)}</SelectItem>
           ))}
         </SelectContent>
       </Select>

@@ -219,9 +219,9 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="weekly_same">Каждую неделю в этот день</SelectItem>
-                        <SelectItem value="weekly_custom">Каждую неделю по выбранным дням</SelectItem>
-                        <SelectItem value="every_n_weeks">Каждые N недель</SelectItem>
+                        <SelectItem value="weekly_same" label="Каждую неделю в этот день">Каждую неделю в этот день</SelectItem>
+                        <SelectItem value="weekly_custom" label="Каждую неделю по выбранным дням">Каждую неделю по выбранным дням</SelectItem>
+                        <SelectItem value="every_n_weeks" label="Каждые N недель">Каждые N недель</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

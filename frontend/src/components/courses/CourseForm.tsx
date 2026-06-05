@@ -114,11 +114,14 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
                       <SelectValue placeholder="Выберите ученика" />
                     </SelectTrigger>
                     <SelectContent>
-                      {students.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.first_name}{s.last_name ? ` ${s.last_name}` : ''}
-                        </SelectItem>
-                      ))}
+                      {students.map((s) => {
+                        const name = s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name
+                        return (
+                          <SelectItem key={s.id} value={s.id} label={name}>
+                            {name}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 )}
