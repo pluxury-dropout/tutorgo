@@ -253,7 +253,7 @@ func (r *paymentRepository) Delete(ctx context.Context, id string, tutorID strin
 func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
 	var total float64
 	err := r.conn.QueryRow(ctx,
-		`SELECT COALESCE(SUM(c.price_per_lesson * lc.cnt), 0)
+		`SELECT COALESCE(SUM((c.price_per_cycle::float / c.lessons_per_cycle) * lc.cnt), 0)
 		 FROM courses c
 		 JOIN (
 		     SELECT course_id, COUNT(*) AS cnt

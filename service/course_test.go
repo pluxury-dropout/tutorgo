@@ -45,18 +45,20 @@ var (
 	studentUUID = func() *string { s := "student-uuid-1"; return &s }()
 
 	courseReq = models.CreateCourseRequest{
-		StudentID:      studentUUID,
-		Subject:        "Mathematics",
-		PricePerLesson: 5000,
-		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        endedAt,
+		StudentID:       studentUUID,
+		Subject:         "Mathematics",
+		PricePerCycle:   20000,
+		LessonsPerCycle: 4,
+		StartedAt:       time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:         endedAt,
 	}
 
 	updateCourseReq = models.UpdateCourseRequest{
-		Subject:        "Physics",
-		PricePerLesson: 6000,
-		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        endedAt,
+		Subject:         "Physics",
+		PricePerCycle:   24000,
+		LessonsPerCycle: 4,
+		StartedAt:       time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:         endedAt,
 	}
 
 	expectedStudent = models.Student{ID: "student-uuid-1", TutorID: tutorID}

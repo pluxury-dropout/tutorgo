@@ -45,13 +45,14 @@ var (
 	testStudentIDPtr = func() *string { s := testStudentID; return &s }()
 
 	testCourse = models.Course{
-		ID:             testCourseID,
-		TutorID:        testTutorID,
-		StudentID:      testStudentIDPtr,
-		Subject:        "Mathematics",
-		PricePerLesson: 5000,
-		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }(),
+		ID:              testCourseID,
+		TutorID:         testTutorID,
+		StudentID:       testStudentIDPtr,
+		Subject:         "Mathematics",
+		PricePerCycle:   20000,
+		LessonsPerCycle: 4,
+		StartedAt:       time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:         func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }(),
 	}
 
 	testLesson = models.Lesson{

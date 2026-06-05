@@ -31,11 +31,12 @@ func newCourseRouter(svc *mockCourseService, tutorID string) *gin.Engine {
 var (
 	testEndedAt         = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
 	testCreateCourseReq = models.CreateCourseRequest{
-		StudentID:      testStudentIDPtr,
-		Subject:        "Mathematics",
-		PricePerLesson: 5000,
-		StartedAt:      time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
-		EndedAt:        testEndedAt,
+		StudentID:       testStudentIDPtr,
+		Subject:         "Mathematics",
+		PricePerCycle:   20000,
+		LessonsPerCycle: 4,
+		StartedAt:       time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		EndedAt:         testEndedAt,
 	}
 )
 
@@ -119,8 +120,9 @@ func TestCourseCreate_ValidationError(t *testing.T) {
 
 	// subject is required
 	w := makeRequest(t, r, http.MethodPost, "/courses", map[string]any{
-		"student_id":       testStudentID,
-		"price_per_lesson": 5000,
+		"student_id":        testStudentID,
+		"price_per_cycle":   20000,
+		"lessons_per_cycle": 4,
 	})
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
