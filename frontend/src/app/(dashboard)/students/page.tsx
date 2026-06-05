@@ -158,6 +158,9 @@ function StudentsPageInner() {
                   cursor: 'pointer',
                 }}
                 className="hover:bg-muted/30 group"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(`/students/${student.id}`) }}
                 onClick={() => router.push(`/students/${student.id}`)}
               >
                 <span style={{
