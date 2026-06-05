@@ -108,7 +108,7 @@ function CoursesPageInner() {
   }
 
   return (
-    <>
+    <div style={{ maxWidth: 900 }}>
       <PageHeader
         title="Курсы"
         description={`${total} курсов`}
@@ -231,7 +231,7 @@ function CoursesPageInner() {
         onSubmit={handleSubmit}
         initial={editing}
       />
-    </>
+    </div>
   )
 }
 
