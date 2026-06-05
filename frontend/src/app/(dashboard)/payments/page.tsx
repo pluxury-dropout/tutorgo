@@ -55,7 +55,7 @@ function PaymentsPageInner() {
   }, [isLoading, total, page, totalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const courseMap      = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
-  const coursePriceMap = Object.fromEntries(courses.map((c) => [c.id, c.price_per_lesson]))
+  const coursePriceMap = Object.fromEntries(courses.map((c) => [c.id, c.price_per_cycle / c.lessons_per_cycle]))
 
   function openEdit(p: Payment) {
     setEditingPayment(p)

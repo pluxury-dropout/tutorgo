@@ -35,23 +35,27 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     formState: { errors, isSubmitting },
   } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: { type: 'individual', subject: '', price_per_lesson: 0, started_at: '', ended_at: '' },
+    defaultValues: { type: 'individual', subject: '', price_per_cycle: 0, lessons_per_cycle: 1, started_at: '', ended_at: '' },
   })
 
-  const courseType = watch('type')
+  const courseType      = watch('type')
+  const pricePerCycle   = watch('price_per_cycle')
+  const lessonsPerCycle = watch('lessons_per_cycle')
+  const pricePerLesson  = lessonsPerCycle > 0 ? pricePerCycle / lessonsPerCycle : 0
 
   useEffect(() => {
     if (initial) {
       reset({
-        type:             initial.student_id ? 'individual' : 'group',
-        student_id:       initial.student_id ?? undefined,
-        subject:          initial.subject,
-        price_per_lesson: initial.price_per_lesson,
-        started_at:       initial.started_at.slice(0, 10),
-        ended_at:         initial.ended_at?.slice(0, 10) ?? '',
+        type:              initial.student_id ? 'individual' : 'group',
+        student_id:        initial.student_id ?? undefined,
+        subject:           initial.subject,
+        price_per_cycle:   initial.price_per_cycle,
+        lessons_per_cycle: initial.lessons_per_cycle,
+        started_at:        initial.started_at.slice(0, 10),
+        ended_at:          initial.ended_at?.slice(0, 10) ?? '',
       })
     } else {
-      reset({ type: 'individual', subject: '', price_per_lesson: 0, started_at: '', ended_at: '' })
+      reset({ type: 'individual', subject: '', price_per_cycle: 0, lessons_per_cycle: 1, started_at: '', ended_at: '' })
     }
   }, [initial, open, reset])
 
@@ -98,7 +102,6 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
             </div>
           )}
 
-          {/* Student select — individual courses only */}
           {courseType === 'individual' && !initial && (
             <div className="space-y-1.5">
               <Label htmlFor="student_id">Ученик</Label>
@@ -134,19 +137,39 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="price_per_lesson">Цена за урок (₸)</Label>
-            <Input
-              id="price_per_lesson"
-              type="number"
-              min={1}
-              step="any"
-              {...register('price_per_lesson', { valueAsNumber: true })}
-            />
-            {errors.price_per_lesson && (
-              <p className="text-xs text-destructive">{errors.price_per_lesson.message}</p>
-            )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="price_per_cycle">Цена за цикл (₸)</Label>
+              <Input
+                id="price_per_cycle"
+                type="number"
+                min={1}
+                step="any"
+                {...register('price_per_cycle', { valueAsNumber: true })}
+              />
+              {errors.price_per_cycle && (
+                <p className="text-xs text-destructive">{errors.price_per_cycle.message}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lessons_per_cycle">Уроков в цикле</Label>
+              <Input
+                id="lessons_per_cycle"
+                type="number"
+                min={1}
+                step={1}
+                {...register('lessons_per_cycle', { valueAsNumber: true })}
+              />
+              {errors.lessons_per_cycle && (
+                <p className="text-xs text-destructive">{errors.lessons_per_cycle.message}</p>
+              )}
+            </div>
           </div>
+          {pricePerLesson > 0 && (
+            <p className="text-xs text-muted-foreground">
+              = {Math.round(pricePerLesson).toLocaleString()} ₸ за урок
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

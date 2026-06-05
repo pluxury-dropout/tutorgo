@@ -315,7 +315,8 @@ export default function CourseDetailPage() {
           <h2 className="text-sm font-semibold mb-2">Информация</h2>
           <Row label="Предмет" value={course.subject} />
           <Row label="Тип" value={<CourseTypeBadge isGroup={isGroup} />} />
-          <Row label="Цена за урок" value={`${course.price_per_lesson.toLocaleString()} ₸`} />
+          <Row label="Цена за цикл" value={`${course.price_per_cycle.toLocaleString()} ₸`} />
+          <Row label="Уроков в цикле" value={String(course.lessons_per_cycle)} />
           <Row label="Начало" value={new Date(course.started_at).toLocaleDateString('ru-RU')} />
           {course.ended_at && (
             <Row label="Окончание" value={new Date(course.ended_at).toLocaleDateString('ru-RU')} />
@@ -540,7 +541,7 @@ export default function CourseDetailPage() {
         open={paymentFormOpen}
         onClose={() => { setPaymentFormOpen(false); setEditingPayment(null) }}
         onSubmit={handlePaymentSubmit}
-        pricePerLesson={course?.price_per_lesson ?? 0}
+        pricePerLesson={course ? course.price_per_cycle / course.lessons_per_cycle : 0}
         initialValues={
           editingPayment
             ? {

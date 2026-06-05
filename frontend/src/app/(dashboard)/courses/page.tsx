@@ -153,7 +153,7 @@ function CoursesPageInner() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Предмет</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Тип</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ученик</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Цена / урок</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Цена за цикл</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Начало</th>
                   <th className="w-4" />
                   <th className="px-4 py-3" />
@@ -169,7 +169,7 @@ function CoursesPageInner() {
                     <td className="px-4 py-3 font-medium">{course.subject}</td>
                     <td className="px-4 py-3"><CourseTypeBadge isGroup={!course.student_id} /></td>
                     <td className="px-4 py-3 text-muted-foreground">{studentName(course) ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{course.price_per_lesson.toLocaleString()} ₸</td>
+                    <td className="px-4 py-3 text-muted-foreground">{course.price_per_cycle.toLocaleString()} ₸ / {course.lessons_per_cycle} ур.</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {new Date(course.started_at).toLocaleDateString('ru-RU')}
                     </td>

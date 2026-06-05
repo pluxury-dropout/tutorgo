@@ -20,7 +20,8 @@ export interface Course {
   student_id: string | null
   tutor_id: string
   subject: string
-  price_per_lesson: number
+  price_per_cycle: number
+  lessons_per_cycle: number
   started_at: string
   ended_at: string | null
 }

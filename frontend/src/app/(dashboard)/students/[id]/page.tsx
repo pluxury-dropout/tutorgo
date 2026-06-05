@@ -89,7 +89,7 @@ export default function StudentDetailPage() {
                 <span className="font-medium">{course.subject}</span>
                 <div className="flex items-center gap-4 text-muted-foreground shrink-0">
                   <CourseTypeBadge isGroup={!course.student_id} />
-                  <span>{course.price_per_lesson.toLocaleString()} ₸/ур.</span>
+                  <span>{Math.round(course.price_per_cycle / course.lessons_per_cycle).toLocaleString()} ₸/ур.</span>
                   <span>{new Date(course.started_at).toLocaleDateString('ru-RU')}</span>
                 </div>
               </div>
