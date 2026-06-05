@@ -23,7 +23,7 @@ type LessonRepository interface {
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
 	Delete(ctx context.Context, id string) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
-	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
+	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
@@ -179,12 +179,17 @@ func (r *lessonRepository) DeleteByCourse(ctx context.Context, courseID string, 
 	return err
 }
 
-func (r *lessonRepository) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
+func (r *lessonRepository) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
 	args := []interface{}{seriesID, tutorID}
 	fromClause := ""
+	toClause := ""
 	if fromDate != nil {
 		fromClause = fmt.Sprintf("AND lessons.scheduled_at >= $%d::timestamptz", len(args)+1)
 		args = append(args, *fromDate)
+	}
+	if toDate != nil {
+		toClause = fmt.Sprintf("AND lessons.scheduled_at <= $%d::timestamptz", len(args)+1)
+		args = append(args, *toDate)
 	}
 
 	query := fmt.Sprintf(`
@@ -193,7 +198,8 @@ func (r *lessonRepository) DeleteSeries(ctx context.Context, seriesID string, tu
 		WHERE lessons.series_id = $1
 		  AND lessons.course_id = courses.id
 		  AND courses.tutor_id = $2
-		  %s`, fromClause)
+		  %s
+		  %s`, fromClause, toClause)
 
 	_, err := r.pool.Exec(ctx, query, args...)
 	return err
