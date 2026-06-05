@@ -50,8 +50,13 @@ export const lessonsApi = {
     api.delete(`/lessons/${id}`).then(() => id),
   deleteByCourse: (courseId: string) =>
     api.delete('/lessons', { params: { course_id: courseId } }).then(() => undefined),
-  deleteSeries: (seriesId: string, fromDate?: string) =>
-    api.delete(`/lessons/series/${seriesId}`, { params: fromDate ? { from: fromDate } : {} }).then(() => undefined),
+  deleteSeries: (seriesId: string, fromDate?: string, toDate?: string) =>
+    api.delete(`/lessons/series/${seriesId}`, {
+      params: {
+        ...(fromDate && { from: fromDate }),
+        ...(toDate  && { to:   toDate  }),
+      },
+    }).then(() => undefined),
   updateSeries: (seriesId: string, data: SeriesUpdateInput) =>
     api.patch(`/lessons/series/${seriesId}`, data).then(() => undefined),
   getAttendance: (lessonId: string) =>

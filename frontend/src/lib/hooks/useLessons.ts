@@ -93,8 +93,8 @@ export function useDeleteLessonsByCourse(courseId: string) {
 export function useDeleteSeries(courseId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ seriesId, fromDate }: { seriesId: string; fromDate?: string }) =>
-      lessonsApi.deleteSeries(seriesId, fromDate),
+    mutationFn: ({ seriesId, fromDate, toDate }: { seriesId: string; fromDate?: string; toDate?: string }) =>
+      lessonsApi.deleteSeries(seriesId, fromDate, toDate),
     onSuccess: () => qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) }),
   })
 }
