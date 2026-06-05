@@ -14,7 +14,7 @@ interface SeriesDialogProps {
   lesson:   Lesson
   open:     boolean
   onClose:  () => void
-  onDelete: (seriesId: string, fromDate?: string) => Promise<void>
+  onDelete: (seriesId: string, fromDate?: string, toDate?: string) => Promise<void>
   onUpdate: (seriesId: string, data: SeriesUpdateInput) => Promise<void>
 }
 
@@ -27,6 +27,7 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
   const [notes, setNotes]         = useState('')
   const [saving, setSaving]       = useState(false)
   const [deleting, setDeleting]   = useState(false)
+  const [toDate, setToDate]       = useState('')
 
   useEffect(() => {
     if (open) {
@@ -35,10 +36,12 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
       setTimeMin('0')
       setDuration('')
       setNotes('')
+      setToDate('')
     }
   }, [open])
 
   const fromDate = scope === 'from' ? lesson.scheduled_at : undefined
+  const toDateISO = toDate ? `${toDate}T23:59:59Z` : undefined
 
   const lessonDate = new Date(lesson.scheduled_at).toLocaleString('ru-RU', {
     day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
@@ -81,7 +84,7 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
 
     setDeleting(true)
     try {
-      await onDelete(lesson.series_id!, fromDate)
+      await onDelete(lesson.series_id!, fromDate, toDateISO)
       toast.success('Уроки удалены')
       onClose()
     } catch {
@@ -112,6 +115,17 @@ export function SeriesDialog({ lesson, open, onClose, onDelete, onUpdate }: Seri
                   checked={scope === 'from'} onChange={() => setScope('from')} />
                 С этого урока ({lessonDate})
               </label>
+              {scope === 'from' && (
+                <div className="pl-6 space-y-1">
+                  <Label className="text-xs text-muted-foreground">По дату (необязательно)</Label>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
