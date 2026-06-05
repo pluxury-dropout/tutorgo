@@ -297,8 +297,8 @@ func (m *mockLessonService) DeleteByCourse(ctx context.Context, courseID string,
 	return m.Called(ctx, courseID, tutorID).Error(0)
 }
 
-func (m *mockLessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
-	return m.Called(ctx, seriesID, tutorID, fromDate).Error(0)
+func (m *mockLessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
+	return m.Called(ctx, seriesID, tutorID, fromDate, toDate).Error(0)
 }
 
 func (m *mockLessonService) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {

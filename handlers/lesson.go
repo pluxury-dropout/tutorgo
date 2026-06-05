@@ -199,12 +199,16 @@ func (h *LessonHandler) DeleteSeries(c *gin.Context) {
 		return
 	}
 	seriesID := c.Param("seriesId")
-	fromDate := c.Query("from")
-	var fromDatePtr *string
-	if fromDate != "" {
-		fromDatePtr = &fromDate
+
+	var fromDatePtr, toDatePtr *string
+	if from := c.Query("from"); from != "" {
+		fromDatePtr = &from
 	}
-	if err := h.service.DeleteSeries(c.Request.Context(), seriesID, tutorID, fromDatePtr); err != nil {
+	if to := c.Query("to"); to != "" {
+		toDatePtr = &to
+	}
+
+	if err := h.service.DeleteSeries(c.Request.Context(), seriesID, tutorID, fromDatePtr, toDatePtr); err != nil {
 		h.log.Error("Failed to delete series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
 		handleServiceError(c, err)
 		return
