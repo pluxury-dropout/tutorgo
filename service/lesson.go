@@ -17,7 +17,7 @@ type LessonService interface {
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID string) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
-	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error
+	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
@@ -189,8 +189,8 @@ func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tut
 	return err
 }
 
-func (s *lessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
-	err := s.repo.DeleteSeries(ctx, seriesID, tutorID, fromDate)
+func (s *lessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
+	err := s.repo.DeleteSeries(ctx, seriesID, tutorID, fromDate, toDate)
 	if err == nil {
 		globalCalendarCache.Invalidate(tutorID)
 	}

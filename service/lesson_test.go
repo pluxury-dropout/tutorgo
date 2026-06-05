@@ -67,8 +67,8 @@ func (m *mockLessonRepo) DeleteByCourse(ctx context.Context, courseID string, tu
 	return m.Called(ctx, courseID, tutorID).Error(0)
 }
 
-func (m *mockLessonRepo) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string) error {
-	return m.Called(ctx, seriesID, tutorID, fromDate).Error(0)
+func (m *mockLessonRepo) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
+	return m.Called(ctx, seriesID, tutorID, fromDate, toDate).Error(0)
 }
 
 func (m *mockLessonRepo) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
@@ -502,4 +502,47 @@ func TestLessonGetByPeriod_CourseNotFound(t *testing.T) {
 	assert.Nil(t, lessons)
 	courseRepo.AssertExpectations(t)
 	lessonRepo.AssertNotCalled(t, "GetByPeriod")
+}
+
+// DeleteSeries
+
+func TestDeleteSeries_NoRange(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("DeleteSeries", mock.Anything, "series-1", tutorID, (*string)(nil), (*string)(nil)).Return(nil)
+
+	err := svc.DeleteSeries(context.Background(), "series-1", tutorID, nil, nil)
+
+	assert.NoError(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestDeleteSeries_WithFromAndTo(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	from := "2026-06-05T00:00:00Z"
+	to   := "2026-12-31T23:59:59Z"
+	lessonRepo.On("DeleteSeries", mock.Anything, "series-1", tutorID, &from, &to).Return(nil)
+
+	err := svc.DeleteSeries(context.Background(), "series-1", tutorID, &from, &to)
+
+	assert.NoError(t, err)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestDeleteSeries_RepoError(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	lessonRepo.On("DeleteSeries", mock.Anything, "series-1", tutorID, (*string)(nil), (*string)(nil)).Return(errors.New("db error"))
+
+	err := svc.DeleteSeries(context.Background(), "series-1", tutorID, nil, nil)
+
+	assert.Error(t, err)
+	lessonRepo.AssertExpectations(t)
 }
