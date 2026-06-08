@@ -28,6 +28,12 @@ const WEEK_DAYS = [
 
 export type RecurrenceType = 'weekly_same' | 'weekly_custom' | 'every_n_weeks'
 
+const REC_TYPE_LABELS: Record<RecurrenceType, string> = {
+  weekly_same:   'Каждую неделю в этот день',
+  weekly_custom: 'Каждую неделю по выбранным дням',
+  every_n_weeks: 'Каждые N недель',
+}
+
 export interface RecurrenceOptions {
   type:    RecurrenceType
   days?:   number[]   // ISO weekdays: 1=Mon … 7=Sun (for weekly_custom)
@@ -216,7 +222,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                     <Label>Тип повторения</Label>
                     <Select value={recType} onValueChange={(v) => setRecType(v as RecurrenceType)}>
                       <SelectTrigger className="w-full">
-                        <SelectValue />
+                        <SelectValue>{REC_TYPE_LABELS[recType]}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="weekly_same" label="Каждую неделю в этот день">Каждую неделю в этот день</SelectItem>
