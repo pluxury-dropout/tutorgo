@@ -145,10 +145,10 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 900 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* V5 Reductive Header */}
-      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 14 }}>
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 14, maxWidth: 900}}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
             <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--foreground)' }}>
@@ -168,13 +168,13 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
-        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.75 }}>
+        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted-foreground)', textAlign: 'start', fontVariantNumeric: 'tabular-nums', opacity: 0.75 }}>
           неделя {weekLessons.length} · месяц {monthLessons.length} уроков · получено {fmtAmt(monthlyIncome)} из {fmtAmt(monthlyExpected)}
         </div>
       </div>
 
       {/* Table Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 36, alignItems: 'start' }}>
+      <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: 36, alignItems: 'start' }}>
 
         {/* Уроки сегодня */}
         <section style={{ display: 'flex', flexDirection: 'column' }}>
@@ -185,40 +185,6 @@ export default function DashboardPage() {
           {sortedLessons.length === 0
             ? <p style={EMPTY}>Уроков на сегодня нет</p>
             : sortedLessons.map((l, i) => <LessonRow key={l.id} lesson={l} isFirst={i === 0} />)
-          }
-        </section>
-
-        {/* Последние платежи */}
-        <section style={{ display: 'flex', flexDirection: 'column' }}>
-          <header style={WIDGET_HEAD}>
-            <h2 style={WIDGET_TITLE}>Последние платежи</h2>
-            <Link href="/payments" style={WIDGET_LINK}>Все →</Link>
-          </header>
-          {recentPayments.length === 0
-            ? <p style={EMPTY}>Платежей пока нет</p>
-            : recentPayments.map((p, i) => (
-                <div
-                  key={p.id}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto 64px',
-                    alignItems: 'baseline',
-                    gap: 12,
-                    padding: '8px 0',
-                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                  }}
-                >
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {fmtAmt(p.amount)}
-                  </span>
-                  <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
-                    {p.lessons_count} ур.
-                  </span>
-                  <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtDate(p.paid_at)}
-                  </span>
-                </div>
-              ))
           }
         </section>
 
@@ -280,6 +246,42 @@ export default function DashboardPage() {
               })
           }
         </section>
+
+        {/* Последние платежи */}
+        <section style={{ display: 'flex', flexDirection: 'column' }}>
+          <header style={WIDGET_HEAD}>
+            <h2 style={WIDGET_TITLE}>Последние платежи</h2>
+            <Link href="/payments" style={WIDGET_LINK}>Все →</Link>
+          </header>
+          {recentPayments.length === 0
+            ? <p style={EMPTY}>Платежей пока нет</p>
+            : recentPayments.map((p, i) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 64px',
+                    alignItems: 'baseline',
+                    gap: 12,
+                    padding: '8px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {fmtAmt(p.amount)}
+                  </span>
+                  <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {p.lessons_count} ур.
+                  </span>
+                  <span style={{ fontSize: 12.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtDate(p.paid_at)}
+                  </span>
+                </div>
+              ))
+          }
+        </section>
+
+        
 
       </div>
     </div>
