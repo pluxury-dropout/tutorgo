@@ -617,3 +617,78 @@ func TestGetCurrentCycles_EmptyLessons(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, result)
 }
+
+func TestGetCurrentCycles_MultiCycleBoundary(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, new(mockCourseRepo), paymentRepo)
+
+	r1, r2, r3, r4 := 1, 2, 3, 4
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Status: "completed", Subject: "Химия", Rank: &r1, ScheduledAt: base},
+		{ID: "l2", CourseID: "c1", Status: "completed", Subject: "Химия", Rank: &r2, ScheduledAt: base.AddDate(0, 0, 7)},
+		{ID: "l3", CourseID: "c1", Status: "scheduled", Subject: "Химия", Rank: &r3, ScheduledAt: base.AddDate(0, 0, 14)},
+		{ID: "l4", CourseID: "c1", Status: "scheduled", Subject: "Химия", Rank: &r4, ScheduledAt: base.AddDate(0, 0, 21)},
+	}
+	lessonRepo.On("GetAllLessonsForCycles", mock.Anything, "tutor-1").Return(lessons, nil)
+	// two payments of 2 lessons each: ranks 1-2 in bucket 0, ranks 3-4 in bucket 1
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, mock.Anything).Return(map[string][]models.Payment{
+		"c1": {{LessonsCount: 2}, {LessonsCount: 2}},
+	}, nil)
+
+	result, err := svc.GetCurrentCycles(context.Background(), "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	// current cycle is bucket 1 (ranks 3-4): 0 completed, cycle_size=2
+	assert.Equal(t, 0, result[0].Progress)
+	assert.Equal(t, 2, result[0].CycleSize)
+	assert.Equal(t, base.AddDate(0, 0, 21), result[0].LastAt)
+}
+
+func TestGetCurrentCycles_SortsByLastAtDesc(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, new(mockCourseRepo), paymentRepo)
+
+	r1, r2 := 1, 1
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Status: "scheduled", Subject: "Математика", Rank: &r1, ScheduledAt: base},
+		{ID: "l2", CourseID: "c2", Status: "scheduled", Subject: "Физика", Rank: &r2, ScheduledAt: base.AddDate(0, 0, 7)},
+	}
+	lessonRepo.On("GetAllLessonsForCycles", mock.Anything, "tutor-1").Return(lessons, nil)
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, mock.Anything).Return(map[string][]models.Payment{
+		"c1": {{LessonsCount: 1}},
+		"c2": {{LessonsCount: 1}},
+	}, nil)
+
+	result, err := svc.GetCurrentCycles(context.Background(), "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	// c2 has later LastAt so it must come first
+	assert.Equal(t, "c2", result[0].CourseID)
+	assert.Equal(t, "c1", result[1].CourseID)
+}
+
+func TestGetCurrentCycles_SkipsCourseWithNoPayments(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, new(mockCourseRepo), paymentRepo)
+
+	r1 := 1
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Status: "scheduled", Subject: "Биология", Rank: &r1, ScheduledAt: base},
+	}
+	lessonRepo.On("GetAllLessonsForCycles", mock.Anything, "tutor-1").Return(lessons, nil)
+	// no payments for c1
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, mock.Anything).Return(map[string][]models.Payment{}, nil)
+
+	result, err := svc.GetCurrentCycles(context.Background(), "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Empty(t, result)
+}

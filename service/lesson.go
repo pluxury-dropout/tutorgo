@@ -271,7 +271,6 @@ func (s *lessonService) GetCurrentCycles(ctx context.Context, tutorID string) ([
 	}
 
 	type lessonMeta struct {
-		id          string
 		scheduledAt time.Time
 		status      string
 		rank        int
@@ -291,7 +290,7 @@ func (s *lessonService) GetCurrentCycles(ctx context.Context, tutorID string) ([
 			coursesByID[l.CourseID] = &courseMeta{subject: l.Subject, studentName: l.StudentName}
 		}
 		coursesByID[l.CourseID].lessons = append(coursesByID[l.CourseID].lessons, lessonMeta{
-			id: l.ID, scheduledAt: l.ScheduledAt, status: l.Status, rank: *l.Rank,
+			scheduledAt: l.ScheduledAt, status: l.Status, rank: *l.Rank,
 		})
 	}
 
@@ -312,6 +311,7 @@ func (s *lessonService) GetCurrentCycles(ctx context.Context, tutorID string) ([
 			continue
 		}
 
+		// payments are ordered by paid_at ASC per GetByCoursesBatch
 		bounds := make([]int, len(payments))
 		cum := 0
 		for i, p := range payments {
