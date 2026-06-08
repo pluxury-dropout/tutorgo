@@ -127,3 +127,39 @@ func (h *CourseHandler) Delete(c *gin.Context) {
 	h.log.Info("Course deleted", slog.String("id", id))
 	c.Status(http.StatusNoContent)
 }
+
+func (h *CourseHandler) GetArchived(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var p models.Pagination
+	_ = c.ShouldBindQuery(&p)
+	p.Normalize()
+
+	courses, total, err := h.service.GetArchived(c.Request.Context(), tutorID, p)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, models.PagedResponse[models.Course]{
+		Data: courses, Total: total, Page: p.Page, Limit: p.Limit,
+	})
+}
+
+func (h *CourseHandler) Restore(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
+	if err := h.service.Restore(c.Request.Context(), id, tutorID); err != nil {
+		h.log.Error("Failed to restore course", slog.String("id", id), slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	h.log.Info("Course restored", slog.String("id", id))
+	c.Status(http.StatusNoContent)
+}
