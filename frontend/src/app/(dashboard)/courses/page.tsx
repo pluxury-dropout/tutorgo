@@ -3,9 +3,9 @@
 import { Suspense, useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { BookOpen, Plus, Pencil, Trash2, ChevronRight } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, ChevronRight, ArchiveRestore } from 'lucide-react'
 
-import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse } from '@/lib/hooks/useCourses'
+import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, useArchivedCoursesPaged, useRestoreCourse } from '@/lib/hooks/useCourses'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -69,6 +69,18 @@ function CoursesPageInner() {
   const updateCourse = useUpdateCourse(editing?.id ?? '')
   const deleteCourse = useDeleteCourse()
 
+  const [tab, setTab] = useState<'active' | 'archive'>('active')
+  const [archivePage, setArchivePage] = useState(1)
+
+  const { data: archivedData, isLoading: archivedLoading } = useArchivedCoursesPaged({
+    page: archivePage, limit: LIMIT, search,
+  })
+  const archivedCourses = archivedData?.data ?? []
+  const archivedTotal   = archivedData?.total ?? 0
+  const archivedPages   = Math.ceil(archivedTotal / LIMIT)
+
+  const restoreCourse = useRestoreCourse()
+
   function openCreate() { setEditing(undefined); setFormOpen(true) }
   function openEdit(c: Course) { setEditing(c); setFormOpen(true) }
 
@@ -92,12 +104,21 @@ function CoursesPageInner() {
   }
 
   async function handleDelete(course: Course) {
-    if (!confirm(`Удалить курс "${course.subject}"?`)) return
+    if (!confirm(`Архивировать курс "${course.subject}"? Завершённые уроки останутся в календаре.`)) return
     try {
       await deleteCourse.mutateAsync(course.id)
-      toast.success('Курс удалён')
+      toast.success('Курс архивирован')
     } catch {
-      toast.error('Нельзя удалить курс с уроками')
+      toast.error('Ошибка архивирования')
+    }
+  }
+
+  async function handleRestore(course: Course) {
+    try {
+      await restoreCourse.mutateAsync(course.id)
+      toast.success('Курс восстановлен')
+    } catch {
+      toast.error('Ошибка восстановления')
     }
   }
 
@@ -111,16 +132,41 @@ function CoursesPageInner() {
     <div style={{ maxWidth: 900 }}>
       <PageHeader
         title="Курсы"
-        description={`${total} курсов`}
+        description={tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
         icon={BookOpen}
         iconBg="oklch(0.92 0.05 155)"
         iconColor="oklch(0.36 0.10 155)"
         actions={
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1.5" /> Добавить
-          </Button>
+          tab === 'active' ? (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1.5" /> Добавить
+            </Button>
+          ) : null
         }
       />
+
+      {/* Tab switcher */}
+      <div className="flex gap-1 mb-4" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+        {(['active', 'archive'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              padding: '6px 16px',
+              fontSize: 13,
+              fontWeight: tab === t ? 600 : 400,
+              color: tab === t ? 'var(--foreground)' : 'var(--muted-foreground)',
+              background: 'none',
+              border: 'none',
+              borderBottom: tab === t ? '2px solid var(--foreground)' : '2px solid transparent',
+              cursor: 'pointer',
+              marginBottom: -1,
+            }}
+          >
+            {t === 'active' ? 'Активные' : 'Архив'}
+          </button>
+        ))}
+      </div>
 
       <div className="mb-4">
         <Input
@@ -131,98 +177,159 @@ function CoursesPageInner() {
         />
       </div>
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
-          ))}
-        </div>
-      ) : courses.length === 0 ? (
-        <EmptyState
-          icon={BookOpen}
-          title={search ? 'Ничего не найдено' : 'Нет курсов'}
-          description={search ? 'Попробуй другой запрос' : 'Добавь первый курс'}
-          action={!search ? { label: 'Добавить курс', onClick: openCreate } : undefined}
-        />
-      ) : (
-        <>
-          <div>
-            {/* Column headers */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
-              alignItems: 'baseline',
-              gap: 12,
-              paddingBottom: 8,
-              borderBottom: '1px solid var(--border)',
-            }}>
-              {(['Предмет', 'Тип', 'Ученик', 'Цена за цикл', 'Начало', '', ''] as const).map((label, i) => (
-                <span key={i} style={{
-                  fontSize: 11.5, fontWeight: 500,
-                  color: 'var(--muted-foreground)',
-                  letterSpacing: '0.05em',
-                  textTransform: 'uppercase',
-                }}>{label}</span>
-              ))}
-            </div>
-            {/* Rows */}
-            {courses.map((course, i) => (
-              <div
-                key={course.id}
-                role="button"
-                tabIndex={0}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '8px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                  cursor: 'pointer',
-                }}
-                className="hover:bg-muted/30 group"
-                onClick={() => router.push(`/courses/${course.id}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/courses/${course.id}`) } }}
-              >
-                <span style={{
-                  fontSize: 14, fontWeight: 600, color: 'var(--foreground)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {course.subject}
-                </span>
-                <span><CourseTypeBadge isGroup={!course.student_id} /></span>
-                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {studentName(course) ?? '—'}
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
-                  {course.price_per_cycle.toLocaleString()} ₸ / {course.lessons_per_cycle} ур.
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
-                  {new Date(course.started_at).toLocaleDateString('ru-RU')}
-                </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(course)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(course)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
+      {tab === 'active' ? (
+        /* ── Active tab ── */
+        isLoading ? (
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
             ))}
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-3 px-1">
-              <span className="text-xs text-muted-foreground">
-                Страница {page} из {totalPages}
-              </span>
-              <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+        ) : courses.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            title={search ? 'Ничего не найдено' : 'Нет курсов'}
+            description={search ? 'Попробуй другой запрос' : 'Добавь первый курс'}
+            action={!search ? { label: 'Добавить курс', onClick: openCreate } : undefined}
+          />
+        ) : (
+          <>
+            <div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
+                alignItems: 'baseline',
+                gap: 12,
+                paddingBottom: 8,
+                borderBottom: '1px solid var(--border)',
+              }}>
+                {(['Предмет', 'Тип', 'Ученик', 'Цена за цикл', 'Начало', '', ''] as const).map((label, i) => (
+                  <span key={i} style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--muted-foreground)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+                ))}
+              </div>
+              {courses.map((course, i) => (
+                <div
+                  key={course.id}
+                  role="button"
+                  tabIndex={0}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                    cursor: 'pointer',
+                  }}
+                  className="hover:bg-muted/30 group"
+                  onClick={() => router.push(`/courses/${course.id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/courses/${course.id}`) } }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {course.subject}
+                  </span>
+                  <span><CourseTypeBadge isGroup={!course.student_id} /></span>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {studentName(course) ?? '—'}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {course.price_per_cycle.toLocaleString()} ₸ / {course.lessons_per_cycle} ур.
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {new Date(course.started_at).toLocaleDateString('ru-RU')}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(course)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(course)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-3 px-1">
+                <span className="text-xs text-muted-foreground">Страница {page} из {totalPages}</span>
+                <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+              </div>
+            )}
+          </>
+        )
+      ) : (
+        /* ── Archive tab ── */
+        archivedLoading ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : archivedCourses.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            title={search ? 'Ничего не найдено' : 'Архив пуст'}
+            description={search ? 'Попробуй другой запрос' : 'Архивированные курсы появятся здесь'}
+          />
+        ) : (
+          <>
+            <div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 120px',
+                alignItems: 'baseline',
+                gap: 12,
+                paddingBottom: 8,
+                borderBottom: '1px solid var(--border)',
+              }}>
+                {(['Предмет', 'Тип', 'Ученик', 'Цена за цикл', 'Начало', '', ''] as const).map((label, i) => (
+                  <span key={i} style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--muted-foreground)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+                ))}
+              </div>
+              {archivedCourses.map((course, i) => (
+                <div
+                  key={course.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 120px',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                    opacity: 0.7,
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {course.subject}
+                  </span>
+                  <span><CourseTypeBadge isGroup={!course.student_id} /></span>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {studentName(course) ?? '—'}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {course.price_per_cycle.toLocaleString()} ₸ / {course.lessons_per_cycle} ур.
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {new Date(course.started_at).toLocaleDateString('ru-RU')}
+                  </span>
+                  <span />
+                  <div className="flex items-center justify-end">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleRestore(course)}>
+                      <ArchiveRestore className="h-3 w-3" /> Восстановить
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {archivedPages > 1 && (
+              <div className="flex items-center justify-between mt-3 px-1">
+                <span className="text-xs text-muted-foreground">Страница {archivePage} из {archivedPages}</span>
+                <Pagination page={archivePage} totalPages={archivedPages} onPageChange={setArchivePage} />
+              </div>
+            )}
+          </>
+        )
       )}
 
       <CourseForm
