@@ -110,3 +110,12 @@ export interface PagedResponse<T> {
   page: number
   limit: number
 }
+
+export interface CurrentCycleInfo {
+  course_id: string
+  subject: string
+  student_name: string | null
+  progress: number
+  cycle_size: number
+  last_at: string
+}

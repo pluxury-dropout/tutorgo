@@ -45,3 +45,10 @@ export function useRescheduleLesson() {
     },
   })
 }
+
+export function useCurrentCycles() {
+  return useQuery({
+    queryKey: ['dashboard', 'cycles'],
+    queryFn:  () => calendarApi.getCurrentCycles(),
+  })
+}
