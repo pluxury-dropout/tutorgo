@@ -79,6 +79,8 @@ function CoursesPageInner() {
   const archivedTotal   = archivedData?.total ?? 0
   const archivedPages   = Math.ceil(archivedTotal / LIMIT)
 
+  useEffect(() => { setArchivePage(1) }, [search])
+
   const restoreCourse = useRestoreCourse()
 
   function openCreate() { setEditing(undefined); setFormOpen(true) }
