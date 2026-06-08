@@ -73,8 +73,10 @@ func (s *courseService) Delete(ctx context.Context, id string, tutorID string) e
 	if err != nil {
 		return err
 	}
-	if len(lessons) > 0 {
-		return fmt.Errorf("course has active lessons: %w", ErrConflict)
+	for _, l := range lessons {
+		if l.Status == "scheduled" {
+			return fmt.Errorf("course has scheduled lessons: %w", ErrConflict)
+		}
 	}
 	return s.repo.Delete(ctx, id, tutorID)
 }
