@@ -200,6 +200,24 @@ func TestLessonCreate_ArchivedCourse(t *testing.T) {
 	courseRepo.AssertExpectations(t)
 }
 
+func TestLessonCreateBulk_ArchivedCourse(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	payRepo := new(mockPaymentRepo)
+	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo)
+
+	archivedCourse := models.Course{ID: courseID, TutorID: tutorID, IsActive: false}
+	courseRepo.On("GetByID", mock.Anything, createLessonReq.CourseID, tutorID).Return(archivedCourse, nil)
+
+	bulkReq := models.CreateBulkLessonRequest{CourseID: createLessonReq.CourseID}
+	lessons, err := svc.CreateBulk(context.Background(), bulkReq, tutorID)
+
+	assert.ErrorIs(t, err, service.ErrConflict)
+	assert.Empty(t, lessons)
+	lessonRepo.AssertNotCalled(t, "CreateBulk")
+	courseRepo.AssertExpectations(t)
+}
+
 func TestLessonCreate_RepoError(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	courseRepo := new(mockCourseRepo)

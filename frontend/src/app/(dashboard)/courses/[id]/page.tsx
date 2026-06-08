@@ -163,12 +163,12 @@ export default function CourseDetailPage() {
   }
 
   async function handleDeleteCourse() {
-    if (!course || !confirm(`Удалить курс "${course.subject}"?`)) return
+    if (!course || !confirm(`Архивировать курс "${course.subject}"? Завершённые уроки останутся в календаре.`)) return
     try {
       await deleteCourse.mutateAsync(course.id)
       router.push('/courses')
     } catch {
-      toast.error('Нельзя удалить курс с уроками')
+      toast.error('Ошибка архивирования')
     }
   }
 
