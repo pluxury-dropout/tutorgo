@@ -26,6 +26,7 @@ type LessonRepository interface {
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
+	GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
 	AutoComplete(ctx context.Context) (int64, error)
 	ExistsPublic(ctx context.Context, id string) error
@@ -407,6 +408,51 @@ func (r *lessonRepository) GetRoomStatus(ctx context.Context, lessonID string) (
 		return "active", nil
 	}
 	return "waiting", nil
+}
+
+func (r *lessonRepository) GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error) {
+	rows, err := r.pool.Query(ctx,
+		`WITH ranked AS (
+		   SELECT l.id,
+		          ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
+		   FROM lessons l
+		   JOIN courses c ON c.id = l.course_id
+		   WHERE c.tutor_id = $1
+		     AND l.status != 'cancelled'
+		 )
+		 SELECT l.id, l.course_id, l.scheduled_at, l.status,
+		        c.subject,
+		        CASE WHEN c.student_id IS NOT NULL
+		             THEN CASE WHEN s.last_name = '' THEN s.first_name ELSE s.first_name || ' ' || s.last_name END
+		             ELSE NULL
+		        END AS student_name,
+		        (c.student_id IS NULL) AS is_group,
+		        r.rank
+		 FROM lessons l
+		 JOIN courses c ON c.id = l.course_id
+		 LEFT JOIN students s ON s.id = c.student_id
+		 LEFT JOIN ranked r ON r.id = l.id
+		 WHERE c.tutor_id = $1
+		   AND l.status != 'cancelled'
+		 ORDER BY l.course_id, l.scheduled_at`,
+		tutorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var lessons []models.CalendarLesson
+	for rows.Next() {
+		var cl models.CalendarLesson
+		if err := rows.Scan(
+			&cl.ID, &cl.CourseID, &cl.ScheduledAt, &cl.Status,
+			&cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.Rank,
+		); err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, cl)
+	}
+	return lessons, rows.Err()
 }
 
 func (r *lessonRepository) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {
