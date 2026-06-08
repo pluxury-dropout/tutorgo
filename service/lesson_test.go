@@ -183,6 +183,23 @@ func TestLessonCreate_CourseNotFound(t *testing.T) {
 	courseRepo.AssertExpectations(t)
 }
 
+func TestLessonCreate_ArchivedCourse(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	payRepo := new(mockPaymentRepo)
+	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo)
+
+	archivedCourse := models.Course{ID: courseID, TutorID: tutorID, IsActive: false}
+	courseRepo.On("GetByID", mock.Anything, createLessonReq.CourseID, tutorID).Return(archivedCourse, nil)
+
+	lesson, err := svc.Create(context.Background(), createLessonReq, tutorID)
+
+	assert.ErrorIs(t, err, service.ErrConflict)
+	assert.Empty(t, lesson)
+	lessonRepo.AssertNotCalled(t, "Create")
+	courseRepo.AssertExpectations(t)
+}
+
 func TestLessonCreate_RepoError(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	courseRepo := new(mockCourseRepo)

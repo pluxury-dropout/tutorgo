@@ -91,8 +91,9 @@ var (
 	}
 
 	expectedCourse = models.Course{
-		ID:      courseID,
-		TutorID: tutorID,
+		ID:       courseID,
+		TutorID:  tutorID,
+		IsActive: true,
 	}
 )
 

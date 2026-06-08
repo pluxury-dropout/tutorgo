@@ -85,9 +85,12 @@ func (s *lessonService) enrichLessons(ctx context.Context, courseID string, less
 }
 
 func (s *lessonService) Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
-	_, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
+	course, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
 	if err != nil {
 		return models.Lesson{}, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	if !course.IsActive {
+		return models.Lesson{}, fmt.Errorf("course is archived: %w", ErrConflict)
 	}
 	lesson, err := s.repo.Create(ctx, req)
 	if err == nil {
@@ -97,9 +100,12 @@ func (s *lessonService) Create(ctx context.Context, req models.CreateLessonReque
 }
 
 func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {
-	_, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
+	course, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
 	if err != nil {
 		return nil, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	if !course.IsActive {
+		return nil, fmt.Errorf("course is archived: %w", ErrConflict)
 	}
 	lessons, err := s.repo.CreateBulk(ctx, req)
 	if err == nil {
