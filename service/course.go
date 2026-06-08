@@ -14,16 +14,17 @@ type CourseService interface {
 	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateCourseRequest) (models.Course, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	GetArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
+	Restore(ctx context.Context, id string, tutorID string) error
 }
 
 type courseService struct {
 	repo        repository.CourseRepository
 	studentRepo repository.StudentRepository
-	lessonRepo  repository.LessonRepository
 }
 
-func NewCourseService(repo repository.CourseRepository, studentRepo repository.StudentRepository, lessonRepo repository.LessonRepository) CourseService {
-	return &courseService{repo: repo, studentRepo: studentRepo, lessonRepo: lessonRepo}
+func NewCourseService(repo repository.CourseRepository, studentRepo repository.StudentRepository) CourseService {
+	return &courseService{repo: repo, studentRepo: studentRepo}
 }
 
 func (s *courseService) Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error) {
@@ -68,15 +69,17 @@ func (s *courseService) Delete(ctx context.Context, id string, tutorID string) e
 	if err != nil {
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
-
-	lessons, err := s.lessonRepo.GetByCourse(ctx, id)
-	if err != nil {
-		return err
-	}
-	for _, l := range lessons {
-		if l.Status == "scheduled" {
-			return fmt.Errorf("course has scheduled lessons: %w", ErrConflict)
-		}
-	}
 	return s.repo.Delete(ctx, id, tutorID)
+}
+
+func (s *courseService) GetArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	return s.repo.GetAllArchived(ctx, tutorID, p)
+}
+
+func (s *courseService) Restore(ctx context.Context, id string, tutorID string) error {
+	_, err := s.repo.GetByID(ctx, id, tutorID)
+	if err != nil {
+		return fmt.Errorf("course: %w", ErrNotFound)
+	}
+	return s.repo.Restore(ctx, id, tutorID)
 }

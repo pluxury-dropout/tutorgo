@@ -196,6 +196,13 @@ func (m *mockCourseService) GetByStudent(ctx context.Context, studentID string, 
 func (m *mockCourseService) Delete(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }
+func (m *mockCourseService) GetArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)
+}
+func (m *mockCourseService) Restore(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
+}
 
 // --- Mock: PaymentService ---
 
