@@ -59,3 +59,12 @@ type CalendarLesson struct {
 	CyclePosition   *int      `json:"cycle_position,omitempty"`
 	CycleSize       *int      `json:"cycle_size,omitempty"`
 }
+
+type CurrentCycleInfo struct {
+	CourseID    string    `json:"course_id"`
+	Subject     string    `json:"subject"`
+	StudentName *string   `json:"student_name"`
+	Progress    int       `json:"progress"`
+	CycleSize   int       `json:"cycle_size"`
+	LastAt      time.Time `json:"last_at"`
+}
