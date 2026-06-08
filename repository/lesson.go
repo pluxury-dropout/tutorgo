@@ -412,26 +412,17 @@ func (r *lessonRepository) GetRoomStatus(ctx context.Context, lessonID string) (
 
 func (r *lessonRepository) GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`WITH ranked AS (
-		   SELECT l.id,
-		          ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
-		   FROM lessons l
-		   JOIN courses c ON c.id = l.course_id
-		   WHERE c.tutor_id = $1
-		     AND l.status != 'cancelled'
-		 )
-		 SELECT l.id, l.course_id, l.scheduled_at, l.status,
+		`SELECT l.id, l.course_id, l.scheduled_at, l.status,
 		        c.subject,
 		        CASE WHEN c.student_id IS NOT NULL
 		             THEN CASE WHEN s.last_name = '' THEN s.first_name ELSE s.first_name || ' ' || s.last_name END
 		             ELSE NULL
 		        END AS student_name,
 		        (c.student_id IS NULL) AS is_group,
-		        r.rank
+		        ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 LEFT JOIN students s ON s.id = c.student_id
-		 LEFT JOIN ranked r ON r.id = l.id
 		 WHERE c.tutor_id = $1
 		   AND l.status != 'cancelled'
 		 ORDER BY l.course_id, l.scheduled_at`,
