@@ -24,6 +24,7 @@ export interface Course {
   lessons_per_cycle: number
   started_at: string
   ended_at: string | null
+  is_active: boolean
 }
 
 export interface CourseBalance {

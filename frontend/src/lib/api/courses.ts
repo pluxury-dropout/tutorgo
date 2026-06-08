@@ -22,6 +22,9 @@ export const coursesApi = {
       .then((r) => r.data.data ?? []),
   listPaged: (p: CourseListParams) =>
     api.get<PagedResponse<Course>>('/courses', { params: p }).then((r) => r.data),
+  listArchived: (p: CourseListParams) =>
+    api.get<PagedResponse<Course>>('/courses/archived', { params: p }).then((r) => r.data),
+  restore: (id: string) => api.post(`/courses/${id}/restore`).then(() => id),
   get: (id: string) => api.get<Course>(`/courses/${id}`).then((r) => r.data),
   create: (data: CourseInput) =>
     api.post<Course>('/courses', data).then((r) => r.data),

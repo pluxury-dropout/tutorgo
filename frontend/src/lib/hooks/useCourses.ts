@@ -7,6 +7,7 @@ export const courseKeys = {
   balance:     (id: string) => ['courses', id, 'balance'] as const,
   enrollments: (id: string) => ['courses', id, 'enrollments'] as const,
   byStudent:   (studentId: string) => ['courses', 'student', studentId] as const,
+  archived:    ['courses', 'archived'] as const,
 }
 
 export function useCourses() {
@@ -91,5 +92,23 @@ export function useCourseCount() {
   return useQuery({
     queryKey: [...courseKeys.all, 'count'],
     queryFn:  () => coursesApi.listPaged({ page: 1, limit: 1, search: '' }).then((r) => r.total),
+  })
+}
+
+export function useArchivedCoursesPaged(params: CourseListParams) {
+  return useQuery({
+    queryKey: [...courseKeys.archived, 'list', params],
+    queryFn:  () => coursesApi.listArchived(params),
+  })
+}
+
+export function useRestoreCourse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: coursesApi.restore,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: courseKeys.all })
+      qc.invalidateQueries({ queryKey: courseKeys.archived })
+    },
   })
 }
