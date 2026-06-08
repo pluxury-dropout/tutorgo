@@ -38,6 +38,13 @@ func (m *mockCourseRepo) GetByStudent(ctx context.Context, studentID string, tut
 func (m *mockCourseRepo) Delete(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }
+func (m *mockCourseRepo) GetAllArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
+	args := m.Called(ctx, tutorID, p)
+	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)
+}
+func (m *mockCourseRepo) Restore(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
+}
 
 var (
 	endedAt = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
@@ -64,8 +71,8 @@ var (
 	expectedStudent = models.Student{ID: "student-uuid-1", TutorID: tutorID}
 )
 
-func newCourseSvc(courseRepo *mockCourseRepo, studentRepo *mockStudentRepo, lessonRepo *mockLessonRepo) service.CourseService {
-	return service.NewCourseService(courseRepo, studentRepo, lessonRepo)
+func newCourseSvc(courseRepo *mockCourseRepo, studentRepo *mockStudentRepo) service.CourseService {
+	return service.NewCourseService(courseRepo, studentRepo)
 }
 
 // Create
@@ -73,8 +80,7 @@ func newCourseSvc(courseRepo *mockCourseRepo, studentRepo *mockStudentRepo, less
 func TestCourseCreate_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	studentRepo.On("GetByID", mock.Anything, *courseReq.StudentID, tutorID).Return(expectedStudent, nil)
 	courseRepo.On("Create", mock.Anything, courseReq, tutorID).Return(expectedCourse, nil)
@@ -90,8 +96,7 @@ func TestCourseCreate_Success(t *testing.T) {
 func TestCourseCreate_StudentNotFound(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	studentRepo.On("GetByID", mock.Anything, *courseReq.StudentID, tutorID).Return(models.Student{}, errors.New("not found"))
 
@@ -106,8 +111,7 @@ func TestCourseCreate_StudentNotFound(t *testing.T) {
 func TestCourseCreate_RepoError(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	studentRepo.On("GetByID", mock.Anything, *courseReq.StudentID, tutorID).Return(expectedStudent, nil)
 	courseRepo.On("Create", mock.Anything, courseReq, tutorID).Return(models.Course{}, errors.New("db error"))
@@ -125,8 +129,7 @@ func TestCourseCreate_RepoError(t *testing.T) {
 func TestCourseGetAll_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Course{expectedCourse}
@@ -143,8 +146,7 @@ func TestCourseGetAll_Success(t *testing.T) {
 func TestCourseGetAll_Error(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	courseRepo.On("GetAll", mock.Anything, tutorID, p).Return([]models.Course{}, 0, errors.New("db error"))
@@ -162,8 +164,7 @@ func TestCourseGetAll_Error(t *testing.T) {
 func TestCourseGetByID_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
 
@@ -177,8 +178,7 @@ func TestCourseGetByID_Success(t *testing.T) {
 func TestCourseGetByID_NotFound(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
@@ -194,8 +194,7 @@ func TestCourseGetByID_NotFound(t *testing.T) {
 func TestCourseUpdate_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	updated := models.Course{ID: courseID, TutorID: tutorID, Subject: "Physics"}
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
@@ -211,8 +210,7 @@ func TestCourseUpdate_Success(t *testing.T) {
 func TestCourseUpdate_NotFound(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
@@ -227,8 +225,7 @@ func TestCourseUpdate_NotFound(t *testing.T) {
 func TestCourseUpdate_RepoError(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
 	courseRepo.On("Update", mock.Anything, courseID, tutorID, updateCourseReq).Return(models.Course{}, errors.New("db error"))
@@ -245,66 +242,106 @@ func TestCourseUpdate_RepoError(t *testing.T) {
 func TestCourseDelete_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
-	lessonRepo.On("GetByCourse", mock.Anything, courseID).Return([]models.Lesson{}, nil)
 	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(nil)
 
 	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.NoError(t, err)
 	courseRepo.AssertExpectations(t)
-	lessonRepo.AssertExpectations(t)
 }
 
 func TestCourseDelete_CourseNotFound(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
 	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.ErrorIs(t, err, service.ErrNotFound)
-	lessonRepo.AssertNotCalled(t, "GetByCourse")
 	courseRepo.AssertNotCalled(t, "Delete")
 	courseRepo.AssertExpectations(t)
-}
-
-func TestCourseDelete_HasLessons(t *testing.T) {
-	courseRepo := new(mockCourseRepo)
-	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
-
-	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
-	lessonRepo.On("GetByCourse", mock.Anything, courseID).Return([]models.Lesson{expectedLesson}, nil)
-
-	err := svc.Delete(context.Background(), courseID, tutorID)
-
-	assert.ErrorIs(t, err, service.ErrConflict)
-	courseRepo.AssertNotCalled(t, "Delete")
-	courseRepo.AssertExpectations(t)
-	lessonRepo.AssertExpectations(t)
 }
 
 func TestCourseDelete_RepoError(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	lessonRepo := new(mockLessonRepo)
-	svc := newCourseSvc(courseRepo, studentRepo, lessonRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
-	lessonRepo.On("GetByCourse", mock.Anything, courseID).Return([]models.Lesson{}, nil)
 	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(errors.New("db error"))
 
 	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.Error(t, err)
 	courseRepo.AssertExpectations(t)
-	lessonRepo.AssertExpectations(t)
+}
+
+// GetArchived
+
+func TestCourseGetArchived_Success(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
+
+	p := models.Pagination{Page: 1, Limit: 20}
+	archived := []models.Course{{ID: courseID, TutorID: tutorID, IsActive: false}}
+	courseRepo.On("GetAllArchived", mock.Anything, tutorID, p).Return(archived, 1, nil)
+
+	courses, total, err := svc.GetArchived(context.Background(), tutorID, p)
+
+	assert.NoError(t, err)
+	assert.Equal(t, archived, courses)
+	assert.Equal(t, 1, total)
+	courseRepo.AssertExpectations(t)
+}
+
+func TestCourseGetArchived_Error(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
+
+	p := models.Pagination{Page: 1, Limit: 20}
+	courseRepo.On("GetAllArchived", mock.Anything, tutorID, p).Return([]models.Course{}, 0, errors.New("db error"))
+
+	courses, total, err := svc.GetArchived(context.Background(), tutorID, p)
+
+	assert.Error(t, err)
+	assert.Empty(t, courses)
+	assert.Equal(t, 0, total)
+	courseRepo.AssertExpectations(t)
+}
+
+// Restore
+
+func TestCourseRestore_Success(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{ID: courseID, TutorID: tutorID, IsActive: false}, nil)
+	courseRepo.On("Restore", mock.Anything, courseID, tutorID).Return(nil)
+
+	err := svc.Restore(context.Background(), courseID, tutorID)
+
+	assert.NoError(t, err)
+	courseRepo.AssertExpectations(t)
+}
+
+func TestCourseRestore_NotFound(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
+
+	err := svc.Restore(context.Background(), courseID, tutorID)
+
+	assert.ErrorIs(t, err, service.ErrNotFound)
+	courseRepo.AssertNotCalled(t, "Restore")
+	courseRepo.AssertExpectations(t)
 }
