@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import Link from 'next/link'
 import { useStudentCount } from '@/lib/hooks/useStudents'
 import { useCourseCount } from '@/lib/hooks/useCourses'
-import { useCalendar } from '@/lib/hooks/useCalendar'
+import { useCalendar, useCurrentCycles } from '@/lib/hooks/useCalendar'
 import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
 import type { CalendarLesson } from '@/types/api'
 
@@ -129,6 +129,7 @@ export default function DashboardPage() {
   const { data: recentPayments = [] } = useRecentPayments()
   const { data: monthlyIncome  = 0  } = useMonthlyIncome()
   const { data: monthlyExpected = 0 } = useMonthlyExpected()
+  const { data: currentCycles = [] } = useCurrentCycles()
 
   const sortedLessons = useMemo(
     () => [...todayLessons].sort((a, b) =>
@@ -218,6 +219,65 @@ export default function DashboardPage() {
                   </span>
                 </div>
               ))
+          }
+        </section>
+
+        {/* Текущие циклы */}
+        <section style={{ display: 'flex', flexDirection: 'column' }}>
+          <header style={WIDGET_HEAD}>
+            <h2 style={WIDGET_TITLE}>Текущие циклы</h2>
+            <Link href="/courses" style={WIDGET_LINK}>Курсы →</Link>
+          </header>
+          {currentCycles.length === 0
+            ? <p style={EMPTY}>Нет активных циклов</p>
+            : currentCycles.map((cycle, i) => {
+                const complete = cycle.progress === cycle.cycle_size
+                return (
+                  <div
+                    key={cycle.course_id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto 52px',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '8px 0',
+                      borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)' }}>
+                        {cycle.subject}
+                      </span>
+                      {cycle.student_name && (
+                        <div style={{ fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 1 }}>
+                          {cycle.student_name}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: '2px 7px',
+                      borderRadius: 6,
+                      border: '1px solid',
+                      whiteSpace: 'nowrap',
+                      color:       complete ? 'var(--success)' : 'var(--foreground)',
+                      borderColor: complete ? 'color-mix(in srgb, var(--success) 40%, transparent)' : 'var(--border)',
+                      background:  complete ? 'color-mix(in srgb, var(--success) 10%, transparent)' : 'var(--muted)',
+                    }}>
+                      {cycle.progress} / {cycle.cycle_size}
+                    </span>
+                    <span style={{
+                      fontSize: 12.5,
+                      color: 'var(--muted-foreground)',
+                      textAlign: 'right',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {fmtDate(cycle.last_at)}
+                    </span>
+                  </div>
+                )
+              })
           }
         </section>
 
