@@ -332,3 +332,8 @@ func (m *mockLessonService) GetByPeriod(ctx context.Context, courseID string, tu
 	args := m.Called(ctx, courseID, tutorID, from, to)
 	return args.Get(0).([]models.Lesson), args.Error(1)
 }
+
+func (m *mockLessonService) GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]models.CurrentCycleInfo), args.Error(1)
+}

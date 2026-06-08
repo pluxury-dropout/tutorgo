@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
+	"time"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -20,6 +22,7 @@ type LessonService interface {
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
+	GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
@@ -256,6 +259,123 @@ func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from st
 
 	globalCalendarCache.set(tutorID, from, to, lessons)
 	return lessons, nil
+}
+
+func (s *lessonService) GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error) {
+	lessons, err := s.repo.GetAllLessonsForCycles(ctx, tutorID)
+	if err != nil {
+		return nil, err
+	}
+	if len(lessons) == 0 {
+		return nil, nil
+	}
+
+	type lessonMeta struct {
+		id          string
+		scheduledAt time.Time
+		status      string
+		rank        int
+	}
+	type courseMeta struct {
+		subject     string
+		studentName *string
+		lessons     []lessonMeta
+	}
+
+	coursesByID := map[string]*courseMeta{}
+	for _, l := range lessons {
+		if l.Rank == nil {
+			continue
+		}
+		if _, ok := coursesByID[l.CourseID]; !ok {
+			coursesByID[l.CourseID] = &courseMeta{subject: l.Subject, studentName: l.StudentName}
+		}
+		coursesByID[l.CourseID].lessons = append(coursesByID[l.CourseID].lessons, lessonMeta{
+			id: l.ID, scheduledAt: l.ScheduledAt, status: l.Status, rank: *l.Rank,
+		})
+	}
+
+	courseIDs := make([]string, 0, len(coursesByID))
+	for id := range coursesByID {
+		courseIDs = append(courseIDs, id)
+	}
+
+	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, courseIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []models.CurrentCycleInfo
+	for courseID, meta := range coursesByID {
+		payments := paymentsMap[courseID]
+		if len(payments) == 0 {
+			continue
+		}
+
+		bounds := make([]int, len(payments))
+		cum := 0
+		for i, p := range payments {
+			cum += p.LessonsCount
+			bounds[i] = cum
+		}
+
+		buckets := make([][]lessonMeta, len(payments))
+		for _, lm := range meta.lessons {
+			for i, bound := range bounds {
+				prev := 0
+				if i > 0 {
+					prev = bounds[i-1]
+				}
+				if lm.rank > prev && lm.rank <= bound {
+					buckets[i] = append(buckets[i], lm)
+					break
+				}
+			}
+		}
+
+		currentIdx := -1
+		for i := len(buckets) - 1; i >= 0; i-- {
+			for _, lm := range buckets[i] {
+				if lm.status == "scheduled" {
+					currentIdx = i
+					break
+				}
+			}
+			if currentIdx >= 0 {
+				break
+			}
+		}
+		if currentIdx < 0 {
+			continue
+		}
+
+		bucket := buckets[currentIdx]
+		cycleSize := payments[currentIdx].LessonsCount
+		var lastAt time.Time
+		progress := 0
+		for _, lm := range bucket {
+			if lm.status == "completed" || lm.status == "missed" {
+				progress++
+			}
+			if lm.scheduledAt.After(lastAt) {
+				lastAt = lm.scheduledAt
+			}
+		}
+
+		result = append(result, models.CurrentCycleInfo{
+			CourseID:    courseID,
+			Subject:     meta.subject,
+			StudentName: meta.studentName,
+			Progress:    progress,
+			CycleSize:   cycleSize,
+			LastAt:      lastAt,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].LastAt.After(result[j].LastAt)
+	})
+	return result, nil
 }
 
 func (s *lessonService) ExistsPublic(ctx context.Context, id string) error {

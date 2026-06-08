@@ -106,6 +106,11 @@ func (m *mockLessonRepo) GetRanksForCourses(ctx context.Context, courseIDs []str
 	return args.Get(0).(map[string]map[string]int), args.Error(1)
 }
 
+func (m *mockLessonRepo) GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]models.CalendarLesson), args.Error(1)
+}
+
 // fixtures
 
 var (
@@ -545,4 +550,70 @@ func TestDeleteSeries_RepoError(t *testing.T) {
 
 	assert.Error(t, err)
 	lessonRepo.AssertExpectations(t)
+}
+
+func TestGetCurrentCycles_ReturnsActiveCycle(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, new(mockCourseRepo), paymentRepo)
+
+	r1, r2, r3, r4 := 1, 2, 3, 4
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	studentName := "Азиз"
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Status: "completed", Subject: "Математика", StudentName: &studentName, Rank: &r1, ScheduledAt: base},
+		{ID: "l2", CourseID: "c1", Status: "completed", Subject: "Математика", StudentName: &studentName, Rank: &r2, ScheduledAt: base.AddDate(0, 0, 7)},
+		{ID: "l3", CourseID: "c1", Status: "scheduled", Subject: "Математика", StudentName: &studentName, Rank: &r3, ScheduledAt: base.AddDate(0, 0, 14)},
+		{ID: "l4", CourseID: "c1", Status: "scheduled", Subject: "Математика", StudentName: &studentName, Rank: &r4, ScheduledAt: base.AddDate(0, 0, 21)},
+	}
+	lessonRepo.On("GetAllLessonsForCycles", mock.Anything, "tutor-1").Return(lessons, nil)
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, mock.Anything).Return(map[string][]models.Payment{
+		"c1": {{LessonsCount: 4}},
+	}, nil)
+
+	result, err := svc.GetCurrentCycles(context.Background(), "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "c1", result[0].CourseID)
+	assert.Equal(t, "Математика", result[0].Subject)
+	assert.Equal(t, &studentName, result[0].StudentName)
+	assert.Equal(t, 2, result[0].Progress)
+	assert.Equal(t, 4, result[0].CycleSize)
+	assert.Equal(t, base.AddDate(0, 0, 21), result[0].LastAt)
+}
+
+func TestGetCurrentCycles_SkipsCourseWithNoScheduled(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, new(mockCourseRepo), paymentRepo)
+
+	r1, r2 := 1, 2
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Status: "completed", Subject: "Физика", Rank: &r1, ScheduledAt: base},
+		{ID: "l2", CourseID: "c1", Status: "completed", Subject: "Физика", Rank: &r2, ScheduledAt: base.AddDate(0, 0, 7)},
+	}
+	lessonRepo.On("GetAllLessonsForCycles", mock.Anything, "tutor-1").Return(lessons, nil)
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, mock.Anything).Return(map[string][]models.Payment{
+		"c1": {{LessonsCount: 2}},
+	}, nil)
+
+	result, err := svc.GetCurrentCycles(context.Background(), "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Empty(t, result)
+}
+
+func TestGetCurrentCycles_EmptyLessons(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, new(mockCourseRepo), paymentRepo)
+
+	lessonRepo.On("GetAllLessonsForCycles", mock.Anything, "tutor-1").Return([]models.CalendarLesson{}, nil)
+
+	result, err := svc.GetCurrentCycles(context.Background(), "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Empty(t, result)
 }
