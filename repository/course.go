@@ -85,12 +85,12 @@ func (r *courseRepository) GetByStudent(ctx context.Context, studentID string, t
 	rows, err := r.conn.Query(ctx,
 		`SELECT c.id, c.student_id, c.tutor_id, c.subject, c.price_per_cycle, c.lessons_per_cycle, c.started_at, c.ended_at, c.is_active
 		 FROM courses c
-		 WHERE c.tutor_id = $2 AND c.student_id = $1
+		 WHERE c.tutor_id = $2 AND c.student_id = $1 AND c.is_active = TRUE
 		 UNION
 		 SELECT c.id, c.student_id, c.tutor_id, c.subject, c.price_per_cycle, c.lessons_per_cycle, c.started_at, c.ended_at, c.is_active
 		 FROM courses c
 		 JOIN course_enrollments ce ON ce.course_id = c.id
-		 WHERE c.tutor_id = $2 AND ce.student_id = $1
+		 WHERE c.tutor_id = $2 AND ce.student_id = $1 AND c.is_active = TRUE
 		 ORDER BY started_at DESC`,
 		studentID, tutorID,
 	)
