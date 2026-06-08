@@ -11,6 +11,7 @@ type Course struct {
 	LessonsPerCycle int        `json:"lessons_per_cycle"`
 	StartedAt       time.Time  `json:"started_at"`
 	EndedAt         *time.Time `json:"ended_at"`
+	IsActive        bool       `json:"is_active"`
 }
 
 type CourseBalance struct {
