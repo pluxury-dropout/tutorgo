@@ -123,6 +123,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.PATCH("/lessons/series/:seriesId", lessonHandler.UpdateSeries)
 
 		auth.GET("/calendar", lessonHandler.GetCalendar)
+		auth.GET("/dashboard/cycles", lessonHandler.GetCurrentCycles)
 
 		auth.GET("/courses/:id/enrollments", enrollmentHandler.GetByCourse)
 		auth.POST("/courses/:id/enrollments", enrollmentHandler.Add)

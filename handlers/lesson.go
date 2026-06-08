@@ -257,3 +257,18 @@ func (h *LessonHandler) GetCalendar(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, lessons)
 }
+
+func (h *LessonHandler) GetCurrentCycles(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	cycles, err := h.service.GetCurrentCycles(c.Request.Context(), tutorID)
+	if err != nil {
+		h.log.Error("Failed to get current cycles", slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, cycles)
+}
