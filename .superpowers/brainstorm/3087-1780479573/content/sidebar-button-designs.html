@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Дизайн кнопки</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f0f0f;
+    color: #e8e8e8;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 32px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 24px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .card {
+    border: 2px solid #222;
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: #444; transform: translateY(-2px); }
+  .card.selected { border-color: #6366f1; }
+
+  .card-label {
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #555;
+    border-bottom: 1px solid #1a1a1a;
+    background: #111;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-label .badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    background: #6366f1; color: #fff; font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* Sidebar mockup wrapper */
+  .sidebar-mock {
+    background: #161616;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 200px;
+    justify-content: flex-end;
+  }
+
+  /* ───── Option A: Compact status bar ───── */
+  .btn-a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    cursor: pointer;
+    transition: background 0.12s;
+    width: 100%;
+    text-align: left;
+  }
+  .btn-a:hover { background: #252525; }
+  .dot-live {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    animation: livePulse 2s ease-in-out infinite;
+  }
+  @keyframes livePulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+    50% { opacity: 0.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+  }
+  .btn-a-text { font-size: 12px; font-weight: 600; color: #d4d4d4; flex: 1; }
+  .btn-a-icon { color: #555; font-size: 11px; }
+
+  /* ───── Option B: Filled primary ───── */
+  .btn-b {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.12s, transform 0.1s;
+  }
+  .btn-b:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-b svg { width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 2; }
+  .btn-b-text { font-size: 12.5px; font-weight: 700; color: #fff; letter-spacing: -0.01em; }
+
+  /* ───── Option C: Ghost + record button ───── */
+  .btn-c {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: transparent;
+    border: 1.5px solid #2f2f2f;
+    cursor: pointer;
+    width: 100%;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .btn-c:hover { border-color: #444; background: #1c1c1c; }
+  .record-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #ef4444; flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
+  }
+  .btn-c-text { font-size: 12px; font-weight: 600; color: #c4c4c4; flex: 1; }
+  .shortcut { font-size: 10px; color: #444; font-family: monospace; background: #1f1f1f; padding: 2px 5px; border-radius: 4px; border: 1px solid #2f2f2f; }
+
+  /* fake lesson list above button */
+  .lesson-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 6px 8px; border-radius: 7px;
+  }
+  .lesson-bar { width: 3px; height: 32px; border-radius: 2px; background: #3b82f6; flex-shrink: 0; }
+  .lesson-info { display: flex; flex-direction: column; gap: 2px; }
+  .lesson-time { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
+  .lesson-name { font-size: 11.5px; font-weight: 600; color: #d4d4d4; }
+  .lesson-student { font-size: 10.5px; color: #555; }
+
+  .section-label {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #3f3f3f;
+    padding: 0 8px 4px;
+  }
+
+  .divider { height: 1px; background: #1e1e1e; margin: 4px 0; }
+
+  .card-desc {
+    padding: 10px 14px 12px;
+    font-size: 11.5px;
+    color: #555;
+    line-height: 1.5;
+    background: #111;
+  }
+
+  .selected-indicator {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #6366f1; color: #fff;
+    padding: 10px 18px; border-radius: 10px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .selected-indicator.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>Дизайн кнопки «Начать урок»</h1>
+<p class="subtitle">Кнопка появляется внизу CalendarSidebarPanel, под мини-расписанием. Кликни чтобы выбрать.</p>
+
+<div class="grid">
+
+  <!-- Option A -->
+  <div class="card" onclick="select(this, 'A')">
+    <div class="card-label">Вариант A <span class="badge">Рекомендую</span></div>
+    <div class="sidebar-mock">
+      <div class="section-label">Сегодня · ср, 3 июн</div>
+      <div class="lesson-item">
+        <div class="lesson-bar"></div>
+        <div class="lesson-info">
+          <div class="lesson-time">14:00</div>
+          <div class="lesson-name">Математика</div>
+          <div class="lesson-student">Айдос К.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <button class="btn-a">
+        <div class="dot-live"></div>
+        <span class="btn-a-text">Начать урок</span>
+        <span class="btn-a-icon">→</span>
+      </button>
+    </div>
+    <div class="card-desc">Минималистичный статус-бар с живым зелёным индикатором. Органично вписывается в сайдбар, не кричит.</div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" onclick="select(this, 'B')">
+    <div class="card-label">Вариант B</div>
+    <div class="sidebar-mock">
+      <div class="section-label">Сегодня · ср, 3 июн</div>
+      <div class="lesson-item">
+        <div class="lesson-bar"></div>
+        <div class="lesson-info">
+          <div class="lesson-time">14:00</div>
+          <div class="lesson-name">Математика</div>
+          <div class="lesson-student">Айдос К.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <button class="btn-b">
+        <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <span class="btn-b-text">Начать урок</span>
+      </button>
+    </div>
+    <div class="card-desc">Яркая заливка с градиентом. Чёткий CTA — невозможно пропустить. Выбивается из монохромного сайдбара.</div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" onclick="select(this, 'C')">
+    <div class="card-label">Вариант C</div>
+    <div class="sidebar-mock">
+      <div class="section-label">Сегодня · ср, 3 июн</div>
+      <div class="lesson-item">
+        <div class="lesson-bar"></div>
+        <div class="lesson-info">
+          <div class="lesson-time">14:00</div>
+          <div class="lesson-name">Математика</div>
+          <div class="lesson-student">Айдос К.</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <button class="btn-c">
+        <div class="record-dot"></div>
+        <span class="btn-c-text">Начать урок</span>
+      </button>
+    </div>
+    <div class="card-desc">Красная точка «в эфире» — ощущение записи/трансляции. Рамка-ghost не давит, но красная точка сразу цепляет.</div>
+  </div>
+
+</div>
+
+<div class="selected-indicator" id="indicator">Выбрано</div>
+
+<script>
+  let selected = null;
+  function select(el, label) {
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selected = label;
+    const ind = document.getElementById('indicator');
+    ind.textContent = 'Вариант ' + label + ' выбран';
+    ind.classList.add('show');
+    setTimeout(() => ind.classList.remove('show'), 1800);
+  }
+</script>
+
+</body>
+</html>

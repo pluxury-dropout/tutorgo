@@ -1,0 +1,10 @@
+{"type":"server-started","port":62857,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:62857","screen_dir":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/310888-1779963936/content","state_dir":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/310888-1779963936/state"}
+{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/310888-1779963936/content/design-overview.html"}
+{"source":"user-event","type":"click","text":"✎\n    \n      I want to change something\n      Tell me what to adjust before we start","choice":"change","id":null,"timestamp":1779964106762}
+{"source":"user-event","type":"click","text":"✎\n    \n      I want to change something\n      Tell me what to adjust before we start","choice":"change","id":null,"timestamp":1779964109085}
+{"source":"user-event","type":"click","text":"✎\n    \n      I want to change something\n      Tell me what to adjust before we start","choice":"change","id":null,"timestamp":1779964109674}
+{"source":"user-event","type":"click","text":"✎\n    \n      I want to change something\n      Tell me what to adjust before we start","choice":"change","id":null,"timestamp":1779964166412}
+{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/310888-1779963936/content/active-color-question.html"}
+{"source":"user-event","type":"click","text":"A\n    \n      Remove the blue — match the Notion design\n      Active sidebar item gets a subtle grey background with the same dark text as the rest of the UI. The \"important text\" colour becomes #37352F (Notion dark) — no blue accent.\n      \n        \n        \n          🏠 Главная\n          📅 Расписание\n          👥 Ученики\n        \n        \n        \n          25 – 31 мая 2026\n          Important text = #37352F (same as body)","choice":"a","id":null,"timestamp":1779964234283}
+{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/310888-1779963936/content/final-design.html"}
+{"type":"server-stopped","reason":"owner process exited"}

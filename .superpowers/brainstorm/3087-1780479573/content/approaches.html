@@ -1,0 +1,43 @@
+<h2>Как хранить состояние быстрой комнаты?</h2>
+<p class="subtitle">Нажми кнопку → создаётся новая одноразовая комната → копируешь ссылку → отправляешь ученику</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>In-memory map на Go-сервере</h3>
+      <p>Состояние комнат живёт в памяти сервера (Go map + mutex). Нет миграций, нет новых таблиц. Комнаты сбрасываются при перезапуске сервера — для одноразовых сессий это нормально.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Плюсы</h4><ul><li>Нет миграций</li><li>Минимум кода</li><li>Мгновенная проверка статуса</li></ul></div>
+        <div class="cons"><h4>Минусы</h4><ul><li>Сброс при рестарте</li><li>Нет истории звонков</li></ul></div>
+      </div>
+      <p style="margin-top:8px;font-size:12px;color:var(--success);font-weight:600">✓ Рекомендую — идеально для одноразовых комнат</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Новая таблица quick_rooms в БД</h3>
+      <p>Миграция добавляет таблицу <code>quick_rooms(id, tutor_id, started_at, ended_at)</code>. Полный трекинг истории. Структура идентична текущим room-полям в таблице lessons.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Плюсы</h4><ul><li>История всех звонков</li><li>Переживает рестарт</li><li>Консистентно с кодом</li></ul></div>
+        <div class="cons"><h4>Минусы</h4><ul><li>Нужна миграция</li><li>Больше кода</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>LiveKit как источник правды</h3>
+      <p>Не хранить состояние вообще. Статус комнаты проверяется через LiveKit API (ListRooms). Токены генерируются напрямую по UUID без записи в БД или память.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Плюсы</h4><ul><li>Нет локального стейта</li><li>LiveKit — единый источник</li></ul></div>
+        <div class="cons"><h4>Минусы</h4><ul><li>Зависимость от LiveKit API</li><li>Медленнее (сетевой запрос)</li><li>Любой знающий UUID — войдёт</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

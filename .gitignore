@@ -9,9 +9,9 @@ tmp/
 # Claude Code
 .claude/
 CLAUDE.md
-docs/superpowers/
-.superpowers/
-docs/
+# docs/superpowers/
+# .superpowers/
+# docs/
 
 # Git worktrees
 .worktrees/

@@ -1,0 +1,214 @@
+<h2>Calendar Redesign — Implementation Plan</h2>
+<p class="subtitle">Review the planned changes before we start coding. Click anything you want to change.</p>
+
+<div class="section">
+  <h3>📱 Mobile — what's being added to M1</h3>
+  <div class="split" style="gap:24px">
+
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#ef4444;color:#fff">Current — missing features</div>
+      <div class="mockup-body" style="padding:0;font-family:system-ui,sans-serif;font-size:13px">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 14px 8px;border-bottom:1px solid #e5e5e5;background:#fff">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600">Май 2026</div>
+            <div style="font-size:11px;color:#999;margin-top:1px">25 – 31 мая</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="width:28px;height:28px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">‹</div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">›</div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">⌕</div>
+          </div>
+          <div style="padding:2px 8px;background:#fee2e2;color:#ef4444;border-radius:4px;font-size:11px;font-weight:600">No theme toggle</div>
+        </div>
+
+        <!-- Day strip -->
+        <div style="display:flex;padding:8px 6px 8px 30px;border-bottom:1px solid #e5e5e5;background:#fff">
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase">Пн</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:transparent;color:#777;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">25</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase">Вт</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:#f0f0f0;color:#333;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">26</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#333;font-weight:600;text-transform:uppercase">Ср</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:#333;color:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">27</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase">Чт</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:transparent;color:#777;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">28</div>
+          </div>
+          <div style="flex:1"></div><div style="flex:1"></div><div style="flex:1"></div>
+        </div>
+
+        <!-- Mini grid -->
+        <div style="display:flex;position:relative;height:140px;background:#fff">
+          <!-- gutter -->
+          <div style="width:30px;flex:none;position:relative">
+            <div style="position:absolute;top:22px;right:4px;font-size:9px;color:#bbb">09</div>
+            <div style="position:absolute;top:78px;right:4px;font-size:9px;color:#bbb">10</div>
+            <div style="position:absolute;top:134px;right:4px;font-size:9px;color:#bbb">11</div>
+          </div>
+          <!-- cols -->
+          <div style="flex:1;position:relative;border-left:1px solid #f0f0f0">
+            <div style="position:absolute;top:28px;left:1px;right:1px;height:36px;background:#dde9dd;border-radius:3px;padding:2px 3px;font-size:9px;font-weight:600;color:#2e4d2e;overflow:hidden">Математика</div>
+          </div>
+          <div style="flex:1;border-left:1px solid #f0f0f0"></div>
+          <div style="flex:1;border-left:1px solid #f0f0f0">
+            <div style="position:absolute;top:10px;left:calc(2*100%/7 + 31px);width:calc(100%/7 - 2px);height:50px;background:#e7f0f9;border-radius:3px;padding:2px 3px;font-size:9px;font-weight:600;color:#1e466e;overflow:hidden">Английский<br><span style="font-size:8px;opacity:0.7;text-decoration:none">Нет эффекта</span></div>
+          </div>
+          <div style="flex:1;border-left:1px solid #f0f0f0"></div>
+          <div style="flex:1;border-left:1px solid #f0f0f0">
+            <div style="position:absolute;top:60px;right:1px;width:calc(100%/7*3 - 2px);height:32px;background:#efeeec;border-radius:3px;padding:2px 3px;font-size:9px;font-weight:600;color:#8c8a83;overflow:hidden">Химия (cancelled - no strikethrough)</div>
+          </div>
+          <div style="flex:1;border-left:1px solid #f0f0f0"></div>
+        </div>
+
+        <!-- FAB label -->
+        <div style="padding:6px 12px;background:#fef3c7;border-top:1px solid #e5e5e5;font-size:11px;color:#92400e;text-align:center">⚠ FAB button has no action</div>
+
+      </div>
+    </div>
+
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#22c55e;color:#fff">After redesign — all fixed</div>
+      <div class="mockup-body" style="padding:0;font-family:system-ui,sans-serif;font-size:13px">
+
+        <!-- Header with theme toggle -->
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 14px 8px;border-bottom:1px solid #e5e5e5;background:#fff">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600">Май 2026</div>
+            <div style="font-size:11px;color:#999;margin-top:1px">25 – 31 мая</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <div style="width:28px;height:28px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">‹</div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">›</div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999">⌕</div>
+            <!-- theme toggle pill -->
+            <div style="display:inline-flex;align-items:center;background:#f0f0f0;border-radius:999px;padding:2px;gap:1px">
+              <div style="width:22px;height:22px;border-radius:999px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;font-size:12px">☀️</div>
+              <div style="width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:.5">🌙</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Day strip same -->
+        <div style="display:flex;padding:8px 6px 8px 30px;border-bottom:1px solid #e5e5e5;background:#fff">
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase">Пн</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:transparent;color:#777;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">25</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase">Вт</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:#f0f0f0;color:#333;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">26</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#333;font-weight:600;text-transform:uppercase">Ср</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:#333;color:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">27</div>
+          </div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase">Чт</div>
+            <div style="width:24px;height:24px;border-radius:999px;background:transparent;color:#777;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:2px">28</div>
+          </div>
+          <div style="flex:1"></div><div style="flex:1"></div><div style="flex:1"></div>
+        </div>
+
+        <!-- Mini grid with hover + strikethrough -->
+        <div style="display:flex;position:relative;height:140px;background:#fff">
+          <div style="width:30px;flex:none;position:relative">
+            <div style="position:absolute;top:22px;right:4px;font-size:9px;color:#bbb">09</div>
+            <div style="position:absolute;top:78px;right:4px;font-size:9px;color:#bbb">10</div>
+            <div style="position:absolute;top:134px;right:4px;font-size:9px;color:#bbb">11</div>
+          </div>
+          <div style="flex:1;position:relative;border-left:1px solid #f0f0f0">
+            <div style="position:absolute;top:28px;left:1px;right:1px;height:36px;background:#dde9dd;border-radius:3px;padding:2px 3px;font-size:9px;font-weight:600;color:#2e4d2e;overflow:hidden;box-shadow:0 4px 12px -4px rgba(0,0,0,.18);transition:box-shadow .09s">Математика</div>
+          </div>
+          <div style="flex:1;border-left:1px solid #f0f0f0"></div>
+          <div style="flex:1;border-left:1px solid #f0f0f0">
+            <div style="position:absolute;top:10px;left:calc(2*100%/7 + 31px);width:calc(100%/7 - 2px);height:50px;background:#e7f0f9;border-radius:3px;padding:2px 3px;font-size:9px;font-weight:600;color:#1e466e;overflow:hidden">Английский<br><span style="font-size:8px;opacity:0.7">↑ hover shadow</span></div>
+          </div>
+          <div style="flex:1;border-left:1px solid #f0f0f0"></div>
+          <div style="flex:1;border-left:1px solid #f0f0f0">
+            <div style="position:absolute;top:60px;right:1px;width:calc(100%/7*3 - 2px);height:32px;background:#efeeec;border-radius:3px;padding:2px 3px;font-size:9px;font-weight:600;color:#8c8a83;overflow:hidden;text-decoration:line-through">Химия (strikethrough ✓)</div>
+          </div>
+          <div style="flex:1;border-left:1px solid #f0f0f0"></div>
+        </div>
+
+        <div style="padding:6px 12px;background:#f0fdf4;border-top:1px solid #e5e5e5;font-size:11px;color:#166534;text-align:center">✓ FAB left as-is (no action, per your choice)</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>🖥 Desktop light theme — one bug fix</h3>
+  <div class="split" style="gap:24px">
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#ef4444;color:#fff">Current light mode bug</div>
+      <div class="mockup-body" style="font-family:system-ui,sans-serif;font-size:12px;padding:12px">
+        <p style="margin:0 0 8px">In month view, today's column background is hardcoded to:</p>
+        <code style="display:block;background:#f5f5f5;padding:6px 10px;border-radius:4px;font-size:11px;margin-bottom:8px">.fc-daygrid-day.fc-day-today {<br>&nbsp;&nbsp;background: #393939 !important; ← dark grey<br>}</code>
+        <div style="display:flex;gap:4px">
+          <div style="flex:1;height:60px;border:1px solid #e5e5e5;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa">Mon</div>
+          <div style="flex:1;height:60px;border:1px solid #e5e5e5;border-radius:4px;background:#393939;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700">Today<br><span style="font-size:9px;opacity:.7">← dark on light!</span></div>
+          <div style="flex:1;height:60px;border:1px solid #e5e5e5;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa">Wed</div>
+        </div>
+      </div>
+    </div>
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header" style="background:#22c55e;color:#fff">After fix</div>
+      <div class="mockup-body" style="font-family:system-ui,sans-serif;font-size:12px;padding:12px">
+        <p style="margin:0 0 8px">Uses the theme-aware CSS variable instead:</p>
+        <code style="display:block;background:#f5f5f5;padding:6px 10px;border-radius:4px;font-size:11px;margin-bottom:8px">.fc-daygrid-day.fc-day-today {<br>&nbsp;&nbsp;background: var(--primary-light) !important;<br>}</code>
+        <div style="display:flex;gap:4px">
+          <div style="flex:1;height:60px;border:1px solid #e5e5e5;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa">Mon</div>
+          <div style="flex:1;height:60px;border:1px solid #e5e5e5;border-radius:4px;background:#E9F3F7;display:flex;align-items:center;justify-content:center;font-size:11px;color:#337EA9;font-weight:700">Today<br><span style="font-size:9px;opacity:.8">← light Notion blue</span></div>
+          <div style="flex:1;height:60px;border:1px solid #e5e5e5;border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa">Wed</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Summary of all changes</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <strong style="color:#166534">Mobile (MobileWeekCalendar.tsx)</strong>
+      <ul style="margin:8px 0 0;padding-left:16px;color:#374151;line-height:1.8">
+        <li>Add Sun/Moon theme toggle pill to header</li>
+        <li>Cancelled events → strikethrough text</li>
+        <li>Event chips → hover box-shadow via CSS class</li>
+        <li>CSS in globals.css for hover transition</li>
+      </ul>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px">
+      <strong style="color:#166534">Desktop (globals.css)</strong>
+      <ul style="margin:8px 0 0;padding-left:16px;color:#374151;line-height:1.8">
+        <li>Fix today column: <code>#393939</code> → <code>var(--primary-light)</code></li>
+        <li>No other changes — light theme already correct</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:24px">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>Looks good — implement it</h3>
+      <p>Proceed with all 4 changes listed above</p>
+    </div>
+  </div>
+  <div class="option" data-choice="change" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>I want to change something</h3>
+      <p>Tell me what to adjust before we start</p>
+    </div>
+  </div>
+</div>
