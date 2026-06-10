@@ -150,11 +150,12 @@ func (r *whiteboardRepository) DeletePage(ctx context.Context, pageID, boardID s
 }
 
 func (r *whiteboardRepository) CreateInvite(ctx context.Context, boardID string) (models.BoardInvite, error) {
-	// Delete previous invite (one active per board)
-	_, _ = r.conn.Exec(ctx, `DELETE FROM board_invites WHERE board_id = $1`, boardID)
+	// Atomically create or rotate the single active invite per board.
 	var inv models.BoardInvite
 	err := r.conn.QueryRow(ctx,
-		`INSERT INTO board_invites (board_id) VALUES ($1) RETURNING id, board_id, created_at`,
+		`INSERT INTO board_invites (board_id) VALUES ($1)
+         ON CONFLICT (board_id) DO UPDATE SET id = gen_random_uuid(), created_at = now()
+         RETURNING id, board_id, created_at`,
 		boardID,
 	).Scan(&inv.ID, &inv.BoardID, &inv.CreatedAt)
 	return inv, err
