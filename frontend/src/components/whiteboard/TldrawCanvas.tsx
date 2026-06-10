@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Tldraw, type Editor } from '@tldraw/tldraw'
+import { Tldraw, type Editor, AssetRecordType } from '@tldraw/tldraw'
 import '@tldraw/tldraw/tldraw.css'
 import { useWhiteboardSync } from './useWhiteboardSync'
 import type { BoardPage } from '@/types/api'
@@ -23,7 +23,7 @@ export function TldrawCanvas({ page, token, boardId: _boardId }: Props) {
       const editor = editorRef.current
       if (!editor) return
 
-      const assetId = `asset:${crypto.randomUUID()}` as `asset:${string}`
+      const assetId = AssetRecordType.createId()
       editor.createAssets([
         {
           id: assetId,
