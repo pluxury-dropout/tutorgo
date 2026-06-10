@@ -53,7 +53,12 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
 	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
-	wbHubManager := handlers.NewWbHubManager(whiteboardService, log)
+
+	origins := []string{"http://localhost:3000"}
+	if cfg.AllowedOrigin != "" {
+		origins = append(origins, cfg.AllowedOrigin)
+	}
+	wbHubManager := handlers.NewWbHubManager(whiteboardService, log, cfg.JWTSecret, origins)
 	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager)
 
 	r := gin.New()
@@ -63,10 +68,6 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1 MB
 		c.Next()
 	})
-	origins := []string{"http://localhost:3000"}
-	if cfg.AllowedOrigin != "" {
-		origins = append(origins, cfg.AllowedOrigin)
-	}
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

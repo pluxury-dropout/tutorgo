@@ -12,15 +12,10 @@ import (
 
 	"github.com/bep/debounce"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
-
-var wsUpgrader = websocket.Upgrader{
-	CheckOrigin:     func(r *http.Request) bool { return true },
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
 
 // WbMsg — message between client and hub
 type WbMsg struct {
@@ -46,9 +41,11 @@ type wbHub struct {
 	broadcast    chan wbBroadcast
 	register     chan *wbClient
 	unregister   chan *wbClient
+	done         chan struct{}
 	snapshot     json.RawMessage
 	saveDebounce func(f func())
 	svc          service.WhiteboardService
+	mgr          *WbHubManager
 	log          *slog.Logger
 }
 
@@ -57,19 +54,30 @@ type wbBroadcast struct {
 	data   []byte
 }
 
-func newWbHub(pageID string, snapshot json.RawMessage, svc service.WhiteboardService, log *slog.Logger) *wbHub {
+func newWbHub(pageID string, snapshot json.RawMessage, mgr *WbHubManager) *wbHub {
 	h := &wbHub{
 		pageID:     pageID,
 		clients:    make(map[*wbClient]bool),
 		broadcast:  make(chan wbBroadcast, 64),
 		register:   make(chan *wbClient),
 		unregister: make(chan *wbClient),
+		done:       make(chan struct{}),
 		snapshot:   snapshot,
-		svc:        svc,
-		log:        log,
+		svc:        mgr.svc,
+		mgr:        mgr,
+		log:        mgr.log,
 	}
 	h.saveDebounce = debounce.New(2 * time.Second)
 	return h
+}
+
+func (h *wbHub) saveSnapshot(snap json.RawMessage) {
+	if snap == nil {
+		return
+	}
+	if err := h.svc.SaveSnapshot(context.Background(), h.pageID, snap); err != nil {
+		h.log.Error("save snapshot", slog.String("error", err.Error()))
+	}
 }
 
 func (h *wbHub) run() {
@@ -77,7 +85,7 @@ func (h *wbHub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			// Send current snapshot to new client
+			// Send the current full document snapshot to the new client.
 			if h.snapshot != nil {
 				msg, _ := json.Marshal(WbMsg{Type: "snapshot", Payload: h.snapshot})
 				client.send <- msg
@@ -87,15 +95,22 @@ func (h *wbHub) run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
-				// Immediately save snapshot on disconnect
-				if h.snapshot != nil {
+			}
+			if len(h.clients) == 0 {
+				// Last client left: tear down the hub. Take the manager lock and
+				// re-verify emptiness, then remove ourselves and signal done so
+				// any in-flight registration retries with a fresh hub.
+				h.mgr.mu.Lock()
+				if len(h.clients) == 0 {
+					delete(h.mgr.hubs, h.pageID)
+					close(h.done)
+					h.mgr.mu.Unlock()
+					// Capture snapshot value to avoid a data race with run().
 					snap := h.snapshot
-					go func() {
-						if err := h.svc.SaveSnapshot(context.Background(), h.pageID, snap); err != nil {
-							h.log.Error("save snapshot on disconnect", slog.String("error", err.Error()))
-						}
-					}()
+					h.saveSnapshot(snap)
+					return
 				}
+				h.mgr.mu.Unlock()
 			}
 
 		case msg := <-h.broadcast:
@@ -104,24 +119,27 @@ func (h *wbHub) run() {
 				continue
 			}
 
-			if parsed.Type == "update" {
+			switch parsed.Type {
+			case "snapshot":
+				// Full document snapshot: store and debounce-save, do NOT relay.
 				h.snapshot = parsed.Payload
-				// Debounced save to DB
-				h.saveDebounce(func() {
-					snap := h.snapshot
-					if err := h.svc.SaveSnapshot(context.Background(), h.pageID, snap); err != nil {
-						h.log.Error("save snapshot", slog.String("error", err.Error()))
-					}
-				})
-			}
+				snap := h.snapshot
+				h.saveDebounce(func() { h.saveSnapshot(snap) })
+				continue
 
-			// Add sender's peerId to cursor messages
-			if parsed.Type == "cursor" {
+			case "cursor":
+				// Attach sender's peerId, then relay.
 				parsed.PeerID = msg.sender.peerID
 				msg.data, _ = json.Marshal(parsed)
+
+			case "update":
+				// Incremental diff: relay verbatim, never store or persist.
+
+			default:
+				// Unknown message type: relay verbatim.
 			}
 
-			// Broadcast to all except sender
+			// Broadcast to all except sender.
 			for client := range h.clients {
 				if client == msg.sender {
 					continue
@@ -185,18 +203,46 @@ func (c *wbClient) writePump() {
 
 // WbHubManager — stores active hubs (one per pageID)
 type WbHubManager struct {
-	mu   sync.Mutex
-	hubs map[string]*wbHub
-	svc  service.WhiteboardService
-	log  *slog.Logger
+	mu        sync.Mutex
+	hubs      map[string]*wbHub
+	svc       service.WhiteboardService
+	log       *slog.Logger
+	jwtSecret string
+	origins   map[string]bool
+	upgrader  websocket.Upgrader
 }
 
-func NewWbHubManager(svc service.WhiteboardService, log *slog.Logger) *WbHubManager {
-	return &WbHubManager{
-		hubs: make(map[string]*wbHub),
-		svc:  svc,
-		log:  log,
+func NewWbHubManager(svc service.WhiteboardService, log *slog.Logger, jwtSecret string, allowedOrigins []string) *WbHubManager {
+	origins := make(map[string]bool, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		if o != "" {
+			origins[o] = true
+		}
 	}
+	m := &WbHubManager{
+		hubs:      make(map[string]*wbHub),
+		svc:       svc,
+		log:       log,
+		jwtSecret: jwtSecret,
+		origins:   origins,
+	}
+	m.upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin:     m.checkOrigin,
+	}
+	return m
+}
+
+// checkOrigin mirrors the router's CORS allowlist to prevent cross-site
+// WebSocket hijacking. Requests without an Origin header (e.g. non-browser
+// clients) are allowed.
+func (m *WbHubManager) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	return m.origins[origin]
 }
 
 func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbHub {
@@ -205,49 +251,110 @@ func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbH
 	if hub, ok := m.hubs[pageID]; ok {
 		return hub
 	}
-	hub := newWbHub(pageID, snapshot, m.svc, m.log)
+	hub := newWbHub(pageID, snapshot, m)
 	m.hubs[pageID] = hub
 	go hub.run()
 	return hub
 }
 
+// authorizeWS validates the ?token= query param. It first tries to parse it as a
+// tutor access JWT (same scheme as middleware.Auth); on success it requires that
+// pageID's board belongs to the tutor. Otherwise it treats the token as an invite
+// UUID and requires that pageID belongs to the invite's board. Returns true iff
+// the client may access the page.
+func (m *WbHubManager) authorizeWS(ctx context.Context, svc service.WhiteboardService, pageID, token string) bool {
+	if token == "" {
+		return false
+	}
+
+	// Try tutor access JWT first.
+	if tutorID, ok := m.parseTutorJWT(token); ok {
+		owned, err := svc.PageBelongsToTutor(ctx, pageID, tutorID)
+		if err == nil && owned {
+			return true
+		}
+		return false
+	}
+
+	// Fall back to invite UUID: token must map to a board, and pageID must
+	// belong to that same board.
+	board, err := svc.ValidateInvite(ctx, token)
+	if err != nil {
+		return false
+	}
+	for _, p := range board.Pages {
+		if p.ID == pageID {
+			return true
+		}
+	}
+	return false
+}
+
+// parseTutorJWT mirrors middleware.Auth's validation. Returns the tutorID and
+// true if token is a valid HS256 access token carrying an "id" claim.
+func (m *WbHubManager) parseTutorJWT(tokenStr string) (string, bool) {
+	token, err := jwt.ParseWithClaims(
+		tokenStr,
+		jwt.MapClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(m.jwtSecret), nil
+		},
+		jwt.WithValidMethods([]string{"HS256"}),
+	)
+	if err != nil || !token.Valid {
+		return "", false
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", false
+	}
+	tutorID, ok := claims["id"].(string)
+	if !ok || tutorID == "" {
+		return "", false
+	}
+	return tutorID, true
+}
+
 // ServeWS — handler GET /ws/board/:pageId?token=...
+// The route is public (browsers cannot set headers on a WebSocket handshake),
+// so authorization is performed here from the ?token= query param.
 func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		pageID := c.Param("pageId")
 		token := c.Query("token")
 
-		// Authorization: JWT or invite UUID
-		var authorized bool
-		if c.GetString("tutorID") != "" {
-			authorized = true
-		} else if token != "" {
-			// Validate invite token
-			if _, err := svc.ValidateInvite(c.Request.Context(), token); err == nil {
-				authorized = true
-			}
-		}
-		if !authorized {
+		if !m.authorizeWS(c.Request.Context(), svc, pageID, token) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
 
-		// Load current snapshot from DB
+		// Load current snapshot from DB (full document).
 		snapshot, _ := svc.GetPageSnapshot(c.Request.Context(), pageID)
 
-		conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+		conn, err := m.upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			return
 		}
 
-		hub := m.getOrCreate(pageID, snapshot)
 		client := &wbClient{
-			hub:    hub,
 			conn:   conn,
 			send:   make(chan []byte, 256),
 			peerID: uuid.New().String(),
 		}
-		hub.register <- client
+
+		// Register with the hub, retrying with a fresh hub if the one we got is
+		// in the middle of shutting down (avoids the register-after-close race).
+		for {
+			hub := m.getOrCreate(pageID, snapshot)
+			client.hub = hub
+			select {
+			case hub.register <- client:
+				goto registered
+			case <-hub.done:
+				// Hub died before our registration landed; loop for a new one.
+			}
+		}
+	registered:
 
 		go client.writePump()
 		client.readPump()
