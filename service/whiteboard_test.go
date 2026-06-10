@@ -1,0 +1,106 @@
+package service_test
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"tutorgo/models"
+	"tutorgo/service"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+type mockWhiteboardRepo struct{ mock.Mock }
+
+func (m *mockWhiteboardRepo) GetOrCreateBoard(ctx context.Context, courseID, tutorID string) (models.Board, error) {
+	args := m.Called(ctx, courseID, tutorID)
+	return args.Get(0).(models.Board), args.Error(1)
+}
+func (m *mockWhiteboardRepo) GetBoardByInvite(ctx context.Context, inviteID string) (models.Board, error) {
+	args := m.Called(ctx, inviteID)
+	return args.Get(0).(models.Board), args.Error(1)
+}
+func (m *mockWhiteboardRepo) GetPagesByBoard(ctx context.Context, boardID string) ([]models.BoardPage, error) {
+	args := m.Called(ctx, boardID)
+	return args.Get(0).([]models.BoardPage), args.Error(1)
+}
+func (m *mockWhiteboardRepo) GetPageByID(ctx context.Context, pageID string) (models.BoardPage, error) {
+	args := m.Called(ctx, pageID)
+	return args.Get(0).(models.BoardPage), args.Error(1)
+}
+func (m *mockWhiteboardRepo) CreatePage(ctx context.Context, boardID, title string, position int) (models.BoardPage, error) {
+	args := m.Called(ctx, boardID, title, position)
+	return args.Get(0).(models.BoardPage), args.Error(1)
+}
+func (m *mockWhiteboardRepo) UpdatePage(ctx context.Context, pageID string, req models.UpdateBoardPageRequest) (models.BoardPage, error) {
+	args := m.Called(ctx, pageID, req)
+	return args.Get(0).(models.BoardPage), args.Error(1)
+}
+func (m *mockWhiteboardRepo) SaveSnapshot(ctx context.Context, pageID string, snapshot json.RawMessage) error {
+	return m.Called(ctx, pageID, snapshot).Error(0)
+}
+func (m *mockWhiteboardRepo) DeletePage(ctx context.Context, pageID, boardID string) error {
+	return m.Called(ctx, pageID, boardID).Error(0)
+}
+func (m *mockWhiteboardRepo) CreateInvite(ctx context.Context, boardID string) (models.BoardInvite, error) {
+	args := m.Called(ctx, boardID)
+	return args.Get(0).(models.BoardInvite), args.Error(1)
+}
+func (m *mockWhiteboardRepo) DeleteInvite(ctx context.Context, boardID string) error {
+	return m.Called(ctx, boardID).Error(0)
+}
+func (m *mockWhiteboardRepo) GetInviteByBoard(ctx context.Context, boardID string) (models.BoardInvite, error) {
+	args := m.Called(ctx, boardID)
+	return args.Get(0).(models.BoardInvite), args.Error(1)
+}
+func (m *mockWhiteboardRepo) CreateAsset(ctx context.Context, boardID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error) {
+	args := m.Called(ctx, boardID, filePath, mimeType, sizeBytes)
+	return args.Get(0).(models.BoardAsset), args.Error(1)
+}
+func (m *mockWhiteboardRepo) GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error) {
+	args := m.Called(ctx, assetID)
+	return args.Get(0).(models.BoardAsset), args.Error(1)
+}
+func (m *mockWhiteboardRepo) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
+	args := m.Called(ctx, pageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(json.RawMessage), args.Error(1)
+}
+
+func TestWhiteboardService_GetOrCreateBoard_CreatesFirstPage(t *testing.T) {
+	repo := new(mockWhiteboardRepo)
+	svc := service.NewWhiteboardService(repo)
+
+	board := models.Board{ID: "board-1", CourseID: "course-1", TutorID: "tutor-1"}
+	repo.On("GetOrCreateBoard", mock.Anything, "course-1", "tutor-1").Return(board, nil)
+	// No pages → service creates first one
+	repo.On("GetPagesByBoard", mock.Anything, "board-1").Return([]models.BoardPage{}, nil)
+	firstPage := models.BoardPage{ID: "page-1", BoardID: "board-1", Title: "Страница 1", Position: 0}
+	repo.On("CreatePage", mock.Anything, "board-1", "Страница 1", 0).Return(firstPage, nil)
+
+	result, err := svc.GetOrCreateBoard(context.Background(), "course-1", "tutor-1")
+	assert.NoError(t, err)
+	assert.Equal(t, "board-1", result.ID)
+	assert.Len(t, result.Pages, 1)
+	assert.Equal(t, "Страница 1", result.Pages[0].Title)
+	repo.AssertExpectations(t)
+}
+
+func TestWhiteboardService_GetOrCreateBoard_ExistingPages(t *testing.T) {
+	repo := new(mockWhiteboardRepo)
+	svc := service.NewWhiteboardService(repo)
+
+	board := models.Board{ID: "board-1", CourseID: "course-1", TutorID: "tutor-1"}
+	pages := []models.BoardPage{{ID: "page-1", BoardID: "board-1", Title: "Урок 1"}}
+	repo.On("GetOrCreateBoard", mock.Anything, "course-1", "tutor-1").Return(board, nil)
+	repo.On("GetPagesByBoard", mock.Anything, "board-1").Return(pages, nil)
+
+	result, err := svc.GetOrCreateBoard(context.Background(), "course-1", "tutor-1")
+	assert.NoError(t, err)
+	assert.Len(t, result.Pages, 1)
+	// CreatePage should not be called if pages already exist
+	repo.AssertNotCalled(t, "CreatePage")
+}

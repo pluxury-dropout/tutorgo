@@ -28,6 +28,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	enrollmentRepo := repository.NewEnrollmentRepository(pool)
 	attendanceRepo := repository.NewAttendanceRepository(pool)
 	taskRepo := repository.NewTaskRepository(pool)
+	whiteboardRepo := repository.NewWhiteboardRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo)
@@ -39,6 +40,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
+	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
@@ -51,6 +53,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
 	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
+	wbHubManager := handlers.NewWbHubManager(whiteboardService, log)
+	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -80,6 +84,11 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
 	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
+
+	// Whiteboard public routes (no JWT required)
+	r.GET("/public/board/join/:token", whiteboardHandler.JoinByInvite)
+	r.GET("/public/board-assets/:id", whiteboardHandler.ServeAsset)
+	r.GET("/ws/board/:pageId", wbHubManager.ServeWS(whiteboardService))
 
 	// Protected routes
 	auth := r.Group("/")
@@ -145,6 +154,15 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.POST("/lessons/:id/end-room", callHandler.EndRoom)
 		auth.POST("/calls/quick", callHandler.StartQuickRoom)
 		auth.POST("/calls/quick/:id/end", callHandler.EndQuickRoom)
+
+		// Whiteboard protected routes
+		auth.GET("/boards/course/:courseId", whiteboardHandler.GetBoardByCourse)
+		auth.POST("/boards/:boardId/pages", whiteboardHandler.CreatePage)
+		auth.PUT("/board-pages/:pageId", whiteboardHandler.UpdatePage)
+		auth.DELETE("/board-pages/:pageId", whiteboardHandler.DeletePage)
+		auth.POST("/boards/:boardId/invite", whiteboardHandler.CreateInvite)
+		auth.DELETE("/boards/:boardId/invite", whiteboardHandler.DeleteInvite)
+		auth.POST("/boards/:boardId/assets", whiteboardHandler.UploadAsset)
 	}
 
 	return r
