@@ -68,7 +68,9 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
     const ws = new WebSocket(getWsUrl(page.id, token))
     wsRef.current = ws
 
-    ws.onopen = () => setStatus('connected')
+    ws.onopen = () => {
+      if (wsRef.current === ws) setStatus('connected')
+    }
 
     ws.onmessage = (e: MessageEvent) => {
       const msg = JSON.parse(e.data as string) as {
@@ -109,7 +111,10 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
     }
 
     ws.onclose = () => {
-      if (closedRef.current) return
+      // Ignore close events from sockets that were superseded by a newer
+      // connection — otherwise a replaced socket's late onclose would tear
+      // down the healthy one and loop reconnects forever.
+      if (closedRef.current || wsRef.current !== ws) return
       setStatus('disconnected')
       retryRef.current = setTimeout(connect, 2000)
     }
