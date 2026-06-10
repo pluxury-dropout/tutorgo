@@ -36,6 +36,7 @@ export default function BoardPage({ params }: Props) {
       <div className="flex flex-1 overflow-hidden">
         <PageSidebar
           boardId={board.id}
+          courseId={params.courseId}
           pages={board.pages}
           activePageId={currentPageId ?? ''}
           onSelect={setActivePageId}

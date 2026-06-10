@@ -44,6 +44,7 @@ export default function GuestBoardPage({ params }: Props) {
           pages={board.pages}
           activePageId={currentPageId ?? ''}
           onSelect={setActivePageId}
+          isGuest
         />
         <div className="flex-1">
           <TldrawCanvas page={currentPage} boardId={board.id} token={params.token} />

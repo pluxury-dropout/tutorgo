@@ -1,12 +1,16 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { toast } from 'sonner'
 import * as pdfjs from 'pdfjs-dist'
 import { useCreateInvite } from '@/lib/hooks/useWhiteboard'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 
-// Point to the PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+// Bundle the PDF.js worker locally instead of pulling it from a CDN.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString()
 
 interface Props {
   boardId: string
@@ -20,11 +24,15 @@ export function BoardToolbar({ boardId, isGuest = false }: Props) {
   const createInvite = useCreateInvite(boardId)
 
   const handleCopyInvite = async () => {
-    const inv = await createInvite.mutateAsync()
-    const url = `${window.location.origin}/board/join/${inv.id}`
-    await navigator.clipboard.writeText(url)
-    setCopying(true)
-    setTimeout(() => setCopying(false), 2000)
+    try {
+      const inv = await createInvite.mutateAsync()
+      const url = `${window.location.origin}/board/join/${inv.id}`
+      await navigator.clipboard.writeText(url)
+      setCopying(true)
+      setTimeout(() => setCopying(false), 2000)
+    } catch {
+      toast.error('Не удалось создать ссылку-приглашение')
+    }
   }
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,6 +73,8 @@ export function BoardToolbar({ boardId, isGuest = false }: Props) {
           })
         )
       }
+    } catch {
+      toast.error('Не удалось загрузить файл')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -81,20 +91,24 @@ export function BoardToolbar({ boardId, isGuest = false }: Props) {
           {copying ? 'Скопировано!' : 'Пригласить ученика'}
         </button>
       )}
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={uploading}
-        className="text-sm px-3 py-1 rounded bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200"
-      >
-        {uploading ? 'Загрузка...' : 'PDF / Изображение'}
-      </button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,application/pdf"
-        className="hidden"
-        onChange={handlePdfUpload}
-      />
+      {!isGuest && (
+        <>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="text-sm px-3 py-1 rounded bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200"
+          >
+            {uploading ? 'Загрузка...' : 'PDF / Изображение'}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={handlePdfUpload}
+          />
+        </>
+      )}
     </div>
   )
 }

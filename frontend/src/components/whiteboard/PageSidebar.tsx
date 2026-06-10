@@ -1,27 +1,50 @@
 'use client'
 
 import { useState } from 'react'
+import { Plus, X } from 'lucide-react'
+import { toast } from 'sonner'
 import type { BoardPage } from '@/types/api'
 import { useCreatePage, useDeletePage } from '@/lib/hooks/useWhiteboard'
 
 interface Props {
   boardId: string
+  courseId?: string
   pages: BoardPage[]
   activePageId: string
   onSelect: (pageId: string) => void
+  isGuest?: boolean
 }
 
-export function PageSidebar({ boardId, pages, activePageId, onSelect }: Props) {
+export function PageSidebar({
+  boardId,
+  courseId,
+  pages,
+  activePageId,
+  onSelect,
+  isGuest = false,
+}: Props) {
   const [newTitle, setNewTitle] = useState('')
   const [adding, setAdding] = useState(false)
-  const createPage = useCreatePage(boardId)
-  const deletePage = useDeletePage(boardId)
+  const createPage = useCreatePage(boardId, courseId)
+  const deletePage = useDeletePage(boardId, courseId)
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return
-    await createPage.mutateAsync(newTitle.trim())
-    setNewTitle('')
-    setAdding(false)
+    try {
+      await createPage.mutateAsync(newTitle.trim())
+      setNewTitle('')
+      setAdding(false)
+    } catch {
+      toast.error('Не удалось создать страницу')
+    }
+  }
+
+  const handleDelete = async (pageId: string) => {
+    try {
+      await deletePage.mutateAsync(pageId)
+    } catch {
+      toast.error('Не удалось удалить страницу')
+    }
   }
 
   return (
@@ -37,50 +60,57 @@ export function PageSidebar({ boardId, pages, activePageId, onSelect }: Props) {
             }`}
           >
             <span className="truncate">{p.title}</span>
-            {pages.length > 1 && (
+            {!isGuest && pages.length > 1 && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  deletePage.mutate(p.id)
+                  handleDelete(p.id)
                 }}
                 className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 ml-1"
+                aria-label="Удалить страницу"
               >
-                ×
+                <X size={14} />
               </button>
             )}
           </div>
         ))}
       </div>
-      <div className="p-2 border-t">
-        {adding ? (
-          <div className="flex gap-1">
-            <input
-              autoFocus
-              className="flex-1 border rounded px-2 py-1 text-xs"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAdd()
-                if (e.key === 'Escape') setAdding(false)
+      {!isGuest && (
+        <div className="p-2 border-t">
+          {adding ? (
+            <div className="flex gap-1">
+              <input
+                autoFocus
+                className="flex-1 border rounded px-2 py-1 text-xs"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAdd()
+                  if (e.key === 'Escape') setAdding(false)
+                }}
+                placeholder="Название..."
+              />
+              <button
+                onClick={handleAdd}
+                className="flex items-center justify-center bg-blue-500 text-white px-2 rounded"
+                aria-label="Добавить страницу"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setAdding(true)
+                setNewTitle('')
               }}
-              placeholder="Название..."
-            />
-            <button onClick={handleAdd} className="text-xs bg-blue-500 text-white px-2 rounded">
-              +
+              className="flex items-center justify-center gap-1 w-full text-xs text-gray-500 hover:text-gray-700 py-1"
+            >
+              <Plus size={14} /> Страница
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => {
-              setAdding(true)
-              setNewTitle('')
-            }}
-            className="w-full text-xs text-gray-500 hover:text-gray-700 py-1"
-          >
-            + Страница
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
