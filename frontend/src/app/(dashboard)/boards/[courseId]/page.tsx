@@ -1,17 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import { useParams } from 'next/navigation'
 import { useBoardByCourse } from '@/lib/hooks/useWhiteboard'
 import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
 import { PageSidebar } from '@/components/whiteboard/PageSidebar'
 import { BoardToolbar } from '@/components/whiteboard/BoardToolbar'
 
-interface Props {
-  params: { courseId: string }
-}
-
-export default function BoardPage({ params }: Props) {
-  const { data: board, isLoading, error } = useBoardByCourse(params.courseId)
+export default function BoardPage() {
+  const { courseId } = useParams<{ courseId: string }>()
+  const { data: board, isLoading, error } = useBoardByCourse(courseId)
   const [activePageId, setActivePageId] = useState<string | null>(null)
 
   if (isLoading)
@@ -36,7 +34,7 @@ export default function BoardPage({ params }: Props) {
       <div className="flex flex-1 overflow-hidden">
         <PageSidebar
           boardId={board.id}
-          courseId={params.courseId}
+          courseId={courseId}
           pages={board.pages}
           activePageId={currentPageId ?? ''}
           onSelect={setActivePageId}

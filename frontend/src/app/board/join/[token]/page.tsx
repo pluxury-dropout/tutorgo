@@ -1,17 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import { useParams } from 'next/navigation'
 import { useJoinByInvite } from '@/lib/hooks/useWhiteboard'
 import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
 import { PageSidebar } from '@/components/whiteboard/PageSidebar'
 import { BoardToolbar } from '@/components/whiteboard/BoardToolbar'
 
-interface Props {
-  params: { token: string }
-}
-
-export default function GuestBoardPage({ params }: Props) {
-  const { data: board, isLoading, error } = useJoinByInvite(params.token)
+export default function GuestBoardPage() {
+  const { token } = useParams<{ token: string }>()
+  const { data: board, isLoading, error } = useJoinByInvite(token)
   const [activePageId, setActivePageId] = useState<string | null>(null)
 
   if (isLoading)
@@ -47,7 +45,7 @@ export default function GuestBoardPage({ params }: Props) {
           isGuest
         />
         <div className="flex-1">
-          <TldrawCanvas page={currentPage} boardId={board.id} token={params.token} />
+          <TldrawCanvas page={currentPage} boardId={board.id} token={token} />
         </div>
       </div>
     </div>
