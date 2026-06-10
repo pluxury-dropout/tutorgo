@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import Link from 'next/link'
 import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX } from 'lucide-react'
 
 import {
@@ -299,6 +300,12 @@ export default function CourseDetailPage() {
         description={isGroup ? 'Групповой курс' : 'Индивидуальный курс'}
         actions={
           <div className="flex gap-2">
+            <Link
+              href={`/boards/${id}`}
+              className="text-sm px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50 text-gray-700 inline-flex items-center"
+            >
+              Доска
+            </Link>
             <Button size="sm" variant="outline" onClick={() => setCourseFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-1.5" /> Редактировать
             </Button>
