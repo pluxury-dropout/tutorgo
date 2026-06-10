@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
   createTLStore,
   defaultShapeUtils,
+  getSnapshot,
+  loadSnapshot,
   type TLRecord,
 } from '@tldraw/tldraw'
 import { getWsUrl } from '@/lib/api/whiteboard'
@@ -24,24 +26,45 @@ interface SyncResult {
   sendCursor: (x: number, y: number) => void
 }
 
-type WsPayload = {
+type WsDiff = {
   added?: Record<string, TLRecord>
   updated?: Record<string, [TLRecord, TLRecord]>
   removed?: Record<string, TLRecord>
 }
+
+const SNAPSHOT_DEBOUNCE_MS = 1000
 
 export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncResult {
   const [status, setStatus] = useState<ConnStatus>('connecting')
   const [cursors, setCursors] = useState<CursorInfo[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guards against zombie reconnects after the effect has been cleaned up
+  // (e.g. a late `onclose` firing once the component unmounted or the page switched).
+  const closedRef = useRef(false)
 
-  const [store] = useState(() =>
-    createTLStore({ shapeUtils: [...defaultShapeUtils] })
+  // Recreate the store per page so switching pages never merges one page's
+  // content on top of another's. Keyed on page.id.
+  const store = useMemo(
+    () => createTLStore({ shapeUtils: [...defaultShapeUtils] }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page?.id]
   )
+
+  const sendSnapshot = useCallback(() => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(
+      JSON.stringify({ type: 'snapshot', payload: getSnapshot(store) })
+    )
+  }, [store])
 
   const connect = useCallback(() => {
     if (!page) return
+    // Explicitly close any previous socket before opening a new one so page
+    // switches / reconnects can't leak parallel sockets.
+    wsRef.current?.close()
+
     const ws = new WebSocket(getWsUrl(page.id, token))
     wsRef.current = ws
 
@@ -50,21 +73,31 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
     ws.onmessage = (e: MessageEvent) => {
       const msg = JSON.parse(e.data as string) as {
         type: string
-        payload?: WsPayload
+        payload?: WsDiff | unknown
         peerId?: string
         x?: number
         y?: number
       }
 
-      if ((msg.type === 'snapshot' || msg.type === 'update') && msg.payload) {
+      if (msg.type === 'snapshot' && msg.payload) {
+        // Full document load (seeded from DB or latest client snapshot).
         store.mergeRemoteChanges(() => {
-          const { added, updated, removed } = msg.payload!
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          loadSnapshot(store, msg.payload as any)
+        })
+        return
+      }
+
+      if (msg.type === 'update' && msg.payload) {
+        store.mergeRemoteChanges(() => {
+          const { added, updated, removed } = msg.payload as WsDiff
           if (added) store.put(Object.values(added))
           if (updated)
             store.put(Object.values(updated).map(([, next]) => next))
           if (removed)
             store.remove(Object.keys(removed) as Array<TLRecord['id']>)
         })
+        return
       }
 
       if (msg.type === 'cursor' && msg.peerId) {
@@ -76,6 +109,7 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
     }
 
     ws.onclose = () => {
+      if (closedRef.current) return
       setStatus('disconnected')
       retryRef.current = setTimeout(connect, 2000)
     }
@@ -84,24 +118,46 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
   }, [page, token, store])
 
   useEffect(() => {
+    closedRef.current = false
+    setStatus('connecting')
+    setCursors([])
     connect()
     return () => {
-      if (retryRef.current) clearTimeout(retryRef.current)
-      wsRef.current?.close()
+      // Mark closed so a late `onclose` won't schedule a reconnect on a dead
+      // socket / unmounted component.
+      closedRef.current = true
+      if (retryRef.current) {
+        clearTimeout(retryRef.current)
+        retryRef.current = null
+      }
+      if (snapshotTimerRef.current) {
+        clearTimeout(snapshotTimerRef.current)
+        snapshotTimerRef.current = null
+      }
+      // Best-effort final snapshot before tearing the socket down.
+      sendSnapshot()
+      const ws = wsRef.current
+      wsRef.current = null
+      ws?.close()
     }
-  }, [connect])
+  }, [connect, sendSnapshot])
 
-  // Send user changes over WebSocket
+  // Send local user changes over the WebSocket.
   useEffect(() => {
     const unsub = store.listen(
       ({ changes }) => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) return
-        wsRef.current.send(JSON.stringify({ type: 'update', payload: changes }))
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          // Relay the diff immediately (not persisted by the hub).
+          wsRef.current.send(JSON.stringify({ type: 'update', payload: changes }))
+        }
+        // Debounce a full-document snapshot send (persisted by the hub).
+        if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+        snapshotTimerRef.current = setTimeout(sendSnapshot, SNAPSHOT_DEBOUNCE_MS)
       },
       { source: 'user', scope: 'document' }
     )
     return unsub
-  }, [store])
+  }, [store, sendSnapshot])
 
   const sendCursor = useCallback((x: number, y: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

@@ -62,6 +62,7 @@ export function TldrawCanvas({ page, token, boardId: _boardId }: Props) {
         </div>
       )}
       <Tldraw
+        key={page?.id ?? 'empty'}
         store={store}
         onMount={(editor) => {
           editorRef.current = editor
