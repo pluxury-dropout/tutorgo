@@ -9,7 +9,9 @@ import (
 )
 
 type WhiteboardRepository interface {
+	CourseBelongsToTutor(ctx context.Context, courseID, tutorID string) (bool, error)
 	GetOrCreateBoard(ctx context.Context, courseID, tutorID string) (models.Board, error)
+	GetBoardByID(ctx context.Context, boardID string) (models.Board, error)
 	GetBoardByInvite(ctx context.Context, inviteID string) (models.Board, error)
 	GetPagesByBoard(ctx context.Context, boardID string) ([]models.BoardPage, error)
 	GetPageByID(ctx context.Context, pageID string) (models.BoardPage, error)
@@ -31,6 +33,24 @@ type whiteboardRepository struct {
 
 func NewWhiteboardRepository(conn *pgxpool.Pool) WhiteboardRepository {
 	return &whiteboardRepository{conn: conn}
+}
+
+func (r *whiteboardRepository) CourseBelongsToTutor(ctx context.Context, courseID, tutorID string) (bool, error) {
+	var exists bool
+	err := r.conn.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM courses WHERE id = $1 AND tutor_id = $2)`,
+		courseID, tutorID,
+	).Scan(&exists)
+	return exists, err
+}
+
+func (r *whiteboardRepository) GetBoardByID(ctx context.Context, boardID string) (models.Board, error) {
+	var b models.Board
+	err := r.conn.QueryRow(ctx,
+		`SELECT id, course_id, tutor_id, created_at FROM boards WHERE id = $1`,
+		boardID,
+	).Scan(&b.ID, &b.CourseID, &b.TutorID, &b.CreatedAt)
+	return b, err
 }
 
 func (r *whiteboardRepository) GetOrCreateBoard(ctx context.Context, courseID, tutorID string) (models.Board, error) {

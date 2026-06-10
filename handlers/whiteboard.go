@@ -33,8 +33,7 @@ func (h *WhiteboardHandler) GetBoardByCourse(c *gin.Context) {
 	}
 	result, err := h.svc.GetOrCreateBoard(c.Request.Context(), c.Param("courseId"), tutorID)
 	if err != nil {
-		h.log.Error("GetOrCreateBoard", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -64,13 +63,13 @@ func (h *WhiteboardHandler) UpdatePage(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	_ = tutorID
 	var req models.UpdateBoardPageRequest
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	// boardId comes as query param; service's GetPageByID verifies board ownership
-	page, err := h.svc.UpdatePage(c.Request.Context(), c.Param("pageId"), c.Query("boardId"), req)
+	// Ownership is verified in the service via the page's board; any client-supplied
+	// ?boardId= query param is ignored.
+	page, err := h.svc.UpdatePage(c.Request.Context(), c.Param("pageId"), tutorID, req)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -84,8 +83,7 @@ func (h *WhiteboardHandler) DeletePage(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	_ = tutorID
-	if err := h.svc.DeletePage(c.Request.Context(), c.Param("pageId"), c.Query("boardId")); err != nil {
+	if err := h.svc.DeletePage(c.Request.Context(), c.Param("pageId"), tutorID); err != nil {
 		handleServiceError(c, err)
 		return
 	}
@@ -98,10 +96,9 @@ func (h *WhiteboardHandler) CreateInvite(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	inv, err := h.svc.CreateInvite(c.Request.Context(), c.Param("boardId"))
+	inv, err := h.svc.CreateInvite(c.Request.Context(), c.Param("boardId"), tutorID)
 	if err != nil {
-		h.log.Error("CreateInvite", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, inv)
@@ -113,7 +110,7 @@ func (h *WhiteboardHandler) DeleteInvite(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	if err := h.svc.DeleteInvite(c.Request.Context(), c.Param("boardId")); err != nil {
+	if err := h.svc.DeleteInvite(c.Request.Context(), c.Param("boardId"), tutorID); err != nil {
 		handleServiceError(c, err)
 		return
 	}
@@ -175,9 +172,12 @@ func (h *WhiteboardHandler) UploadAsset(c *gin.Context) {
 	}
 
 	mimeType := header.Header.Get("Content-Type")
-	asset, err := h.svc.SaveAsset(c.Request.Context(), c.Param("boardId"), dst, mimeType, int(header.Size))
+	asset, err := h.svc.SaveAsset(c.Request.Context(), c.Param("boardId"), tutorID, dst, mimeType, int(header.Size))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		// Remove the just-written file if persisting the asset failed
+		// (e.g. board not owned by this tutor).
+		_ = os.Remove(dst)
+		handleServiceError(c, err)
 		return
 	}
 
