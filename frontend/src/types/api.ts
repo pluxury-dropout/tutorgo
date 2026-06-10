@@ -120,3 +120,44 @@ export interface CurrentCycleInfo {
   cycle_size: number
   last_at: string
 }
+
+export interface Board {
+  id: string
+  course_id: string
+  tutor_id: string
+  created_at: string
+}
+
+export interface BoardPage {
+  id: string
+  board_id: string
+  title: string
+  snapshot: unknown | null
+  position: number
+  created_at: string
+  updated_at: string
+}
+
+export interface BoardInvite {
+  id: string
+  board_id: string
+  created_at: string
+}
+
+export interface BoardAsset {
+  id: string
+  board_id: string
+  file_path: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface BoardAssetResponse {
+  id: string
+  url: string
+}
+
+export interface BoardWithPages extends Board {
+  pages: BoardPage[]
+}
