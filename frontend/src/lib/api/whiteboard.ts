@@ -38,7 +38,16 @@ export const whiteboardApi = {
 
 export function getWsUrl(pageId: string, token?: string): string {
   const base = BASE_URL.replace(/^http/, 'ws')
-  const params = token ? `?token=${token}` : ''
+  // The /ws/board route is public and can't read the Authorization header, so
+  // the access token must travel as ?token=. A guest invite UUID is passed in
+  // explicitly; otherwise fall back to the tutor's access JWT (same storage as
+  // the axios request interceptor in lib/api/client.ts).
+  const wsToken =
+    token ??
+    (typeof window !== 'undefined'
+      ? localStorage.getItem('tg_token') ?? undefined
+      : undefined)
+  const params = wsToken ? `?token=${encodeURIComponent(wsToken)}` : ''
   return `${base}/ws/board/${pageId}${params}`
 }
 
