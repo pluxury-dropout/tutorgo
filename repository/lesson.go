@@ -49,7 +49,7 @@ func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRe
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status)
 		 VALUES ($1, $2, $3, $4,
-		         CASE WHEN $2 + $3 * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
+		         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
 		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
 		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
