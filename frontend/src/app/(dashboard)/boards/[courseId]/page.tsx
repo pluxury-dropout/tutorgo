@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useBoardByCourse } from '@/lib/hooks/useWhiteboard'
 import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
-import { PageSidebar } from '@/components/whiteboard/PageSidebar'
-import { BoardToolbar } from '@/components/whiteboard/BoardToolbar'
 
 export default function BoardPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -29,20 +27,16 @@ export default function BoardPage() {
   const currentPage = board.pages.find((p) => p.id === currentPageId) ?? null
 
   return (
-    <div className="flex flex-col h-screen">
-      <BoardToolbar boardId={board.id} />
-      <div className="flex flex-1 overflow-hidden">
-        <PageSidebar
-          boardId={board.id}
-          courseId={courseId}
-          pages={board.pages}
-          activePageId={currentPageId ?? ''}
-          onSelect={setActivePageId}
-        />
-        <div className="flex-1">
-          <TldrawCanvas page={currentPage} boardId={board.id} />
-        </div>
-      </div>
+    <div className="h-screen">
+      <TldrawCanvas
+        page={currentPage}
+        boardId={board.id}
+        pages={board.pages}
+        activePageId={currentPageId ?? ''}
+        onSelectPage={setActivePageId}
+        courseId={courseId}
+        isGuest={false}
+      />
     </div>
   )
 }
