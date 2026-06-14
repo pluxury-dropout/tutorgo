@@ -9,6 +9,7 @@ import {
   type TLRecord,
 } from '@tldraw/tldraw'
 import { getWsUrl } from '@/lib/api/whiteboard'
+import { getTokenAsync } from '@/lib/api/client'
 import type { BoardPage } from '@/types/api'
 
 type ConnStatus = 'connecting' | 'connected' | 'disconnected'
@@ -44,12 +45,16 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
   // (e.g. a late `onclose` firing once the component unmounted or the page switched).
   const closedRef = useRef(false)
 
+  // Stable primitive — prevents connect from recreating on React Query refetches
+  // that return a new object reference for the same page.
+  const pageId = page?.id ?? null
+
   // Recreate the store per page so switching pages never merges one page's
-  // content on top of another's. Keyed on page.id.
+  // content on top of another's. Keyed on pageId string.
   const store = useMemo(
     () => createTLStore({ shapeUtils: [...defaultShapeUtils] }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page?.id]
+    [pageId]
   )
 
   const sendSnapshot = useCallback(() => {
@@ -59,13 +64,16 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
     )
   }, [store])
 
-  const connect = useCallback(() => {
-    if (!page) return
+  const connect = useCallback(async () => {
+    if (!pageId) return
     // Explicitly close any previous socket before opening a new one so page
     // switches / reconnects can't leak parallel sockets.
     wsRef.current?.close()
 
-    const ws = new WebSocket(getWsUrl(page.id, token))
+    // Await any in-flight proactive token refresh so we never open a WS with
+    // a stale token (the HTTP Axios interceptor refreshes async; WS skips it).
+    const wsToken = await getTokenAsync(token)
+    const ws = new WebSocket(getWsUrl(pageId, wsToken))
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -116,11 +124,11 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
       // down the healthy one and loop reconnects forever.
       if (closedRef.current || wsRef.current !== ws) return
       setStatus('disconnected')
-      retryRef.current = setTimeout(connect, 2000)
+      retryRef.current = setTimeout(() => { connect() }, 2000)
     }
 
     ws.onerror = () => ws.close()
-  }, [page, token, store])
+  }, [pageId, token, store])
 
   useEffect(() => {
     closedRef.current = false
