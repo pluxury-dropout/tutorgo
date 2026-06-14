@@ -18,22 +18,35 @@ function getTokenExp(token: string): number | null {
 }
 
 let isRefreshing = false
+let refreshPromise: Promise<void> | null = null
 
 async function proactiveRefresh(): Promise<void> {
   if (isRefreshing) return
+  isRefreshing = true
+  const p = (async () => {
+    try {
+      const { data } = await axios.post<{ access_token: string }>(
+        `${BASE_URL}/auth/refresh`,
+        {},
+        { withCredentials: true },
+      )
+      localStorage.setItem('tg_token', data.access_token)
+    } catch {
+      // silently ignore — reactive 401 handler will log out if needed
+    }
+  })()
+  refreshPromise = p
   try {
-    isRefreshing = true
-    const { data } = await axios.post<{ access_token: string }>(
-      `${BASE_URL}/auth/refresh`,
-      {},
-      { withCredentials: true },
-    )
-    localStorage.setItem('tg_token', data.access_token)
-  } catch {
-    // silently ignore — reactive 401 handler will log out if needed
+    await p
   } finally {
     isRefreshing = false
+    refreshPromise = null
   }
+}
+
+export async function getTokenAsync(fallback?: string): Promise<string | undefined> {
+  if (refreshPromise) await refreshPromise
+  return localStorage.getItem('tg_token') ?? fallback ?? undefined
 }
 
 api.interceptors.request.use(async (config) => {
