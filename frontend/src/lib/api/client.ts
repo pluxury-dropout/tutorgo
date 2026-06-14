@@ -46,6 +46,7 @@ async function proactiveRefresh(): Promise<void> {
 
 export async function getTokenAsync(fallback?: string): Promise<string | undefined> {
   if (refreshPromise) await refreshPromise
+  if (typeof window === 'undefined') return fallback
   return localStorage.getItem('tg_token') ?? fallback ?? undefined
 }
 
@@ -73,22 +74,29 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !isAuthRoute && !isRefreshing) {
       isRefreshing = true
-      try {
+      let freshToken: string | null = null
+      refreshPromise = (async () => {
         const { data } = await axios.post<{ access_token: string }>(
           `${BASE_URL}/auth/refresh`,
           {},
           { withCredentials: true },
         )
+        freshToken = data.access_token
         localStorage.setItem('tg_token', data.access_token)
+      })()
+      try {
+        await refreshPromise
         isRefreshing = false
+        refreshPromise = null
 
-        if (error.config) {
+        if (error.config && freshToken) {
           error.config.headers = error.config.headers ?? {}
-          error.config.headers['Authorization'] = `Bearer ${data.access_token}`
+          error.config.headers['Authorization'] = `Bearer ${freshToken}`
           return api.request(error.config)
         }
       } catch {
         isRefreshing = false
+        refreshPromise = null
         localStorage.removeItem('tg_token')
         localStorage.removeItem('tg_user')
         if (typeof window !== 'undefined') window.location.href = '/login'
