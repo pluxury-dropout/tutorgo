@@ -73,6 +73,8 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
     // Await any in-flight proactive token refresh so we never open a WS with
     // a stale token (the HTTP Axios interceptor refreshes async; WS skips it).
     const wsToken = await getTokenAsync(token)
+    // Guard: effect may have been cleaned up while awaiting the token.
+    if (closedRef.current) return
     const ws = new WebSocket(getWsUrl(pageId, wsToken))
     wsRef.current = ws
 
