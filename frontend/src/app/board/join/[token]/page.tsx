@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useJoinByInvite } from '@/lib/hooks/useWhiteboard'
 import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
-import { PageSidebar } from '@/components/whiteboard/PageSidebar'
-import { BoardToolbar } from '@/components/whiteboard/BoardToolbar'
 
 export default function GuestBoardPage() {
   const { token } = useParams<{ token: string }>()
@@ -34,20 +32,16 @@ export default function GuestBoardPage() {
   const currentPage = board.pages.find((p) => p.id === currentPageId) ?? null
 
   return (
-    <div className="flex flex-col h-screen">
-      <BoardToolbar boardId={board.id} isGuest />
-      <div className="flex flex-1 overflow-hidden">
-        <PageSidebar
-          boardId={board.id}
-          pages={board.pages}
-          activePageId={currentPageId ?? ''}
-          onSelect={setActivePageId}
-          isGuest
-        />
-        <div className="flex-1">
-          <TldrawCanvas page={currentPage} boardId={board.id} token={token} />
-        </div>
-      </div>
+    <div className="h-screen">
+      <TldrawCanvas
+        page={currentPage}
+        boardId={board.id}
+        pages={board.pages}
+        activePageId={currentPageId ?? ''}
+        onSelectPage={setActivePageId}
+        token={token}
+        isGuest={true}
+      />
     </div>
   )
 }
