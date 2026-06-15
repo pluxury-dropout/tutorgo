@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
 
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
+import { CallRoom } from '@/components/call/CallRoom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { GraduationCap } from 'lucide-react'
@@ -78,17 +78,14 @@ export default function JoinPage() {
   if (stage === 'in-room' && room) {
     return (
       <div style={{ height: '100dvh' }}>
-        <LiveKitRoom
+        <CallRoom
+          lessonId={lessonId}
           serverUrl={room.server_url}
           token={room.token}
-          video={true}
-          audio={true}
+          role="guest"
+          enableMedia
           onDisconnected={handleDisconnected}
-          data-lk-theme="default"
-          style={{ height: '100%' }}
-        >
-          <VideoConference />
-        </LiveKitRoom>
+        />
       </div>
     )
   }
