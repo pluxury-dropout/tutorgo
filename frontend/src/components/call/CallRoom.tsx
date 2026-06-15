@@ -57,20 +57,24 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
     })
   }, [lessonId, role])
 
-  // Guest: handle board-open sent before this participant joined (room metadata)
+  // Guest: handle board-open sent before this participant joined (participant metadata)
   useEffect(() => {
     if (role !== 'guest') return
-    let meta: { boardOpen?: boolean; boardToken?: string } | null = null
-    try { meta = room.metadata ? JSON.parse(room.metadata) : null } catch {}
-    if (!meta?.boardOpen || !meta.boardToken) return
-    whiteboardApi.joinByInvite(meta.boardToken).then((data) => {
-      setGuestBoardToken(meta!.boardToken!)
-      setGuestBoard(data)
-      setMode('board')
-    }).catch(() => {
-      toast.error('Не удалось открыть доску')
-    })
-  }, [room.metadata, role])
+    for (const participant of room.remoteParticipants.values()) {
+      let meta: { boardOpen?: boolean; boardToken?: string } | null = null
+      try { meta = participant.metadata ? JSON.parse(participant.metadata) : null } catch {}
+      if (!meta?.boardOpen || !meta.boardToken) continue
+      const boardToken = meta.boardToken
+      whiteboardApi.joinByInvite(boardToken).then((data) => {
+        setGuestBoardToken(boardToken)
+        setGuestBoard(data)
+        setMode('board')
+      }).catch(() => {
+        toast.error('Не удалось открыть доску')
+      })
+      break
+    }
+  }, [room, role])
 
   // Both: listen for DataChannel events
   useEffect(() => {
@@ -106,7 +110,7 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
     if (mode === 'board') {
       const closeMsg: DataMessage = { type: 'board-close' }
       try {
-        room.localParticipant.publishData(
+        await room.localParticipant.publishData(
           new TextEncoder().encode(JSON.stringify(closeMsg)),
           { reliable: true },
         )
