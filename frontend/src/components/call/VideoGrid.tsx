@@ -5,7 +5,6 @@ import {
   GridLayout,
   ParticipantTile,
   ControlBar,
-  RoomAudioRenderer,
   useTracks,
   useRoomContext,
 } from '@livekit/components-react'
@@ -31,7 +30,6 @@ export function VideoGrid() {
         <ParticipantTile />
       </GridLayout>
       <ControlBar />
-      <RoomAudioRenderer />
     </div>
   )
 }

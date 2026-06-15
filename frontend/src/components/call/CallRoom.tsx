@@ -52,7 +52,9 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
     if (role !== 'tutor') return
     lessonsApi.get(lessonId).then((lesson) => {
       if (lesson.course_id) setCourseId(lesson.course_id)
-    }).catch(() => {})
+    }).catch(() => {
+      toast.error('Не удалось загрузить данные урока')
+    })
   }, [lessonId, role])
 
   // Guest: handle board-open sent before this participant joined (room metadata)
@@ -65,7 +67,9 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
       setGuestBoardToken(meta!.boardToken!)
       setGuestBoard(data)
       setMode('board')
-    }).catch(() => {})
+    }).catch(() => {
+      toast.error('Не удалось открыть доску')
+    })
   }, [room.metadata, role])
 
   // Both: listen for DataChannel events
@@ -87,6 +91,7 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
         setMode('call')
         setGuestBoardToken(null)
         setGuestBoard(null)
+        setActivePageId(null)
       }
     }
 
@@ -100,12 +105,17 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
 
     if (mode === 'board') {
       const closeMsg: DataMessage = { type: 'board-close' }
-      room.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(closeMsg)),
-        { reliable: true },
-      )
-      await room.localParticipant.setMetadata(JSON.stringify({ boardOpen: false }))
-      setMode('call')
+      try {
+        room.localParticipant.publishData(
+          new TextEncoder().encode(JSON.stringify(closeMsg)),
+          { reliable: true },
+        )
+        await room.localParticipant.setMetadata(JSON.stringify({ boardOpen: false }))
+      } catch {
+        toast.error('Не удалось закрыть доску')
+      } finally {
+        setMode('call')
+      }
       return
     }
 
@@ -122,7 +132,7 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
       }
 
       const openMsg: DataMessage = { type: 'board-open', board_token: inviteToken }
-      room.localParticipant.publishData(
+      await room.localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify(openMsg)),
         { reliable: true },
       )
@@ -140,14 +150,14 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
   // Resolve which board + page to render
   const activeBoard = role === 'tutor' ? tutorBoard : guestBoard
   const activeBoardToken = role === 'guest' ? guestBoardToken ?? undefined : undefined
-  const resolvedPageId = activePageId ?? activeBoard?.pages[0]?.id ?? ''
+  const resolvedPageId = activePageId ?? activeBoard?.pages[0]?.id ?? null
   const currentPage = activeBoard?.pages.find((p) => p.id === resolvedPageId) ?? null
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {mode === 'call' && <VideoGrid />}
 
-      {mode === 'board' && activeBoard && (
+      {mode === 'board' && activeBoard && resolvedPageId && (
         <TldrawCanvas
           page={currentPage}
           boardId={activeBoard.id}
