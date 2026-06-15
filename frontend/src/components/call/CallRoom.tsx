@@ -115,6 +115,7 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
         toast.error('Не удалось закрыть доску')
       } finally {
         setMode('call')
+        setActivePageId(null)
       }
       return
     }
