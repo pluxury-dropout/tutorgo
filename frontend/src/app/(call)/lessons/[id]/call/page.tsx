@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import '@livekit/components-styles'
 
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
+import { lessonsApi } from '@/lib/api/lessons'
 import { Button } from '@/components/ui/button'
 import { Link, Check } from 'lucide-react'
 import { CallRoom } from '@/components/call/CallRoom'
@@ -15,10 +16,11 @@ export default function CallPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
 
-  const [stage, setStage]   = useState<Stage>('idle')
-  const [room, setRoom]     = useState<RoomTokenResponse | null>(null)
-  const [error, setError]   = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [stage, setStage]     = useState<Stage>('idle')
+  const [room, setRoom]       = useState<RoomTokenResponse | null>(null)
+  const [courseId, setCourseId] = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+  const [copied, setCopied]   = useState(false)
 
   function handleCopyLink() {
     const url = `${window.location.origin}/join/${id}`
@@ -32,11 +34,14 @@ export default function CallPage() {
     setError(null)
     try {
       await callsApi.startRoom(id)
+      const [data, lesson] = await Promise.all([
+        callsApi.getRoomToken(id),
+        lessonsApi.get(id).catch(() => null),
+      ])
       navigator.clipboard.writeText(`${window.location.origin}/join/${id}`)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-      setStage('connecting')
-      const data = await callsApi.getRoomToken(id)
+      if (lesson?.course_id) setCourseId(lesson.course_id)
       setRoom(data)
       setStage('in-room')
     } catch {
@@ -81,7 +86,7 @@ export default function CallPage() {
   return (
     <div style={{ height: '100dvh', position: 'relative' }}>
       <CallRoom
-        lessonId={id}
+        courseId={courseId ?? undefined}
         serverUrl={room.server_url}
         token={room.token}
         role="tutor"

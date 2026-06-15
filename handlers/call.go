@@ -71,12 +71,14 @@ func (h *CallHandler) GetToken(c *gin.Context) {
 	roomName := "lesson-" + lessonID
 	canPublish := true
 	canSubscribe := true
+	canUpdateMeta := true
 	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
 	grant := &lkauth.VideoGrant{
-		RoomJoin:     true,
-		Room:         roomName,
-		CanPublish:   &canPublish,
-		CanSubscribe: &canSubscribe,
+		RoomJoin:             true,
+		Room:                 roomName,
+		CanPublish:           &canPublish,
+		CanSubscribe:         &canSubscribe,
+		CanUpdateOwnMetadata: &canUpdateMeta,
 	}
 	at.SetVideoGrant(grant).
 		SetIdentity("tutor-" + tutorID).

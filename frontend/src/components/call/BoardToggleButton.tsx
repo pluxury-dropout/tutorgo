@@ -17,10 +17,10 @@ export function BoardToggleButton({ mode, loading, onToggle }: BoardToggleButton
       onClick={onToggle}
       disabled={loading}
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: 12,
         left: 12,
-        zIndex: 50,
+        zIndex: 9999,
       }}
     >
       {mode === 'call' ? (

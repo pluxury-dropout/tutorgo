@@ -14,7 +14,6 @@ import { VideoGrid } from './VideoGrid'
 import { PipCameras } from './PipCameras'
 import { BoardToggleButton } from './BoardToggleButton'
 import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
-import { lessonsApi } from '@/lib/api/lessons'
 import { whiteboardApi } from '@/lib/api/whiteboard'
 import type { BoardWithPages } from '@/types/api'
 
@@ -28,34 +27,23 @@ interface DataMessage {
 // ─── Inner component (must live inside <LiveKitRoom>) ───────────────────────
 
 interface CallRoomInnerProps {
-  lessonId: string
+  courseId?: string
   role: 'tutor' | 'guest'
 }
 
-function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
+function CallRoomInner({ courseId, role }: CallRoomInnerProps) {
   const room = useRoomContext()
   const [mode, setMode] = useState<Mode>('call')
   const [boardLoading, setBoardLoading] = useState(false)
   const [activePageId, setActivePageId] = useState<string | null>(null)
 
   // Tutor state
-  const [courseId, setCourseId] = useState<string | null>(null)
   const [tutorBoard, setTutorBoard] = useState<BoardWithPages | null>(null)
   const inviteTokenRef = useRef<string | null>(null)
 
   // Guest state
   const [guestBoardToken, setGuestBoardToken] = useState<string | null>(null)
   const [guestBoard, setGuestBoard] = useState<BoardWithPages | null>(null)
-
-  // Tutor: resolve courseId once on mount
-  useEffect(() => {
-    if (role !== 'tutor') return
-    lessonsApi.get(lessonId).then((lesson) => {
-      if (lesson.course_id) setCourseId(lesson.course_id)
-    }).catch(() => {
-      toast.error('Не удалось загрузить данные урока')
-    })
-  }, [lessonId, role])
 
   // Guest: handle board-open sent before this participant joined (participant metadata)
   useEffect(() => {
@@ -105,7 +93,10 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
 
   // Tutor: toggle board open/close
   const handleToggle = useCallback(async () => {
-    if (!courseId) return
+    if (!courseId) {
+      toast.error('Доска недоступна: урок не привязан к курсу')
+      return
+    }
 
     if (mode === 'board') {
       const closeMsg: DataMessage = { type: 'board-close' }
@@ -145,7 +136,8 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
         JSON.stringify({ boardOpen: true, boardToken: inviteToken }),
       )
       setMode('board')
-    } catch {
+    } catch (err) {
+      console.error('[CallRoom] handleToggle error:', err)
       toast.error('Не удалось открыть доску')
     } finally {
       setBoardLoading(false)
@@ -177,7 +169,7 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
 
       {mode === 'board' && <PipCameras />}
 
-      {role === 'tutor' && !!courseId && (
+      {role === 'tutor' && (
         <BoardToggleButton
           mode={mode}
           loading={boardLoading}
@@ -191,7 +183,7 @@ function CallRoomInner({ lessonId, role }: CallRoomInnerProps) {
 // ─── Public component ────────────────────────────────────────────────────────
 
 export interface CallRoomProps {
-  lessonId: string
+  courseId?: string
   serverUrl: string
   token: string
   role: 'tutor' | 'guest'
@@ -200,7 +192,7 @@ export interface CallRoomProps {
 }
 
 export function CallRoom({
-  lessonId,
+  courseId,
   serverUrl,
   token,
   role,
@@ -219,7 +211,7 @@ export function CallRoom({
       style={{ height: '100%' }}
     >
       <RoomAudioRenderer />
-      <CallRoomInner lessonId={lessonId} role={role} />
+      <CallRoomInner courseId={courseId} role={role} />
     </LiveKitRoom>
   )
 }

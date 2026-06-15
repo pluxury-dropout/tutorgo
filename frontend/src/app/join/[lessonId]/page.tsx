@@ -79,7 +79,6 @@ export default function JoinPage() {
     return (
       <div style={{ height: '100dvh' }}>
         <CallRoom
-          lessonId={lessonId}
           serverUrl={room.server_url}
           token={room.token}
           role="guest"

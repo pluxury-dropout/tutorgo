@@ -12,10 +12,10 @@ export function PipCameras() {
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: 12,
         right: 12,
-        zIndex: 50,
+        zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,

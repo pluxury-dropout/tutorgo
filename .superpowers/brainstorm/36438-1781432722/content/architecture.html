@@ -1,0 +1,127 @@
+<h2>Архитектура: Call + Whiteboard</h2>
+<p class="subtitle">Компоненты и поток данных</p>
+
+<div class="mockup">
+  <div class="mockup-header">Структура страниц (что меняем, что добавляем)</div>
+  <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.8;">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <!-- Teacher side -->
+      <div>
+        <div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Учитель</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px;">
+          <div style="color:#4a9eff;margin-bottom:4px;">📄 /lessons/[id]/call/page.tsx</div>
+          <div style="color:var(--muted);font-size:11px;margin-left:12px;margin-bottom:8px;">⚠️ Изменить: убрать VideoConference</div>
+          <div style="margin-left:12px;">
+            <span style="color:#22c55e;">▼</span>
+            <span style="color:#ffd93d;"> &lt;CallRoom role="tutor"&gt;</span>
+            <span style="color:#ffa500;font-size:10px;"> NEW</span>
+          </div>
+          <div style="margin-left:24px;color:var(--muted);font-size:11px;">
+            <div>├─ &lt;LiveKitRoom&gt;</div>
+            <div>│  ├─ [mode=call] &lt;VideoGrid /&gt; <span style="color:#ffa500;">NEW</span></div>
+            <div>│  ├─ [mode=board] &lt;TldrawCanvas /&gt;</div>
+            <div>│  ├─ [mode=board] &lt;PipCameras /&gt; <span style="color:#ffa500;">NEW</span></div>
+            <div>│  └─ &lt;BoardToggleButton /&gt; <span style="color:#ffa500;">NEW</span></div>
+            <div>└─ (DataChannel: отправляет)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student side -->
+      <div>
+        <div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Ученик</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px;">
+          <div style="color:#4a9eff;margin-bottom:4px;">📄 /join/[lessonId]/page.tsx</div>
+          <div style="color:var(--muted);font-size:11px;margin-left:12px;margin-bottom:8px;">⚠️ Изменить: добавить CallRoom</div>
+          <div style="margin-left:12px;">
+            <span style="color:#22c55e;">▼</span>
+            <span style="color:#ffd93d;"> &lt;CallRoom role="guest"&gt;</span>
+            <span style="color:#ffa500;font-size:10px;"> NEW</span>
+          </div>
+          <div style="margin-left:24px;color:var(--muted);font-size:11px;">
+            <div>├─ &lt;LiveKitRoom&gt;</div>
+            <div>│  ├─ [mode=call] &lt;VideoGrid /&gt;</div>
+            <div>│  ├─ [mode=board] &lt;TldrawCanvas /&gt;</div>
+            <div>│  ├─ [mode=board] &lt;PipCameras /&gt;</div>
+            <div>│  └─ (кнопки скрыты для гостя)</div>
+            <div>└─ (DataChannel: слушает)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:20px;">
+  <div class="mockup-header">Поток: учитель открывает доску</div>
+  <div class="mockup-body">
+    <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#1e3a5f;border-radius:20px;padding:4px 12px;color:#7ec8e3;white-space:nowrap;">👤 Учитель</div>
+        <div style="color:var(--muted);">нажимает «Открыть доску»</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-left:20px;">
+        <div style="width:2px;background:var(--border);height:20px;margin-left:20px;"></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#2d4a1e;border-radius:20px;padding:4px 12px;color:#86efac;white-space:nowrap;">CallRoom</div>
+        <div style="color:var(--muted);">1. переключает mode → 'board'</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#2d4a1e;border-radius:20px;padding:4px 12px;color:#86efac;white-space:nowrap;">CallRoom</div>
+        <div style="color:var(--muted);">2. <code style="background:var(--surface);padding:2px 6px;border-radius:4px;">room.localParticipant.publishData({type:"board-open"})</code></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#2d4a1e;border-radius:20px;padding:4px 12px;color:#86efac;white-space:nowrap;">CallRoom</div>
+        <div style="color:var(--muted);">3. fetch /lessons/:id → courseId → loadBoard(courseId)</div>
+      </div>
+
+      <div style="border-top:1px dashed var(--border);margin:8px 0;"></div>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#3a1e5f;border-radius:20px;padding:4px 12px;color:#c4b5fd;white-space:nowrap;">👤 Ученик</div>
+        <div style="color:var(--muted);">получает DataChannel event</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#3a1e5f;border-radius:20px;padding:4px 12px;color:#c4b5fd;white-space:nowrap;">CallRoom</div>
+        <div style="color:var(--muted);">4. fetch /api/guest-token/:lessonId → boardToken</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="background:#3a1e5f;border-radius:20px;padding:4px 12px;color:#c4b5fd;white-space:nowrap;">CallRoom</div>
+        <div style="color:var(--muted);">5. переключает mode → 'board', открывает TldrawCanvas(token)</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:20px;">
+  <div class="mockup-header">Новые файлы</div>
+  <div class="mockup-body" style="font-size:12px;line-height:2;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div>
+        <div style="color:#ffa500;font-weight:600;margin-bottom:4px;">📁 src/components/call/ (новая папка)</div>
+        <div style="color:var(--muted);margin-left:12px;">├─ CallRoom.tsx — оркестратор</div>
+        <div style="color:var(--muted);margin-left:12px;">├─ VideoGrid.tsx — сетка камер (call mode)</div>
+        <div style="color:var(--muted);margin-left:12px;">├─ PipCameras.tsx — плавающие камеры (board mode)</div>
+        <div style="color:var(--muted);margin-left:12px;">└─ BoardToggleButton.tsx — кнопка переключения</div>
+      </div>
+      <div>
+        <div style="color:#22c55e;font-weight:600;margin-bottom:4px;">✅ Без изменений на backend</div>
+        <div style="color:var(--muted);margin-left:12px;">• /api/guest-token/:lessonId — уже есть</div>
+        <div style="color:var(--muted);margin-left:12px;">• WS доски — уже есть</div>
+        <div style="color:var(--muted);margin-left:12px;">• LiveKit сервер — уже есть</div>
+        <div style="color:var(--muted);;margin-left:12px;">• GET /lessons/:id — уже есть</div>
+      </div>
+    </div>
+  </div>
+</div>

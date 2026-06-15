@@ -1,0 +1,78 @@
+<h2>Picture-in-Picture — как это выглядит</h2>
+<p class="subtitle">Доска занимает весь экран, камеры — маленькие окошки поверх неё</p>
+
+<div class="mockup">
+  <div class="mockup-header">Режим звонка + доски (PiP)</div>
+  <div class="mockup-body" style="padding:0;overflow:hidden;">
+    <div style="position:relative;background:#0d1117;border-radius:0 0 6px 6px;height:340px;">
+
+      <!-- Tldraw canvas area -->
+      <div style="position:absolute;inset:0;background:white;border-radius:0 0 6px 6px;display:flex;align-items:center;justify-content:center;">
+        <!-- Fake tldraw toolbar -->
+        <div style="position:absolute;left:50%;bottom:20px;transform:translateX(-50%);background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;padding:6px 12px;display:flex;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+          <span style="font-size:16px;">✏️</span>
+          <span style="font-size:16px;">⬛</span>
+          <span style="font-size:16px;">⭕</span>
+          <span style="font-size:16px;">📝</span>
+          <span style="font-size:16px;">🖐️</span>
+        </div>
+        <!-- Fake drawing content -->
+        <svg width="100%" height="100%" style="position:absolute;inset:0;">
+          <line x1="120" y1="80" x2="320" y2="200" stroke="#4a9eff" stroke-width="2" stroke-linecap="round"/>
+          <rect x="180" y="120" width="140" height="80" rx="4" fill="none" stroke="#ff6b6b" stroke-width="2" stroke-dasharray="4,2"/>
+          <text x="240" y="170" font-size="14" fill="#333" text-anchor="middle">y = x²</text>
+          <circle cx="350" cy="100" r="30" fill="none" stroke="#ffd93d" stroke-width="2"/>
+        </svg>
+        <div style="color:#ccc;font-size:13px;z-index:1;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.3;">tldraw — общая доска</div>
+      </div>
+
+      <!-- PiP camera windows -->
+      <div style="position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:8px;z-index:10;">
+        <!-- Teacher cam -->
+        <div style="width:120px;height:80px;background:#1a2a3a;border-radius:8px;border:2px solid #4a9eff;overflow:hidden;position:relative;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg,#1e3a5f,#2d5a8e);display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div style="font-size:24px;">👤</div>
+            <div style="font-size:9px;color:#7ec8e3;margin-top:2px;">Учитель</div>
+          </div>
+          <div style="position:absolute;bottom:4px;left:6px;background:rgba(0,0,0,0.6);border-radius:3px;padding:1px 5px;font-size:8px;color:white;">Я</div>
+          <div style="position:absolute;top:4px;right:4px;width:8px;height:8px;background:#22c55e;border-radius:50%;"></div>
+        </div>
+        <!-- Student cam -->
+        <div style="width:120px;height:80px;background:#1a2a3a;border-radius:8px;border:2px solid #666;overflow:hidden;position:relative;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg,#2a1f3d,#4a2d6b);display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div style="font-size:24px;">👤</div>
+            <div style="font-size:9px;color:#c8a8e3;margin-top:2px;">Ученик</div>
+          </div>
+          <div style="position:absolute;bottom:4px;left:6px;background:rgba(0,0,0,0.6);border-radius:3px;padding:1px 5px;font-size:8px;color:white;">Айдар</div>
+          <div style="position:absolute;top:4px;right:4px;width:8px;height:8px;background:#22c55e;border-radius:50%;"></div>
+        </div>
+      </div>
+
+      <!-- Toggle button -->
+      <div style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.7);border-radius:8px;padding:6px 12px;font-size:11px;color:#fff;display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <span>📋</span> Скрыть доску
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;">
+  <h3>Как работает переход</h3>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <div style="background:var(--surface);border-radius:8px;padding:12px 16px;border:1px solid var(--border);flex:1;min-width:140px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">ШАГ 1 — Обычный звонок</div>
+      <div style="font-size:13px;">Камеры занимают весь экран (стандартный LiveKit UI)</div>
+    </div>
+    <div style="font-size:20px;color:var(--muted);">→</div>
+    <div style="background:var(--surface);border-radius:8px;padding:12px 16px;border:1px solid var(--border);flex:1;min-width:140px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Нажимаешь кнопку «Открыть доску»</div>
+      <div style="font-size:13px;">Камеры сжимаются в PiP-окошки (правый угол), доска занимает экран</div>
+    </div>
+    <div style="font-size:20px;color:var(--muted);">→</div>
+    <div style="background:var(--surface);border-radius:8px;padding:12px 16px;border:1px solid var(--border);flex:1;min-width:140px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Нажимаешь «Скрыть доску»</div>
+      <div style="font-size:13px;">Возврат к обычному звонку</div>
+    </div>
+  </div>
+</div>
