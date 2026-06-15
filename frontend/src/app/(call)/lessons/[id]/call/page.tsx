@@ -1,32 +1,13 @@
 'use client'
 
-import { Component, useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
 
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
 import { Button } from '@/components/ui/button'
 import { Link, Check } from 'lucide-react'
-
-class VideoConferenceBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false }
-
-  static getDerivedStateFromError() {
-    return { hasError: true }
-  }
-
-  componentDidCatch() {
-    setTimeout(() => this.setState({ hasError: false }), 0)
-  }
-
-  render() {
-    return this.state.hasError ? null : this.props.children
-  }
-}
+import { CallRoom } from '@/components/call/CallRoom'
 
 type Stage = 'idle' | 'starting' | 'connecting' | 'in-room'
 
@@ -99,25 +80,19 @@ export default function CallPage() {
 
   return (
     <div style={{ height: '100dvh', position: 'relative' }}>
-      <LiveKitRoom
-        key={room.token}
+      <CallRoom
+        lessonId={id}
         serverUrl={room.server_url}
         token={room.token}
+        role="tutor"
         onDisconnected={handleDisconnected}
-        data-lk-theme="default"
-        style={{ height: '100%' }}
-      >
-        <VideoConferenceBoundary>
-          <VideoConference />
-        </VideoConferenceBoundary>
-      </LiveKitRoom>
-
+      />
       <Button
         variant="secondary"
         size="icon"
         onClick={handleCopyLink}
         title="Скопировать ссылку для ученика"
-        style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 50 }}
+        style={{ position: 'absolute', bottom: '80px', right: '12px', zIndex: 60 }}
       >
         {copied ? <Check className="h-4 w-4" /> : <Link className="h-4 w-4" />}
       </Button>
