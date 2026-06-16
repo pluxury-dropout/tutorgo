@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react'
 import {
   Plus, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react'
-import { useCalendar } from '@/lib/hooks/useCalendar'
+import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import type { CalendarLesson, LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
@@ -14,6 +14,10 @@ import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
 const HOUR_PX  = 56
 const HOURS    = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 const GRID_H   = HOURS.length * HOUR_PX
+
+// long-press before drag engages, so a normal scroll/tap isn't hijacked
+const DRAG_LONG_PRESS_MS = 300
+const DRAG_SLOP_PX       = 10
 
 const DOW_MINI = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const MONTHS_GEN = [
@@ -82,6 +86,71 @@ export function MobileWeekCalendar() {
   }, [weekStart])
 
   const { data: lessons = [] } = useCalendar(rangeFrom, rangeTo)
+  const reschedule = useRescheduleLesson()
+
+  // ─── drag-to-reschedule (touch long-press) ─────────────────────────────────
+
+  const dragTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dragStartRef    = useRef<{ x: number; y: number } | null>(null)
+  const dragEngagedRef  = useRef(false)
+  const [drag, setDrag] = useState<{ lesson: CalendarLesson; pointerId: number; deltaY: number } | null>(null)
+
+  function clearDragTimer() {
+    if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
+    dragStartRef.current = null
+  }
+
+  function handleEventPointerDown(e: React.PointerEvent<HTMLDivElement>, lesson: CalendarLesson) {
+    dragStartRef.current = { x: e.clientX, y: e.clientY }
+    const target = e.currentTarget
+    const pointerId = e.pointerId
+    dragTimerRef.current = setTimeout(() => {
+      target.setPointerCapture(pointerId)
+      target.style.touchAction = 'none'
+      dragEngagedRef.current = true
+      setDrag({ lesson, pointerId, deltaY: 0 })
+    }, DRAG_LONG_PRESS_MS)
+  }
+
+  function handleEventPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (drag && e.pointerId === drag.pointerId) {
+      setDrag(d => d && { ...d, deltaY: e.clientY - (dragStartRef.current?.y ?? e.clientY) })
+      return
+    }
+    if (dragStartRef.current) {
+      const dx = Math.abs(e.clientX - dragStartRef.current.x)
+      const dy = Math.abs(e.clientY - dragStartRef.current.y)
+      if (dx > DRAG_SLOP_PX || dy > DRAG_SLOP_PX) clearDragTimer()
+    }
+  }
+
+  function handleEventPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    clearDragTimer()
+    if (!drag || e.pointerId !== drag.pointerId) return
+    e.currentTarget.style.touchAction = ''
+    const minutesDelta = Math.round(drag.deltaY / HOUR_PX * 2) * 30
+    if (minutesDelta !== 0) {
+      const newStart = new Date(new Date(drag.lesson.scheduled_at).getTime() + minutesDelta * 60_000)
+      reschedule.mutate({
+        id:   drag.lesson.id,
+        data: {
+          scheduled_at:     newStart.toISOString(),
+          duration_minutes: drag.lesson.duration_minutes,
+          status:           drag.lesson.status,
+          notes:            drag.lesson.notes,
+        },
+      })
+    }
+    setDrag(null)
+  }
+
+  function handleEventPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
+    clearDragTimer()
+    if (drag && e.pointerId === drag.pointerId) {
+      e.currentTarget.style.touchAction = ''
+      setDrag(null)
+    }
+  }
 
   // ─── auto-scroll ────────────────────────────────────────────────────────────
 
@@ -157,6 +226,7 @@ export function MobileWeekCalendar() {
   // ─── open lesson popover ────────────────────────────────────────────────────
 
   function openLesson(l: CalendarLesson) {
+    if (dragEngagedRef.current) { dragEngagedRef.current = false; return }
     setSelectedLesson({
       id:              l.id,
       courseId:        l.course_id,
@@ -312,12 +382,17 @@ export function MobileWeekCalendar() {
                     const colW     = 100 / layout.total
                     const left     = colW * ev._col
                     const style    = STATUS_STYLE[ev.status]
-                    const isPast   = new Date(ev.scheduled_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
+                    const isPast    = new Date(ev.scheduled_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
+                    const isDragged = drag?.lesson.id === ev.id
 
                     return (
                       <div
                         key={ev.id}
                         onClick={() => openLesson(ev)}
+                        onPointerDown={(e) => handleEventPointerDown(e, ev)}
+                        onPointerMove={handleEventPointerMove}
+                        onPointerUp={handleEventPointerUp}
+                        onPointerCancel={handleEventPointerCancel}
                         style={{
                           position: 'absolute',
                           top, height,
@@ -330,9 +405,11 @@ export function MobileWeekCalendar() {
                           fontSize: 9.5, lineHeight: 1.15,
                           cursor: 'pointer',
                           overflow: 'hidden',
-                          zIndex: 2,
+                          zIndex:    isDragged ? 6 : 2,
                           filter:          isPast              ? 'brightness(0.9)'    : undefined,
                           textDecoration:  ev.status === 'cancelled' ? 'line-through' : undefined,
+                          transform:  isDragged ? `translateY(${drag.deltaY}px) scale(1.03)` : undefined,
+                          boxShadow:  isDragged ? '0 6px 16px -4px rgba(0,0,0,0.35)' : undefined,
                         }}
                       >
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
