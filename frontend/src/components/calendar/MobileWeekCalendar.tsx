@@ -175,10 +175,7 @@ export function MobileWeekCalendar() {
   // ─── layout: overlap columns per day ───────────────────────────────────────
 
   const layoutByDay = useMemo(() => {
-    const result: Record<number, {
-      events: (CalendarLesson & { _col: number })[]
-      total:  number
-    }> = {}
+    const result: Record<number, (CalendarLesson & { _col: number; _cols: number })[]> = {}
 
     for (let d = 0; d < 7; d++) {
       const dayDate = new Date(weekStart)
@@ -187,29 +184,49 @@ export function MobileWeekCalendar() {
       const dayLessons = lessons
         .filter(l => isSameLocalDay(new Date(l.scheduled_at), dayDate))
         .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
-        .map(l => ({ ...l, _col: 0 }))
+        .map(l => ({ ...l, _col: 0, _cols: 1 }))
 
-      const cols: (CalendarLesson & { _col: number })[][] = []
+      // pack into columns, but only within connected overlap clusters —
+      // a lesson with no overlap anywhere that day must stay full-width
+      const out: typeof dayLessons = []
+      let cluster: typeof dayLessons = []
+      let clusterCols: (typeof dayLessons)[] = []
+      let clusterEnd = -Infinity
+
+      const flushCluster = () => {
+        for (const ev of cluster) ev._cols = clusterCols.length
+        out.push(...cluster)
+        cluster = []
+        clusterCols = []
+      }
+
       for (const ev of dayLessons) {
         const startMin = toMinutes(ev.scheduled_at)
-        let placed     = false
-        for (let c = 0; c < cols.length; c++) {
-          const last    = cols[c][cols[c].length - 1]
+        const endMin   = toMinutes(ev.scheduled_at, ev.duration_minutes)
+
+        if (startMin >= clusterEnd) flushCluster()
+        clusterEnd = Math.max(clusterEnd, endMin)
+
+        let placed = false
+        for (let c = 0; c < clusterCols.length; c++) {
+          const last    = clusterCols[c][clusterCols[c].length - 1]
           const lastEnd = toMinutes(last.scheduled_at, last.duration_minutes)
           if (lastEnd <= startMin) {
-            cols[c].push(ev)
-            ev._col  = c
-            placed   = true
+            clusterCols[c].push(ev)
+            ev._col = c
+            placed  = true
             break
           }
         }
         if (!placed) {
-          cols.push([ev])
-          ev._col = cols.length - 1
+          clusterCols.push([ev])
+          ev._col = clusterCols.length - 1
         }
+        cluster.push(ev)
       }
+      flushCluster()
 
-      result[d] = { events: dayLessons, total: Math.max(1, cols.length) }
+      result[d] = out
     }
     return result
   }, [lessons, weekStart])
@@ -374,12 +391,12 @@ export function MobileWeekCalendar() {
                   )}
 
                   {/* Events */}
-                  {layout?.events.map(ev => {
+                  {layout?.map(ev => {
                     const startMin = toMinutes(ev.scheduled_at)
                     const endMin   = startMin + ev.duration_minutes
                     const top      = (startMin - HOURS[0] * 60) / 60 * HOUR_PX
                     const height   = Math.max(20, (endMin - startMin) / 60 * HOUR_PX - 2)
-                    const colW     = 100 / layout.total
+                    const colW     = 100 / ev._cols
                     const left     = colW * ev._col
                     const style    = STATUS_STYLE[ev.status]
                     const isPast    = new Date(ev.scheduled_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
