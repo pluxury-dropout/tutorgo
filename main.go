@@ -13,7 +13,6 @@ import (
 
 	"tutorgo/config"
 	"tutorgo/database"
-	"tutorgo/logger"
 	"tutorgo/repository"
 	"tutorgo/router"
 
@@ -39,7 +38,7 @@ func runAutoCompleteLoop(ctx context.Context, interval time.Duration, autoComple
 }
 
 func main() {
-	log := logger.New()
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg := config.Load(log)
 
 	pool := database.Connect(cfg.DBUrl, log)

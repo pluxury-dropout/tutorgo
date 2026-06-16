@@ -20,21 +20,21 @@ function getTokenExp(token: string): number | null {
 let isRefreshing = false
 let refreshPromise: Promise<void> | null = null
 
+async function refreshToken(): Promise<string> {
+  const { data } = await axios.post<{ access_token: string }>(
+    `${BASE_URL}/auth/refresh`,
+    {},
+    { withCredentials: true },
+  )
+  localStorage.setItem('tg_token', data.access_token)
+  return data.access_token
+}
+
 async function proactiveRefresh(): Promise<void> {
   if (isRefreshing) return
   isRefreshing = true
-  const p = (async () => {
-    try {
-      const { data } = await axios.post<{ access_token: string }>(
-        `${BASE_URL}/auth/refresh`,
-        {},
-        { withCredentials: true },
-      )
-      localStorage.setItem('tg_token', data.access_token)
-    } catch {
-      // silently ignore — reactive 401 handler will log out if needed
-    }
-  })()
+  // silently ignore — reactive 401 handler will log out if needed
+  const p = refreshToken().then(() => undefined, () => undefined)
   refreshPromise = p
   try {
     await p
@@ -74,22 +74,14 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !isAuthRoute && !isRefreshing) {
       isRefreshing = true
-      let freshToken: string | null = null
-      refreshPromise = (async () => {
-        const { data } = await axios.post<{ access_token: string }>(
-          `${BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true },
-        )
-        freshToken = data.access_token
-        localStorage.setItem('tg_token', data.access_token)
-      })()
+      const p = refreshToken()
+      refreshPromise = p.then(() => undefined)
       try {
-        await refreshPromise
+        const freshToken = await p
         isRefreshing = false
         refreshPromise = null
 
-        if (error.config && freshToken) {
+        if (error.config) {
           error.config.headers = error.config.headers ?? {}
           error.config.headers['Authorization'] = `Bearer ${freshToken}`
           return api.request(error.config)
