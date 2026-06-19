@@ -93,7 +93,8 @@ export function MobileWeekCalendar() {
   const dragTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragStartRef    = useRef<{ x: number; y: number } | null>(null)
   const dragEngagedRef  = useRef(false)
-  const [drag, setDrag] = useState<{ lesson: CalendarLesson; pointerId: number; deltaY: number } | null>(null)
+  const gridRef         = useRef<HTMLDivElement>(null)
+  const [drag, setDrag] = useState<{ lesson: CalendarLesson; pointerId: number; deltaY: number; deltaX: number } | null>(null)
 
   function clearDragTimer() {
     if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
@@ -108,13 +109,17 @@ export function MobileWeekCalendar() {
       target.setPointerCapture(pointerId)
       target.style.touchAction = 'none'
       dragEngagedRef.current = true
-      setDrag({ lesson, pointerId, deltaY: 0 })
+      setDrag({ lesson, pointerId, deltaY: 0, deltaX: 0 })
     }, DRAG_LONG_PRESS_MS)
   }
 
   function handleEventPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (drag && e.pointerId === drag.pointerId) {
-      setDrag(d => d && { ...d, deltaY: e.clientY - (dragStartRef.current?.y ?? e.clientY) })
+      setDrag(d => d && {
+        ...d,
+        deltaY: e.clientY - (dragStartRef.current?.y ?? e.clientY),
+        deltaX: e.clientX - (dragStartRef.current?.x ?? e.clientX),
+      })
       return
     }
     if (dragStartRef.current) {
@@ -129,8 +134,12 @@ export function MobileWeekCalendar() {
     if (!drag || e.pointerId !== drag.pointerId) return
     e.currentTarget.style.touchAction = ''
     const minutesDelta = Math.round(drag.deltaY / HOUR_PX * 2) * 30
-    if (minutesDelta !== 0) {
-      const newStart = new Date(new Date(drag.lesson.scheduled_at).getTime() + minutesDelta * 60_000)
+    const colWidth     = gridRef.current ? gridRef.current.clientWidth / 7 : 0
+    const dayDelta     = colWidth > 0 ? Math.round(drag.deltaX / colWidth) : 0
+    if (minutesDelta !== 0 || dayDelta !== 0) {
+      const base     = new Date(drag.lesson.scheduled_at)
+      base.setDate(base.getDate() + dayDelta)
+      const newStart = new Date(base.getTime() + minutesDelta * 60_000)
       reschedule.mutate({
         id:   drag.lesson.id,
         data: {
@@ -338,7 +347,7 @@ export function MobileWeekCalendar() {
           ref={scrollRef}
           style={{ flex: 1, overflow: 'auto', background: 'var(--background)', minHeight: 0 }}
         >
-          <div style={{ display: 'flex', position: 'relative', height: GRID_H }}>
+          <div ref={gridRef} style={{ display: 'flex', position: 'relative', height: GRID_H }}>
 
             {/* Time gutter */}
             <div style={{ width: 30, flexShrink: 0, position: 'relative', height: GRID_H }}>
@@ -423,9 +432,11 @@ export function MobileWeekCalendar() {
                           cursor: 'pointer',
                           overflow: 'hidden',
                           zIndex:    isDragged ? 6 : 2,
+                          userSelect: 'none',
+                          WebkitUserSelect: 'none',
                           filter:          isPast              ? 'brightness(0.9)'    : undefined,
                           textDecoration:  ev.status === 'cancelled' ? 'line-through' : undefined,
-                          transform:  isDragged ? `translateY(${drag.deltaY}px) scale(1.03)` : undefined,
+                          transform:  isDragged ? `translate(${drag.deltaX}px,${drag.deltaY}px) scale(1.03)` : undefined,
                           boxShadow:  isDragged ? '0 6px 16px -4px rgba(0,0,0,0.35)' : undefined,
                         }}
                       >
