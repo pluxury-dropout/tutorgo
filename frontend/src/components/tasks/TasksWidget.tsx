@@ -27,7 +27,9 @@ const EMPTY: React.CSSProperties = {
 type SheetState = { open: boolean; task: Task | null }
 
 function toDatetimeLocal(iso: string) {
-  return new Date(iso).toISOString().slice(0, 16)
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export function TasksWidget() {
@@ -94,7 +96,7 @@ export function TasksWidget() {
     })
   }
 
-  const isPending = createTask.isPending || reschedule.isPending
+  const isPending = createTask.isPending || reschedule.isPending || deleteTask.isPending
 
   return (
     <>
@@ -137,8 +139,8 @@ export function TasksWidget() {
               </span>
               <button
                 onClick={() => openEdit(task)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center', opacity: 0 }}
-                className="group-hover:opacity-100"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center' }}
+                className="opacity-0 group-hover:opacity-100"
                 aria-label="Редактировать задачу"
               >
                 <PencilIcon size={13} />
