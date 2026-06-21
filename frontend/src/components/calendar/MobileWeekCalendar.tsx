@@ -361,7 +361,7 @@ export function MobileWeekCalendar() {
               {HOURS.map((h, i) => (
                 <div key={h} style={{
                   position: 'absolute', top: i * HOUR_PX - 6, right: 4,
-                  fontSize: 9.5, color: 'var(--muted-foreground)',
+                  fontSize: 11, color: 'var(--muted-foreground)',
                   fontVariantNumeric: 'tabular-nums', lineHeight: 1,
                 }}>
                   {i === 0 ? '' : String(h).padStart(2, '0')}
@@ -467,7 +467,7 @@ export function MobileWeekCalendar() {
         {/* ── FAB ── */}
         <button
           style={{
-            position: 'fixed', right: 16, bottom: 82,
+            position: 'fixed', right: 16, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 66px)',
             width: 52, height: 52, borderRadius: 999,
             background: 'var(--foreground)', color: 'var(--background)',
             border: 0, cursor: 'pointer',

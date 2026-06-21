@@ -165,8 +165,8 @@ export function MiniCalendar({ from, to, onSelect, onClose }: MiniCalendarProps)
             key={i}
             className={dayClass(day)}
             onClick={() => day && handleDayClick(day)}
-            onMouseEnter={() => day && setHoverDate(startOfDay(day))}
-            onMouseLeave={() => setHoverDate(null)}
+            onPointerEnter={() => day && setHoverDate(startOfDay(day))}
+            onPointerLeave={() => setHoverDate(null)}
           >
             {day?.getDate()}
           </div>

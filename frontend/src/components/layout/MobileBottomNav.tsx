@@ -31,7 +31,7 @@ export function MobileBottomNav() {
             style={{ color: active ? 'var(--foreground)' : 'var(--muted-foreground)' }}
           >
             <Icon size={19} strokeWidth={2} />
-            <span style={{ fontSize: 10.5, fontWeight: active ? 600 : 500, lineHeight: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: active ? 600 : 500, lineHeight: 1 }}>
               {label}
             </span>
           </Link>
