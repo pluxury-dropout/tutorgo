@@ -96,19 +96,3 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
-
-func (h *TaskHandler) ToggleDone(c *gin.Context) {
-	tutorID := c.GetString("tutorID")
-	if tutorID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	id := c.Param("id")
-	task, err := h.service.ToggleDone(c.Request.Context(), id, tutorID)
-	if err != nil {
-		h.log.Error("Failed to toggle task", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to toggle task"})
-		return
-	}
-	c.JSON(http.StatusOK, task)
-}

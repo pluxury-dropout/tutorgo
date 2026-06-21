@@ -148,7 +148,6 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.POST("/tasks", taskHandler.Create)
 		auth.PUT("/tasks/:id", taskHandler.Update)
 		auth.DELETE("/tasks/:id", taskHandler.Delete)
-		auth.PATCH("/tasks/:id/done", taskHandler.ToggleDone)
 
 		auth.POST("/lessons/:id/room-token", callHandler.GetToken)
 		auth.POST("/lessons/:id/start-room", callHandler.StartRoom)

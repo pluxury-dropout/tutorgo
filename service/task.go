@@ -11,7 +11,6 @@ type TaskService interface {
 	GetByRange(ctx context.Context, tutorID, from, to string) ([]models.Task, error)
 	Update(ctx context.Context, id, tutorID string, req models.UpdateTaskRequest) (models.Task, error)
 	Delete(ctx context.Context, id, tutorID string) error
-	ToggleDone(ctx context.Context, id, tutorID string) (models.Task, error)
 }
 
 type taskService struct {
@@ -23,6 +22,9 @@ func NewTaskService(repo repository.TaskRepository) TaskService {
 }
 
 func (s *taskService) Create(ctx context.Context, tutorID string, req models.CreateTaskRequest) (models.Task, error) {
+	if req.Status == "" {
+		req.Status = "not_urgent"
+	}
 	return s.repo.Create(ctx, tutorID, req)
 }
 
@@ -36,8 +38,4 @@ func (s *taskService) Update(ctx context.Context, id, tutorID string, req models
 
 func (s *taskService) Delete(ctx context.Context, id, tutorID string) error {
 	return s.repo.Delete(ctx, id, tutorID)
-}
-
-func (s *taskService) ToggleDone(ctx context.Context, id, tutorID string) (models.Task, error) {
-	return s.repo.ToggleDone(ctx, id, tutorID)
 }
