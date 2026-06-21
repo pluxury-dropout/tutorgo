@@ -121,7 +121,8 @@ export function MobileWeekCalendar() {
   }
 
   function handleEventPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (drag && e.pointerId === drag.pointerId) {
+    // ponytail: check ref not state — setDrag is async, drag state is stale until next render
+    if (dragEngagedRef.current) {
       setDrag(d => d && {
         ...d,
         deltaY: e.clientY - (dragStartRef.current?.y ?? e.clientY),
@@ -162,10 +163,9 @@ export function MobileWeekCalendar() {
 
   function handleEventPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
     clearDragTimer()
-    if (drag && e.pointerId === drag.pointerId) {
-      e.currentTarget.style.touchAction = ''
-      setDrag(null)
-    }
+    dragEngagedRef.current = false
+    e.currentTarget.style.touchAction = ''
+    setDrag(null)
   }
 
   // ─── auto-scroll ────────────────────────────────────────────────────────────
