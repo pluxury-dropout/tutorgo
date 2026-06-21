@@ -91,7 +91,7 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
 		h.log.Error("Failed to delete task", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task"})
+		handleServiceError(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)

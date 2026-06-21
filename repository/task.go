@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"tutorgo/models"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,8 +69,14 @@ func (r *taskRepository) Update(ctx context.Context, id, tutorID string, req mod
 }
 
 func (r *taskRepository) Delete(ctx context.Context, id, tutorID string) error {
-	_, err := r.conn.Exec(ctx,
+	tag, err := r.conn.Exec(ctx,
 		`DELETE FROM tasks WHERE id=$1 AND tutor_id=$2`, id, tutorID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("task not found")
+	}
+	return nil
 }

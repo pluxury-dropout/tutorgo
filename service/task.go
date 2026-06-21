@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -37,5 +38,8 @@ func (s *taskService) Update(ctx context.Context, id, tutorID string, req models
 }
 
 func (s *taskService) Delete(ctx context.Context, id, tutorID string) error {
-	return s.repo.Delete(ctx, id, tutorID)
+	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
+		return fmt.Errorf("task: %w", ErrNotFound)
+	}
+	return nil
 }
