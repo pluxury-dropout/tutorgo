@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var ErrTaskNotFound = errors.New("task not found")
+
 type TaskRepository interface {
 	Create(ctx context.Context, tutorID string, req models.CreateTaskRequest) (models.Task, error)
 	GetByRange(ctx context.Context, tutorID, from, to string) ([]models.Task, error)
@@ -76,7 +78,7 @@ func (r *taskRepository) Delete(ctx context.Context, id, tutorID string) error {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("task not found")
+		return ErrTaskNotFound
 	}
 	return nil
 }
