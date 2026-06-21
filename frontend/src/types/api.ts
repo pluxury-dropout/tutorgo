@@ -94,7 +94,7 @@ export interface Task {
   title: string
   scheduled_at: string
   duration_minutes: number
-  done: boolean
+  status: 'not_urgent' | 'urgent' | 'very_urgent' | 'done'
   created_at: string
 }
 

@@ -18,14 +18,6 @@ export function useCreateTask() {
   })
 }
 
-export function useToggleTask() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => tasksApi.toggleDone(id),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ['tasks'] }),
-  })
-}
-
 export function useRescheduleTask() {
   const qc = useQueryClient()
   return useMutation({

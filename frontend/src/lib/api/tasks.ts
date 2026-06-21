@@ -5,10 +5,11 @@ export interface TaskInput {
   title: string
   scheduled_at: string
   duration_minutes: number
+  status?: string
 }
 
 export interface TaskUpdateInput extends TaskInput {
-  done: boolean
+  status: string
 }
 
 export const tasksApi = {
@@ -20,6 +21,4 @@ export const tasksApi = {
     api.put<Task>(`/tasks/${id}`, data).then((r) => r.data),
   delete: (id: string) =>
     api.delete(`/tasks/${id}`).then(() => id),
-  toggleDone: (id: string) =>
-    api.patch<Task>(`/tasks/${id}/done`).then((r) => r.data),
 }

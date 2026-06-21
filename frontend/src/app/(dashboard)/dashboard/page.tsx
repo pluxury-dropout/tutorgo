@@ -6,7 +6,6 @@ import { useStudentCount } from '@/lib/hooks/useStudents'
 import { useCourseCount } from '@/lib/hooks/useCourses'
 import { useCalendar, useCurrentCycles } from '@/lib/hooks/useCalendar'
 import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
-import { TasksWidget } from '@/components/tasks/TasksWidget'
 import type { CalendarLesson } from '@/types/api'
 
 function buildDateRanges() {
@@ -284,10 +283,6 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Задачи */}
-      <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: 36, alignItems: 'start' }}>
-        <TasksWidget />
-      </div>
     </div>
   )
 }
