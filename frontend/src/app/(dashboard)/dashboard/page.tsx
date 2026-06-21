@@ -7,6 +7,7 @@ import { useCourseCount } from '@/lib/hooks/useCourses'
 import { useCalendar, useCurrentCycles } from '@/lib/hooks/useCalendar'
 import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/hooks/usePayments'
 import type { CalendarLesson } from '@/types/api'
+import KanbanWidget from '@/components/tasks/KanbanWidget'
 
 function buildDateRanges() {
   const now = new Date()
@@ -281,6 +282,10 @@ export default function DashboardPage() {
           }
         </section>
 
+      </div>
+
+      <div style={{ maxWidth: 900 }}>
+        <KanbanWidget />
       </div>
 
     </div>
