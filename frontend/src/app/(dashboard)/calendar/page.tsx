@@ -11,7 +11,7 @@ import ruLocale from '@fullcalendar/core/locales/ru'
 import { Circle, CheckCircle2 } from 'lucide-react'
 
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
-import { useTasks, useToggleTask, useRescheduleTask } from '@/lib/hooks/useTasks'
+import { useTasks, useRescheduleTask } from '@/lib/hooks/useTasks'
 import { FC_COLORS } from '@/lib/lessonStatus'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
@@ -38,7 +38,6 @@ const EDGE_ZONE = 50
 
 export default function CalendarPage() {
   const { mutate: reschedule } = useRescheduleLesson()
-  const toggleTask             = useToggleTask()
   const rescheduleTask         = useRescheduleTask()
 
   const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
@@ -102,7 +101,7 @@ export default function CalendarPage() {
   }))
 
   const taskEvents = tasks.map((t) => {
-    const colors = t.done ? TASK_COLORS.done : TASK_COLORS.active
+    const colors = t.status === 'done' ? TASK_COLORS.done : TASK_COLORS.active
     return {
       id:              t.id,
       title:           t.title,
@@ -112,9 +111,9 @@ export default function CalendarPage() {
       borderColor:     colors.border,
       textColor:       colors.text,
       extendedProps: {
-        type:  'task',
-        done:  t.done,
-        title: t.title,
+        type:   'task',
+        status: t.status,
+        title:  t.title,
       },
     }
   })
@@ -215,7 +214,7 @@ export default function CalendarPage() {
             title:            arg.event.extendedProps.title as string,
             scheduled_at:     snapped.toISOString(),
             duration_minutes: duration,
-            done:             arg.event.extendedProps.done as boolean,
+            status:           arg.event.extendedProps.status as string,
           },
         },
         { onError: () => arg.revert() },
@@ -310,13 +309,24 @@ export default function CalendarPage() {
           }}
           eventContent={(arg) => {
             if (arg.event.extendedProps.type === 'task') {
-              const done = arg.event.extendedProps.done as boolean
+              const done = arg.event.extendedProps.status === 'done'
               return (
                 <div className="flex items-start gap-1 px-1.5 py-0.5 w-full">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      toggleTask.mutate(arg.event.id)
+                      const task = tasks?.find(t => t.id === arg.event.id)
+                      if (task) {
+                        rescheduleTask.mutate({
+                          id: task.id,
+                          data: {
+                            title: task.title,
+                            scheduled_at: task.scheduled_at,
+                            duration_minutes: task.duration_minutes,
+                            status: task.status === 'done' ? 'not_urgent' : 'done',
+                          }
+                        })
+                      }
                     }}
                     className="shrink-0 mt-px"
                   >
