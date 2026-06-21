@@ -24,7 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!mounted || !isAuthenticated) return null
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col overflow-hidden" style={{ height: '100dvh' }}>
       {/* Мобильная шапка — только на телефоне (не показывается на /calendar: там своя шапка) */}
       {pathname !== '/calendar' && (
         <header className="md:hidden flex items-center gap-3 h-12 px-4 border-b bg-sidebar shrink-0">
