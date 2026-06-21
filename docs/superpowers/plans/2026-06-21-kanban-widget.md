@@ -1018,7 +1018,7 @@ import { KanbanWidget } from '@/components/tasks/KanbanWidget'
 Add widget at the end of the main `<div>`, after the existing `grid grid-cols-1 md:grid-cols-3` div:
 ```tsx
       {/* Задачи — Канбан */}
-      <div>
+      <div style={{ maxWidth: 900 }}>
         <KanbanWidget />
       </div>
 ```

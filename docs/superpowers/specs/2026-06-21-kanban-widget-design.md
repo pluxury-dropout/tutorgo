@@ -95,7 +95,7 @@ This toggles between `done` and `not_urgent` — same UX as before.
 
 ### `frontend/src/app/(dashboard)/dashboard/page.tsx`
 - Replace `<TasksWidget />` import with `<KanbanWidget />`
-- Change wrapping div from `grid-cols-1 md:grid-cols-3` to full-width (no grid, just `width: 100%`)
+- Wrap in `<div style={{ maxWidth: 900 }}>` — matches the header's max-width constraint, not full browser width
 
 ## Out of Scope
 
