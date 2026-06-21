@@ -31,6 +31,13 @@ function toDatetimeLocal(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function datetimeLocalToISO(value: string): string {
+  const [date, time] = value.split('T')
+  const [year, month, day] = date.split('-').map(Number)
+  const [hours, minutes] = time.split(':').map(Number)
+  return new Date(year, month - 1, day, hours, minutes).toISOString()
+}
+
 function TaskCard({ task, color, onClick }: { task: Task; color: string; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
   return (
@@ -134,9 +141,10 @@ export default function KanbanWidget() {
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    if (!over || active.id === over.id) return
-    const task = tasks.find(t => t.id === active.id)
+    if (!over) return
+    const task = tasks.find(t => t.id === String(active.id))
     if (!task) return
+    if (task.status === String(over.id)) return  // already in this column
     reschedule.mutate({
       id: String(active.id),
       data: { title: task.title, scheduled_at: task.scheduled_at, duration_minutes: task.duration_minutes, status: String(over.id) },
@@ -144,7 +152,7 @@ export default function KanbanWidget() {
   }
 
   function handleSave() {
-    const data = { ...form, scheduled_at: new Date(form.scheduled_at).toISOString() }
+    const data = { ...form, scheduled_at: datetimeLocalToISO(form.scheduled_at) }
     if (sheet?.mode === 'create') {
       createTask.mutate(data, { onSuccess: () => setSheet(null) })
     } else if (sheet?.mode === 'edit') {
