@@ -93,25 +93,19 @@ export function MobileWeekCalendar() {
   const dragTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragStartRef    = useRef<{ x: number; y: number } | null>(null)
   const dragEngagedRef  = useRef(false)
-  const dragTargetRef   = useRef<HTMLDivElement | null>(null)
   const gridRef         = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<{ lesson: CalendarLesson; pointerId: number; deltaY: number; deltaX: number } | null>(null)
 
   function clearDragTimer() {
     if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
     dragStartRef.current = null
-    if (dragTargetRef.current) {
-      dragTargetRef.current.style.touchAction = ''
-      dragTargetRef.current = null
-    }
   }
 
   function handleEventPointerDown(e: React.PointerEvent<HTMLDivElement>, lesson: CalendarLesson) {
     dragStartRef.current = { x: e.clientX, y: e.clientY }
     const target = e.currentTarget
-    dragTargetRef.current = target
-    // ponytail: touch-action must be set at pointerdown, not later — browser evaluates it once on touch start
-    target.style.touchAction = 'none'
+    // ponytail: touch-action:none lives statically in the card style — setting it here is too
+    // late, the browser locks scroll behavior at touchstart (before this pointerdown fires)
     const pointerId = e.pointerId
     dragTimerRef.current = setTimeout(() => {
       target.setPointerCapture(pointerId)
@@ -140,7 +134,6 @@ export function MobileWeekCalendar() {
   function handleEventPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     clearDragTimer()
     if (!drag || e.pointerId !== drag.pointerId) return
-    e.currentTarget.style.touchAction = ''
     const minutesDelta = Math.round(drag.deltaY / HOUR_PX * 2) * 30
     const colWidth     = gridRef.current ? gridRef.current.clientWidth / 7 : 0
     const dayDelta     = colWidth > 0 ? Math.round(drag.deltaX / colWidth) : 0
@@ -164,7 +157,6 @@ export function MobileWeekCalendar() {
   function handleEventPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
     clearDragTimer()
     dragEngagedRef.current = false
-    e.currentTarget.style.touchAction = ''
     setDrag(null)
   }
 
@@ -441,6 +433,7 @@ export function MobileWeekCalendar() {
                           zIndex:    isDragged ? 6 : 2,
                           userSelect: 'none',
                           WebkitUserSelect: 'none',
+                          touchAction: 'none', // ponytail: must be static — see handleEventPointerDown
                           filter:          isPast              ? 'brightness(0.9)'    : undefined,
                           textDecoration:  ev.status === 'cancelled' ? 'line-through' : undefined,
                           transform:  isDragged ? `translate(${drag.deltaX}px,${drag.deltaY}px) scale(1.03)` : undefined,
