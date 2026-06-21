@@ -93,21 +93,28 @@ export function MobileWeekCalendar() {
   const dragTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragStartRef    = useRef<{ x: number; y: number } | null>(null)
   const dragEngagedRef  = useRef(false)
+  const dragTargetRef   = useRef<HTMLDivElement | null>(null)
   const gridRef         = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<{ lesson: CalendarLesson; pointerId: number; deltaY: number; deltaX: number } | null>(null)
 
   function clearDragTimer() {
     if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
     dragStartRef.current = null
+    if (dragTargetRef.current) {
+      dragTargetRef.current.style.touchAction = ''
+      dragTargetRef.current = null
+    }
   }
 
   function handleEventPointerDown(e: React.PointerEvent<HTMLDivElement>, lesson: CalendarLesson) {
     dragStartRef.current = { x: e.clientX, y: e.clientY }
     const target = e.currentTarget
+    dragTargetRef.current = target
+    // ponytail: touch-action must be set at pointerdown, not later — browser evaluates it once on touch start
+    target.style.touchAction = 'none'
     const pointerId = e.pointerId
     dragTimerRef.current = setTimeout(() => {
       target.setPointerCapture(pointerId)
-      target.style.touchAction = 'none'
       dragEngagedRef.current = true
       setDrag({ lesson, pointerId, deltaY: 0, deltaX: 0 })
     }, DRAG_LONG_PRESS_MS)
