@@ -13,11 +13,18 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: 'cover',
 }
 
 export const metadata: Metadata = {
   title: 'TutorGo',
   description: 'CRM for private tutors',
+  // ponytail: только apple-теги — iOS не читает manifest display:standalone. Manifest добавить, когда понадобится Android PWA.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'TutorGo',
+  },
 }
 
 export default function RootLayout({
