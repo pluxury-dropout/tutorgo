@@ -13,14 +13,14 @@ type Task struct {
 }
 
 type CreateTaskRequest struct {
-	Title           string     `json:"title"            validate:"required,max=200"`
+	Title           string     `json:"title"            validate:"required,max=10000"`
 	ScheduledAt     *time.Time `json:"scheduled_at"`
 	DurationMinutes *int       `json:"duration_minutes" validate:"omitempty,gt=0"`
 	Status          string     `json:"status"           validate:"omitempty,oneof=not_urgent urgent very_urgent done"`
 }
 
 type UpdateTaskRequest struct {
-	Title           string     `json:"title"            validate:"required,max=200"`
+	Title           string     `json:"title"            validate:"required,max=10000"`
 	ScheduledAt     *time.Time `json:"scheduled_at"`
 	DurationMinutes *int       `json:"duration_minutes" validate:"omitempty,gt=0"`
 	Status          string     `json:"status"           validate:"required,oneof=not_urgent urgent very_urgent done"`
