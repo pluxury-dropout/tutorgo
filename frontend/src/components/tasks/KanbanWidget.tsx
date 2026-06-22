@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
+import TaskEditor from './TaskEditor'
 import {
   DndContext,
   DragEndEvent,
@@ -55,13 +57,15 @@ function TaskCard({
         cursor: 'grab',
         userSelect: 'none',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 6,
       }}
     >
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {task.title}
-      </span>
+      <div
+        className="task-content"
+        style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.title) }}
+      />
       <button
         onClick={(e) => { e.stopPropagation(); onDelete() }}
         onPointerDown={(e) => e.stopPropagation()}
@@ -74,38 +78,6 @@ function TaskCard({
   )
 }
 
-// Inline-поле для создания и редактирования задачи. Сохраняет по blur/Enter, отмена по Escape.
-function InlineInput({
-  defaultValue,
-  onCommit,
-  onCancel,
-}: {
-  defaultValue: string
-  onCommit: (value: string) => void
-  onCancel: () => void
-}) {
-  const [value, setValue] = useState(defaultValue)
-  return (
-    <input
-      autoFocus
-      value={value}
-      placeholder="Название задачи"
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => onCommit(value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-        if (e.key === 'Escape') onCancel()
-      }}
-      style={{
-        ...cardBaseStyle,
-        width: '100%',
-        outline: 'none',
-        color: 'var(--foreground)',
-        fontFamily: 'inherit',
-      }}
-    />
-  )
-}
 
 function Column({
   col,
@@ -154,10 +126,10 @@ function Column({
       >
         {tasks.map(task =>
           editingId === task.id ? (
-            <InlineInput
+            <TaskEditor
               key={task.id}
               defaultValue={task.title}
-              onCommit={(title) => onCommitEdit(task, title)}
+              onCommit={(html) => onCommitEdit(task, html)}
               onCancel={onCancelEdit}
             />
           ) : (
@@ -170,7 +142,7 @@ function Column({
           ),
         )}
         {draftOpen && (
-          <InlineInput defaultValue="" onCommit={onCommitDraft} onCancel={onCancelDraft} />
+          <TaskEditor defaultValue="" onCommit={onCommitDraft} onCancel={onCancelDraft} />
         )}
       </div>
     </div>
