@@ -10,6 +10,7 @@ import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import ruLocale from '@fullcalendar/core/locales/ru'
 import { Circle, CheckCircle2 } from 'lucide-react'
 
+import { stripHtml } from '@/lib/stripHtml'
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { useTasks, useRescheduleTask } from '@/lib/hooks/useTasks'
 import { FC_COLORS } from '@/lib/lessonStatus'
@@ -104,7 +105,7 @@ export default function CalendarPage() {
     const colors = t.status === 'done' ? TASK_COLORS.done : TASK_COLORS.active
     return {
       id:              t.id,
-      title:           t.title,
+      title:           stripHtml(t.title),
       start:           t.scheduled_at!,
       end:             new Date(new Date(t.scheduled_at!).getTime() + t.duration_minutes! * 60_000).toISOString(),
       backgroundColor: colors.bg,

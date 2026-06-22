@@ -390,3 +390,35 @@
   padding: 1px 4px !important;
   border-width: 0 !important;
 }
+
+/* Форматированный контент задачи (карточка канбана + инлайн-редактор) */
+.task-content { line-height: 1.4; }
+.task-content p { margin: 0; }
+.task-content p + p { margin-top: 4px; }
+.task-content ul { list-style: disc; padding-left: 1.2em; margin: 2px 0; }
+.task-content ol { list-style: decimal; padding-left: 1.2em; margin: 2px 0; }
+.task-content li { margin: 1px 0; }
+.task-content h1 { font-size: 1.2em; font-weight: 600; margin: 4px 0 2px; }
+.task-content h2 { font-size: 1.1em; font-weight: 600; margin: 4px 0 2px; }
+.task-content h3 { font-size: 1em;   font-weight: 600; margin: 4px 0 2px; }
+.task-content blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  color: var(--muted-foreground);
+  margin: 2px 0;
+}
+.task-content code {
+  background: var(--muted);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 0.9em;
+}
+/* Редактор: убрать обводку ProseMirror + плейсхолдер пустого документа */
+.task-editor { outline: none; }
+.task-editor.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
