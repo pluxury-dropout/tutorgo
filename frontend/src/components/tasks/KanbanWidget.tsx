@@ -11,10 +11,6 @@ import {
   useDroppable,
   useDraggable,
 } from '@dnd-kit/core'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { useBoardTasks, useCreateTask, useRescheduleTask, useDeleteTask } from '@/lib/hooks/useTasks'
 import { Task } from '@/types/api'
 
@@ -25,7 +21,28 @@ const COLUMNS = [
   { id: 'done',        label: 'Выполнено',      color: 'var(--muted-foreground)' },
 ] as const
 
-function TaskCard({ task, color, onClick }: { task: Task; color: string; onClick: () => void }) {
+const cardBaseStyle: React.CSSProperties = {
+  borderRadius: 6,
+  padding: '8px 10px',
+  marginBottom: 6,
+  background: 'var(--card)',
+  borderTop: '1px solid var(--border)',
+  borderRight: '1px solid var(--border)',
+  borderBottom: '1px solid var(--border)',
+  fontSize: 13,
+}
+
+function TaskCard({
+  task,
+  color,
+  onClick,
+  onDelete,
+}: {
+  task: Task
+  color: string
+  onClick: () => void
+  onDelete: () => void
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
   return (
     <div
@@ -34,74 +51,143 @@ function TaskCard({ task, color, onClick }: { task: Task; color: string; onClick
       {...attributes}
       onClick={onClick}
       style={{
+        ...cardBaseStyle,
         transform: transform ? `translate3d(${transform.x}px,${transform.y}px,0)` : undefined,
         opacity: isDragging ? 0.4 : 1,
         cursor: 'grab',
-        borderRadius: 6,
-        padding: '8px 10px',
-        marginBottom: 6,
-        background: 'var(--card)',
-        borderTop: '1px solid var(--border)',
-        borderRight: '1px solid var(--border)',
-        borderBottom: '1px solid var(--border)',
         borderLeft: `3px solid ${color}`,
-        fontSize: 13,
         userSelect: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
       }}
     >
-      {task.title}
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {task.title}
+      </span>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete() }}
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.5 }}
+        title="Удалить"
+      >
+        ×
+      </button>
     </div>
+  )
+}
+
+// Inline-поле для создания и редактирования задачи. Сохраняет по blur/Enter, отмена по Escape.
+function InlineInput({
+  defaultValue,
+  color,
+  onCommit,
+  onCancel,
+}: {
+  defaultValue: string
+  color: string
+  onCommit: (value: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(defaultValue)
+  return (
+    <input
+      autoFocus
+      value={value}
+      placeholder="Название задачи"
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        if (e.key === 'Escape') onCancel()
+      }}
+      style={{
+        ...cardBaseStyle,
+        borderLeft: `3px solid ${color}`,
+        width: '100%',
+        outline: 'none',
+        color: 'var(--foreground)',
+        fontFamily: 'inherit',
+      }}
+    />
   )
 }
 
 function Column({
   col,
   tasks,
+  editingId,
+  draftOpen,
   onCardClick,
-  onAdd,
+  onCardDelete,
+  onCommitEdit,
+  onCancelEdit,
+  onOpenDraft,
+  onCommitDraft,
+  onCancelDraft,
 }: {
   col: typeof COLUMNS[number]
   tasks: Task[]
+  editingId: string | null
+  draftOpen: boolean
   onCardClick: (task: Task) => void
-  onAdd: () => void
+  onCardDelete: (task: Task) => void
+  onCommitEdit: (task: Task, title: string) => void
+  onCancelEdit: () => void
+  onOpenDraft: () => void
+  onCommitDraft: (title: string) => void
+  onCancelDraft: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id })
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <div style={{ marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: col.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           {col.label}
         </span>
-        <button
-          onClick={onAdd}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', fontSize: 16, lineHeight: 1, padding: '0 2px' }}
-        >
-          +
-        </button>
       </div>
       <div
         ref={setNodeRef}
+        onClick={(e) => { if (e.target === e.currentTarget && !draftOpen) onOpenDraft() }}
         style={{
           minHeight: 80,
           borderRadius: 6,
           padding: 4,
           background: isOver ? 'var(--muted)' : 'transparent',
           transition: 'background 0.15s',
+          cursor: 'text',
         }}
       >
-        {tasks.map(task => (
-          <TaskCard key={task.id} task={task} color={col.color} onClick={() => onCardClick(task)} />
-        ))}
+        {tasks.map(task =>
+          editingId === task.id ? (
+            <InlineInput
+              key={task.id}
+              defaultValue={task.title}
+              color={col.color}
+              onCommit={(title) => onCommitEdit(task, title)}
+              onCancel={onCancelEdit}
+            />
+          ) : (
+            <TaskCard
+              key={task.id}
+              task={task}
+              color={col.color}
+              onClick={() => onCardClick(task)}
+              onDelete={() => onCardDelete(task)}
+            />
+          ),
+        )}
+        {draftOpen && (
+          <InlineInput defaultValue="" color={col.color} onCommit={onCommitDraft} onCancel={onCancelDraft} />
+        )}
       </div>
     </div>
   )
 }
 
-type SheetMode = { mode: 'create'; status: string } | { mode: 'edit'; task: Task } | null
-
 export default function KanbanWidget() {
-  const [sheet, setSheet] = useState<SheetMode>(null)
-  const [form, setForm] = useState({ title: '', status: 'not_urgent' })
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [draftStatus, setDraftStatus] = useState<string | null>(null)
 
   const { data: tasks = [] } = useBoardTasks()
   const createTask = useCreateTask()
@@ -113,99 +199,55 @@ export default function KanbanWidget() {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
   )
 
-  function openCreate(status: string) {
-    setForm({ title: '', status })
-    setSheet({ mode: 'create', status })
-  }
-
-  function openEdit(task: Task) {
-    setForm({ title: task.title, status: task.status })
-    setSheet({ mode: 'edit', task })
-  }
-
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over) return
     const task = tasks.find(t => t.id === String(active.id))
-    if (!task) return
-    if (task.status === String(over.id)) return  // already in this column
+    if (!task || task.status === String(over.id)) return
     reschedule.mutate({
       id: String(active.id),
       data: { title: task.title, scheduled_at: task.scheduled_at, duration_minutes: task.duration_minutes, status: String(over.id) },
     })
   }
 
-  function handleSave() {
-    if (sheet?.mode === 'create') {
-      // Канбан-задача: только название и статус, без времени.
-      createTask.mutate(form, { onSuccess: () => setSheet(null) })
-    } else if (sheet?.mode === 'edit') {
-      // Прокидываем существующие scheduled_at/duration, чтобы не затереть календарные задачи.
-      reschedule.mutate(
-        {
-          id: sheet.task.id,
-          data: { ...form, scheduled_at: sheet.task.scheduled_at, duration_minutes: sheet.task.duration_minutes },
-        },
-        { onSuccess: () => setSheet(null) },
-      )
-    }
+  function commitDraft(title: string) {
+    const t = title.trim()
+    if (t && draftStatus) createTask.mutate({ title: t, status: draftStatus })
+    setDraftStatus(null)
   }
 
-  function handleDelete() {
-    if (sheet?.mode === 'edit') {
-      deleteTask.mutate(sheet.task.id, { onSuccess: () => setSheet(null) })
+  function commitEdit(task: Task, title: string) {
+    const t = title.trim()
+    // Прокидываем существующие scheduled_at/duration, чтобы не затереть календарные задачи.
+    if (t && t !== task.title) {
+      reschedule.mutate({
+        id: task.id,
+        data: { title: t, status: task.status, scheduled_at: task.scheduled_at, duration_minutes: task.duration_minutes },
+      })
     }
+    setEditingId(null)
   }
-
-  const isPending = createTask.isPending || reschedule.isPending || deleteTask.isPending
 
   return (
-    <>
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div style={{ display: 'flex', gap: 12 }}>
-          {COLUMNS.map(col => (
-            <Column
-              key={col.id}
-              col={col}
-              tasks={tasks.filter(t => t.status === col.id)}
-              onCardClick={openEdit}
-              onAdd={() => openCreate(col.id)}
-            />
-          ))}
-        </div>
-      </DndContext>
-
-      <Sheet open={sheet !== null} onOpenChange={open => !open && setSheet(null)}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>{sheet?.mode === 'create' ? 'Новая задача' : 'Редактировать задачу'}</SheetTitle>
-          </SheetHeader>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-            <div>
-              <Label>Название</Label>
-              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Статус</Label>
-              <select
-                value={form.status}
-                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                style={{ width: '100%', padding: '8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--foreground)', fontSize: 14 }}
-              >
-                {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </select>
-            </div>
-            <Button onClick={handleSave} disabled={isPending}>
-              {isPending ? 'Сохранение...' : 'Сохранить'}
-            </Button>
-            {sheet?.mode === 'edit' && (
-              <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
-                Удалить
-              </Button>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <div style={{ display: 'flex', gap: 12 }}>
+        {COLUMNS.map(col => (
+          <Column
+            key={col.id}
+            col={col}
+            tasks={tasks.filter(t => t.status === col.id)}
+            editingId={editingId}
+            draftOpen={draftStatus === col.id}
+            onCardClick={(task) => { setDraftStatus(null); setEditingId(task.id) }}
+            onCardDelete={(task) => deleteTask.mutate(task.id)}
+            onCommitEdit={commitEdit}
+            onCancelEdit={() => setEditingId(null)}
+            onOpenDraft={() => { setEditingId(null); setDraftStatus(col.id) }}
+            onCommitDraft={commitDraft}
+            onCancelDraft={() => setDraftStatus(null)}
+          />
+        ))}
+      </div>
+    </DndContext>
   )
 }
