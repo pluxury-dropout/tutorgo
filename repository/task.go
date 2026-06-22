@@ -13,6 +13,7 @@ var ErrTaskNotFound = errors.New("task not found")
 type TaskRepository interface {
 	Create(ctx context.Context, tutorID string, req models.CreateTaskRequest) (models.Task, error)
 	GetByRange(ctx context.Context, tutorID, from, to string) ([]models.Task, error)
+	GetAll(ctx context.Context, tutorID string) ([]models.Task, error)
 	Update(ctx context.Context, id, tutorID string, req models.UpdateTaskRequest) (models.Task, error)
 	Delete(ctx context.Context, id, tutorID string) error
 }
@@ -43,6 +44,29 @@ func (r *taskRepository) GetByRange(ctx context.Context, tutorID, from, to strin
 		 WHERE tutor_id = $1 AND scheduled_at >= $2 AND scheduled_at < $3
 		 ORDER BY scheduled_at`,
 		tutorID, from, to,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tasks []models.Task
+	for rows.Next() {
+		var t models.Task
+		if err := rows.Scan(&t.ID, &t.TutorID, &t.Title, &t.Status, &t.ScheduledAt, &t.DurationMinutes, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+func (r *taskRepository) GetAll(ctx context.Context, tutorID string) ([]models.Task, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT id, tutor_id, title, status, scheduled_at, duration_minutes, created_at
+		 FROM tasks
+		 WHERE tutor_id = $1
+		 ORDER BY created_at DESC`,
+		tutorID,
 	)
 	if err != nil {
 		return nil, err

@@ -43,6 +43,24 @@ func (h *TaskHandler) GetByRange(c *gin.Context) {
 	c.JSON(http.StatusOK, tasks)
 }
 
+func (h *TaskHandler) GetBoard(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	tasks, err := h.service.GetAll(c.Request.Context(), tutorID)
+	if err != nil {
+		h.log.Error("Failed to get board tasks", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve tasks"})
+		return
+	}
+	if tasks == nil {
+		tasks = []models.Task{}
+	}
+	c.JSON(http.StatusOK, tasks)
+}
+
 func (h *TaskHandler) Create(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

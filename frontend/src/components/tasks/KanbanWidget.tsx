@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useTasks, useCreateTask, useRescheduleTask, useDeleteTask } from '@/lib/hooks/useTasks'
+import { useBoardTasks, useCreateTask, useRescheduleTask, useDeleteTask } from '@/lib/hooks/useTasks'
 import { Task } from '@/types/api'
 
 const COLUMNS = [
@@ -24,19 +24,6 @@ const COLUMNS = [
   { id: 'very_urgent', label: 'Очень срочно',   color: 'var(--destructive)' },
   { id: 'done',        label: 'Выполнено',      color: 'var(--muted-foreground)' },
 ] as const
-
-function toDatetimeLocal(iso: string) {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function datetimeLocalToISO(value: string): string {
-  const [date, time] = value.split('T')
-  const [year, month, day] = date.split('-').map(Number)
-  const [hours, minutes] = time.split(':').map(Number)
-  return new Date(year, month - 1, day, hours, minutes).toISOString()
-}
 
 function TaskCard({ task, color, onClick }: { task: Task; color: string; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
@@ -114,9 +101,9 @@ type SheetMode = { mode: 'create'; status: string } | { mode: 'edit'; task: Task
 
 export default function KanbanWidget() {
   const [sheet, setSheet] = useState<SheetMode>(null)
-  const [form, setForm] = useState({ title: '', status: 'not_urgent', scheduled_at: '', duration_minutes: 30 })
+  const [form, setForm] = useState({ title: '', status: 'not_urgent' })
 
-  const { data: tasks = [] } = useTasks('2020-01-01T00:00:00Z', '2035-01-01T00:00:00Z')
+  const { data: tasks = [] } = useBoardTasks()
   const createTask = useCreateTask()
   const reschedule = useRescheduleTask()
   const deleteTask = useDeleteTask()
@@ -127,15 +114,12 @@ export default function KanbanWidget() {
   )
 
   function openCreate(status: string) {
-    const now = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const dt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
-    setForm({ title: '', status, scheduled_at: dt, duration_minutes: 30 })
+    setForm({ title: '', status })
     setSheet({ mode: 'create', status })
   }
 
   function openEdit(task: Task) {
-    setForm({ title: task.title, status: task.status, scheduled_at: toDatetimeLocal(task.scheduled_at), duration_minutes: task.duration_minutes })
+    setForm({ title: task.title, status: task.status })
     setSheet({ mode: 'edit', task })
   }
 
@@ -152,11 +136,18 @@ export default function KanbanWidget() {
   }
 
   function handleSave() {
-    const data = { ...form, scheduled_at: datetimeLocalToISO(form.scheduled_at) }
     if (sheet?.mode === 'create') {
-      createTask.mutate(data, { onSuccess: () => setSheet(null) })
+      // Канбан-задача: только название и статус, без времени.
+      createTask.mutate(form, { onSuccess: () => setSheet(null) })
     } else if (sheet?.mode === 'edit') {
-      reschedule.mutate({ id: sheet.task.id, data }, { onSuccess: () => setSheet(null) })
+      // Прокидываем существующие scheduled_at/duration, чтобы не затереть календарные задачи.
+      reschedule.mutate(
+        {
+          id: sheet.task.id,
+          data: { ...form, scheduled_at: sheet.task.scheduled_at, duration_minutes: sheet.task.duration_minutes },
+        },
+        { onSuccess: () => setSheet(null) },
+      )
     }
   }
 
@@ -203,14 +194,6 @@ export default function KanbanWidget() {
               >
                 {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
-            </div>
-            <div>
-              <Label>Дата и время</Label>
-              <Input type="datetime-local" value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Длительность (мин)</Label>
-              <Input type="number" value={form.duration_minutes} onChange={e => setForm(f => ({ ...f, duration_minutes: Number(e.target.value) }))} />
             </div>
             <Button onClick={handleSave} disabled={isPending}>
               {isPending ? 'Сохранение...' : 'Сохранить'}

@@ -145,6 +145,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.PUT("/lessons/:id/attendance", attendanceHandler.Update)
 
 		auth.GET("/tasks", taskHandler.GetByRange)
+		auth.GET("/tasks/board", taskHandler.GetBoard)
 		auth.POST("/tasks", taskHandler.Create)
 		auth.PUT("/tasks/:id", taskHandler.Update)
 		auth.DELETE("/tasks/:id", taskHandler.Delete)

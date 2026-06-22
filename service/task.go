@@ -11,6 +11,7 @@ import (
 type TaskService interface {
 	Create(ctx context.Context, tutorID string, req models.CreateTaskRequest) (models.Task, error)
 	GetByRange(ctx context.Context, tutorID, from, to string) ([]models.Task, error)
+	GetAll(ctx context.Context, tutorID string) ([]models.Task, error)
 	Update(ctx context.Context, id, tutorID string, req models.UpdateTaskRequest) (models.Task, error)
 	Delete(ctx context.Context, id, tutorID string) error
 }
@@ -32,6 +33,10 @@ func (s *taskService) Create(ctx context.Context, tutorID string, req models.Cre
 
 func (s *taskService) GetByRange(ctx context.Context, tutorID, from, to string) ([]models.Task, error) {
 	return s.repo.GetByRange(ctx, tutorID, from, to)
+}
+
+func (s *taskService) GetAll(ctx context.Context, tutorID string) ([]models.Task, error) {
+	return s.repo.GetAll(ctx, tutorID)
 }
 
 func (s *taskService) Update(ctx context.Context, id, tutorID string, req models.UpdateTaskRequest) (models.Task, error) {

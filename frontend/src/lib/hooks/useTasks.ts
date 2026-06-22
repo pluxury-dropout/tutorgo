@@ -10,6 +10,13 @@ export function useTasks(from: string, to: string) {
   })
 }
 
+export function useBoardTasks() {
+  return useQuery({
+    queryKey: ['tasks', 'board'],
+    queryFn:  () => tasksApi.board(),
+  })
+}
+
 export function useCreateTask() {
   const qc = useQueryClient()
   return useMutation({

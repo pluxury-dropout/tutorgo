@@ -3,8 +3,8 @@ import { Task } from '@/types/api'
 
 export interface TaskInput {
   title: string
-  scheduled_at: string
-  duration_minutes: number
+  scheduled_at?: string | null
+  duration_minutes?: number | null
   status?: string
 }
 
@@ -15,6 +15,8 @@ export interface TaskUpdateInput extends TaskInput {
 export const tasksApi = {
   list: (from: string, to: string) =>
     api.get<Task[]>('/tasks', { params: { from, to } }).then((r) => r.data ?? []),
+  board: () =>
+    api.get<Task[]>('/tasks/board').then((r) => r.data ?? []),
   create: (data: TaskInput) =>
     api.post<Task>('/tasks', data).then((r) => r.data),
   update: (id: string, data: TaskUpdateInput) =>

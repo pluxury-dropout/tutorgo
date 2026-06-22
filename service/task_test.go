@@ -24,6 +24,11 @@ func (m *mockTaskRepo) GetByRange(ctx context.Context, tutorID, from, to string)
 	return args.Get(0).([]models.Task), args.Error(1)
 }
 
+func (m *mockTaskRepo) GetAll(ctx context.Context, tutorID string) ([]models.Task, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]models.Task), args.Error(1)
+}
+
 func (m *mockTaskRepo) Update(ctx context.Context, id, tutorID string, req models.UpdateTaskRequest) (models.Task, error) {
 	args := m.Called(ctx, id, tutorID, req)
 	return args.Get(0).(models.Task), args.Error(1)
@@ -38,11 +43,11 @@ func TestTaskService_Create_DefaultsStatus(t *testing.T) {
 	repo := new(mockTaskRepo)
 	svc := service.NewTaskService(repo)
 
-	req := models.CreateTaskRequest{Title: "Test task", DurationMinutes: 30}
+	req := models.CreateTaskRequest{Title: "Test task"} // kanban task: no time/duration
 	expected := models.Task{ID: "1", Status: "not_urgent"}
 
 	repo.On("Create", mock.Anything, "tutor-1", models.CreateTaskRequest{
-		Title: "Test task", DurationMinutes: 30, Status: "not_urgent",
+		Title: "Test task", Status: "not_urgent",
 	}).Return(expected, nil)
 
 	result, err := svc.Create(context.Background(), "tutor-1", req)
@@ -55,7 +60,7 @@ func TestTaskService_Create_PreservesExplicitStatus(t *testing.T) {
 	repo := new(mockTaskRepo)
 	svc := service.NewTaskService(repo)
 
-	req := models.CreateTaskRequest{Title: "Urgent task", DurationMinutes: 30, Status: "urgent"}
+	req := models.CreateTaskRequest{Title: "Urgent task", Status: "urgent"}
 	expected := models.Task{ID: "2", Status: "urgent"}
 
 	repo.On("Create", mock.Anything, "tutor-1", req).Return(expected, nil)

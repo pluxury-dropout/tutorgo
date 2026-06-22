@@ -92,8 +92,8 @@ export interface Task {
   id: string
   tutor_id: string
   title: string
-  scheduled_at: string
-  duration_minutes: number
+  scheduled_at: string | null
+  duration_minutes: number | null
   status: 'not_urgent' | 'urgent' | 'very_urgent' | 'done'
   created_at: string
 }
