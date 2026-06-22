@@ -34,12 +34,10 @@ const cardBaseStyle: React.CSSProperties = {
 
 function TaskCard({
   task,
-  color,
   onClick,
   onDelete,
 }: {
   task: Task
-  color: string
   onClick: () => void
   onDelete: () => void
 }) {
@@ -55,7 +53,6 @@ function TaskCard({
         transform: transform ? `translate3d(${transform.x}px,${transform.y}px,0)` : undefined,
         opacity: isDragging ? 0.4 : 1,
         cursor: 'grab',
-        borderLeft: `3px solid ${color}`,
         userSelect: 'none',
         display: 'flex',
         alignItems: 'center',
@@ -80,12 +77,10 @@ function TaskCard({
 // Inline-поле для создания и редактирования задачи. Сохраняет по blur/Enter, отмена по Escape.
 function InlineInput({
   defaultValue,
-  color,
   onCommit,
   onCancel,
 }: {
   defaultValue: string
-  color: string
   onCommit: (value: string) => void
   onCancel: () => void
 }) {
@@ -103,7 +98,6 @@ function InlineInput({
       }}
       style={{
         ...cardBaseStyle,
-        borderLeft: `3px solid ${color}`,
         width: '100%',
         outline: 'none',
         color: 'var(--foreground)',
@@ -142,7 +136,7 @@ function Column({
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: col.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: col.color, letterSpacing: '-0.01em' }}>
           {col.label}
         </span>
       </div>
@@ -163,7 +157,6 @@ function Column({
             <InlineInput
               key={task.id}
               defaultValue={task.title}
-              color={col.color}
               onCommit={(title) => onCommitEdit(task, title)}
               onCancel={onCancelEdit}
             />
@@ -171,14 +164,13 @@ function Column({
             <TaskCard
               key={task.id}
               task={task}
-              color={col.color}
               onClick={() => onCardClick(task)}
               onDelete={() => onCardDelete(task)}
             />
           ),
         )}
         {draftOpen && (
-          <InlineInput defaultValue="" color={col.color} onCommit={onCommitDraft} onCancel={onCancelDraft} />
+          <InlineInput defaultValue="" onCommit={onCommitDraft} onCancel={onCancelDraft} />
         )}
       </div>
     </div>
