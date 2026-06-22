@@ -22,13 +22,6 @@ export default function TaskEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: { class: 'task-content task-editor', 'data-placeholder': 'Название задачи' },
-      handleKeyDown: (_view, event) => {
-        if (event.key === 'Escape') { onCancel(); return true }
-        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-          commit(); return true
-        }
-        return false
-      },
     },
   })
 
@@ -49,6 +42,12 @@ export default function TaskEditor({
         background: 'var(--card)',
         border: '1px solid var(--border)',
         fontSize: 13,
+      }}
+      // Обработчики на обёртке (React) пересоздаются каждый рендер, поэтому видят
+      // актуальный editor/commit — в отличие от editorProps, замороженных при init.
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commit() }
       }}
       onBlur={(e) => {
         // Коммитим только когда фокус ушёл из всего редактора, а не между его узлами.

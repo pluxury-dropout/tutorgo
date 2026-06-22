@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import TaskEditor from './TaskEditor'
 import {
@@ -44,6 +44,8 @@ function TaskCard({
   onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
+  // Санитизация дёргает DOM-парсер; мемоизируем, чтобы не гонять на каждый drag-рендер.
+  const safeHtml = useMemo(() => DOMPurify.sanitize(task.title), [task.title])
   return (
     <div
       ref={setNodeRef}
@@ -64,7 +66,7 @@ function TaskCard({
       <div
         className="task-content"
         style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
-        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.title) }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
       <button
         onClick={(e) => { e.stopPropagation(); onDelete() }}
