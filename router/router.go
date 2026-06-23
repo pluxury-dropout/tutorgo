@@ -1,8 +1,10 @@
 package router
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"tutorgo/config"
@@ -10,6 +12,7 @@ import (
 	"tutorgo/middleware"
 	"tutorgo/repository"
 	"tutorgo/service"
+	"tutorgo/storage"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -58,8 +61,13 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	if cfg.AllowedOrigin != "" {
 		origins = append(origins, cfg.AllowedOrigin)
 	}
+	store, err := storage.New(context.Background(), *cfg)
+	if err != nil {
+		log.Error("failed to init object storage", "err", err)
+		os.Exit(1)
+	}
 	wbHubManager := handlers.NewWbHubManager(whiteboardService, log, cfg.JWTSecret, origins)
-	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager)
+	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager, store)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
