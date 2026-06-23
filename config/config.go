@@ -16,6 +16,11 @@ type Config struct {
 	LiveKitAPIKey    string
 	LiveKitAPISecret string
 	Env              string
+	S3Endpoint       string
+	S3Region         string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3Bucket         string
 }
 
 func Load(log *slog.Logger) Config {
@@ -35,6 +40,11 @@ func Load(log *slog.Logger) Config {
 		LiveKitAPIKey:    os.Getenv("LIVEKIT_API_KEY"),
 		LiveKitAPISecret: os.Getenv("LIVEKIT_API_SECRET"),
 		Env:              os.Getenv("APP_ENV"),
+		S3Endpoint:       os.Getenv("S3_ENDPOINT"),
+		S3Region:         os.Getenv("S3_REGION"),
+		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:      os.Getenv("S3_SECRET_ACCESS_KEY"),
+		S3Bucket:         os.Getenv("S3_BUCKET"),
 	}
 
 	if cfg.DBUrl == "" {

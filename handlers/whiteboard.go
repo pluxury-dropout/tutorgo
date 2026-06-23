@@ -2,14 +2,13 @@ package handlers
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 
 	"tutorgo/models"
 	"tutorgo/service"
+	"tutorgo/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,10 +18,11 @@ type WhiteboardHandler struct {
 	svc   service.WhiteboardService
 	log   *slog.Logger
 	wsHub *WbHubManager
+	store *storage.Client
 }
 
-func NewWhiteboardHandler(svc service.WhiteboardService, log *slog.Logger, wsHub *WbHubManager) *WhiteboardHandler {
-	return &WhiteboardHandler{svc: svc, log: log, wsHub: wsHub}
+func NewWhiteboardHandler(svc service.WhiteboardService, log *slog.Logger, wsHub *WbHubManager, store *storage.Client) *WhiteboardHandler {
+	return &WhiteboardHandler{svc: svc, log: log, wsHub: wsHub, store: store}
 }
 
 func (h *WhiteboardHandler) GetBoardByCourse(c *gin.Context) {
@@ -149,34 +149,21 @@ func (h *WhiteboardHandler) UploadAsset(c *gin.Context) {
 		return
 	}
 
-	dir := "uploads/board-assets"
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "storage error"})
-		return
-	}
-
 	ext := filepath.Ext(header.Filename)
-	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
-	dst := filepath.Join(dir, filename)
-
-	out, err := os.Create(dst)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "storage error"})
-		return
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, file); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "storage error"})
-		return
-	}
+	key := fmt.Sprintf("board-assets/%s%s", uuid.New().String(), ext)
 
 	mimeType := header.Header.Get("Content-Type")
-	asset, err := h.svc.SaveAsset(c.Request.Context(), c.Param("boardId"), tutorID, dst, mimeType, int(header.Size))
+	if err := h.store.Put(c.Request.Context(), key, file, header.Size, mimeType); err != nil {
+		h.log.Error("upload asset to storage", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "storage error"})
+		return
+	}
+
+	asset, err := h.svc.SaveAsset(c.Request.Context(), c.Param("boardId"), tutorID, key, mimeType, int(header.Size))
 	if err != nil {
-		// Remove the just-written file if persisting the asset failed
+		// Remove the just-uploaded object if persisting the asset failed
 		// (e.g. board not owned by this tutor).
-		_ = os.Remove(dst)
+		_ = h.store.Remove(c.Request.Context(), key)
 		handleServiceError(c, err)
 		return
 	}
@@ -193,5 +180,13 @@ func (h *WhiteboardHandler) ServeAsset(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	c.File(asset.FilePath)
+
+	// TODO(human): asset.FilePath теперь хранит S3 object key (не путь на диске).
+	// Сгенерируй presigned URL: h.store.PresignGet(c.Request.Context(), asset.FilePath, ttl)
+	// и отдай его клиенту. Нужно решить два момента:
+	//   1) TTL ссылки (time.Duration) — короткий = приватнее, длиннее = меньше перегенераций.
+	//   2) Формат ответа: 302-редирект c.Redirect(http.StatusFound, url) ИЛИ JSON {"url": url}.
+	//      Фронт сейчас кладёт URL прямо в <img src> / PDF-вьюер — это влияет на выбор.
+	//      На ошибке PresignGet — 500 storage error.
+	_ = asset
 }
