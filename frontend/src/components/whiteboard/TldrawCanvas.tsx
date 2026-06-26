@@ -5,9 +5,6 @@ import { Tldraw, type Editor, AssetRecordType } from '@tldraw/tldraw'
 import '@tldraw/tldraw/tldraw.css'
 import { useWhiteboardSync } from './useWhiteboardSync'
 import { BoardContextProvider } from './BoardContext'
-import { InviteSharePanel } from './InviteSharePanel'
-import { BoardPageMenu } from './BoardPageMenu'
-import { PdfUploadToolbar } from './PdfUploadToolbar'
 import type { BoardPage } from '@/types/api'
 
 interface Props {
@@ -88,15 +85,8 @@ export function TldrawCanvas({
           store={store}
           onMount={(editor) => {
             editorRef.current = editor
-            // TEMP debug: expose editor so we can inspect why the toolbar hides.
-            ;(window as unknown as { __tlEditor?: Editor }).__tlEditor = editor
           }}
           colorScheme="system"
-          components={{
-            SharePanel: InviteSharePanel,
-            PageMenu: BoardPageMenu,
-            Toolbar: PdfUploadToolbar,
-          }}
         />
       </div>
     </BoardContextProvider>
