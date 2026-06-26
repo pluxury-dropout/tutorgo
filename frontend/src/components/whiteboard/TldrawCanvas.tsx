@@ -85,6 +85,25 @@ export function TldrawCanvas({
           store={store}
           onMount={(editor) => {
             editorRef.current = editor
+            // TEMP diag: log key state every 2s to catch what changes when the
+            // tldraw UI layer vanishes a few seconds in. Remove once root-caused.
+            const w = window as unknown as { __tlEditor?: Editor; __tlDiag?: number }
+            w.__tlEditor = editor
+            if (w.__tlDiag) clearInterval(w.__tlDiag)
+            let n = 0
+            w.__tlDiag = window.setInterval(() => {
+              const c = document.querySelector('.tl-container')
+              // eslint-disable-next-line no-console
+              console.log('[tldiag]', n, {
+                uiLayer: !!document.querySelector('.tlui-layout'),
+                focus: editor.getInstanceState().isFocusMode,
+                readonly: editor.getInstanceState().isReadonly,
+                sameEditor: w.__tlEditor === editor,
+                records: editor.store.allRecords().length,
+                kids: c ? Array.from(c.children).map((x) => String(x.className).slice(0, 32)) : null,
+              })
+              if (++n > 7) clearInterval(w.__tlDiag)
+            }, 2000)
           }}
           colorScheme="system"
         />
