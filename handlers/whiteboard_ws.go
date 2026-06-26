@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -215,7 +216,10 @@ type WbHubManager struct {
 func NewWbHubManager(svc service.WhiteboardService, log *slog.Logger, jwtSecret string, allowedOrigins []string) *WbHubManager {
 	origins := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
-		if o != "" {
+		// Match gin-cors's tolerance: env vars often carry stray whitespace or a
+		// trailing slash, which gin-cors trims but a raw map lookup would not —
+		// that mismatch silently 403s the WS upgrade while REST CORS still works.
+		if o = normalizeOrigin(o); o != "" {
 			origins[o] = true
 		}
 	}
@@ -242,7 +246,14 @@ func (m *WbHubManager) checkOrigin(r *http.Request) bool {
 	if origin == "" {
 		return true
 	}
-	return m.origins[origin]
+	return m.origins[normalizeOrigin(origin)]
+}
+
+// normalizeOrigin mirrors gin-cors's origin handling (trim + lowercase) and also
+// drops a trailing slash, so the WS allowlist and the REST CORS allowlist accept
+// exactly the same set of origins.
+func normalizeOrigin(o string) string {
+	return strings.TrimRight(strings.ToLower(strings.TrimSpace(o)), "/")
 }
 
 func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbHub {
