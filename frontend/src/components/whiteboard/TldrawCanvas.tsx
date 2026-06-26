@@ -83,6 +83,10 @@ export function TldrawCanvas({
         <Tldraw
           key={page?.id ?? 'empty'}
           store={store}
+          // Don't block the whole UI on font loading — tldraw hides .tlui-layout
+          // while loadRequiredFontsForCurrentPage() is pending, and on prod that
+          // request to tldraw's CDN can hang, leaving the board with no toolbar.
+          options={{ maxFontsToLoadBeforeRender: 0 }}
           onMount={(editor) => {
             editorRef.current = editor
             // TEMP diag: log key state every 2s to catch what changes when the
