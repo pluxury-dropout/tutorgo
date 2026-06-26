@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"tutorgo/models"
 	"tutorgo/service"
@@ -180,13 +181,11 @@ func (h *WhiteboardHandler) ServeAsset(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-
-	// TODO(human): asset.FilePath теперь хранит S3 object key (не путь на диске).
-	// Сгенерируй presigned URL: h.store.PresignGet(c.Request.Context(), asset.FilePath, ttl)
-	// и отдай его клиенту. Нужно решить два момента:
-	//   1) TTL ссылки (time.Duration) — короткий = приватнее, длиннее = меньше перегенераций.
-	//   2) Формат ответа: 302-редирект c.Redirect(http.StatusFound, url) ИЛИ JSON {"url": url}.
-	//      Фронт сейчас кладёт URL прямо в <img src> / PDF-вьюер — это влияет на выбор.
-	//      На ошибке PresignGet — 500 storage error.
-	_ = asset
+	presignedlink, err := h.store.PresignGet(c.Request.Context(), asset.FilePath, 20*time.Minute)
+	if err != nil {
+		h.log.Error("failed to get presigned link", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "presigned link error"})
+		return
+	}
+	c.Redirect(http.StatusFound, presignedlink)
 }
