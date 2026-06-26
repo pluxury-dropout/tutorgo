@@ -111,7 +111,13 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
                 render={({ field }) => (
                   <Select value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger id="student_id">
-                      <SelectValue placeholder="Выберите ученика" />
+                      <SelectValue>
+                        {(id) => {
+                          const s = students.find((s) => s.id === id)
+                          if (!s) return 'Выберите ученика'
+                          return s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {students.map((s) => {
