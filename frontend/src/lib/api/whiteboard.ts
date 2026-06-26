@@ -37,7 +37,10 @@ export const whiteboardApi = {
 }
 
 export function getWsUrl(pageId: string, token?: string): string {
-  const base = BASE_URL.replace(/^http/, 'ws')
+  // Strip trailing slash so a slash in NEXT_PUBLIC_API_URL doesn't produce
+  // `//ws/board/...` — the double slash triggers a 301 redirect that breaks the
+  // WS handshake (REST is fine because axios normalizes the join).
+  const base = BASE_URL.replace(/\/+$/, '').replace(/^http/, 'ws')
   // The /ws/board route is public and can't read the Authorization header, so
   // the access token must travel as ?token=. A guest invite UUID is passed in
   // explicitly; otherwise fall back to the tutor's access JWT (same storage as
