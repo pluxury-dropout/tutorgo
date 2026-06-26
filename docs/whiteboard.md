@@ -13,7 +13,7 @@ Go/Gin + WebSocket-хаб, хранение снапшотов в PostgreSQL (JS
 |---------------|-------------------------------------------------------------------|
 | `Board`       | 1:1 с курсом, принадлежит тьютору                                  |
 | `BoardPage`   | холст (одна вкладка), хранит `snapshot JSONB` + `position`         |
-| `BoardAsset`  | загруженный файл (PDF/картинка), лежит на диске, метаданные в БД   |
+| `BoardAsset`  | загруженный файл (PDF/картинка) в S3-хранилище, метаданные в БД    |
 | `BoardInvite` | UUID-инвайт для гостевого доступа ученика (`UNIQUE(board_id)`)     |
 
 Миграция: `migrations/014_whiteboard.sql`. Все FK на `boards` — `ON DELETE CASCADE`,
@@ -50,17 +50,79 @@ router → WhiteboardHandler / WbHubManager → WhiteboardService → Whiteboard
 | Метод | Путь                          | Действие                               |
 |-------|-------------------------------|----------------------------------------|
 | GET   | `/public/board/join/:token`   | вход ученика по инвайту → доска+страницы|
-| GET   | `/public/board-assets/:id`    | отдать файл ассета с диска              |
+| GET   | `/public/board-assets/:id`    | presigned-редирект на файл в S3         |
 | GET   | `/ws/board/:pageId?token=...` | WebSocket-апгрейд (см. ниже)            |
 
 `GetOrCreateBoard` — идемпотентный: если доски нет, создаёт её и первую страницу
 «Страница 1». Из-за `ON CONFLICT DO NOTHING` по `course_id` сервис дополнительно
 сверяет `board.TutorID == tutorID`, чтобы upsert не вернул чужую доску.
 
-Загрузка ассетов пишет файл в `uploads/board-assets/<uuid><ext>`; если запись
-метаданных в БД упала (например, доска не принадлежит тьютору) — файл удаляется
-обратно. Лимит 20 МБ навешен и через `http.MaxBytesReader`, и через проверку
-`header.Size`.
+Загрузка ассетов льёт объект в S3 (`storage.Client.Put`) под ключ
+`board-assets/<uuid><ext>`; если запись метаданных в БД упала (например, доска не
+принадлежит тьютору) — объект удаляется обратно (`store.Remove`). Лимит 20 МБ
+навешен и через `http.MaxBytesReader`, и через проверку `header.Size`.
+
+## Методы по слоям
+
+Цепочка для каждой фичи: **handler → service → repository**. Handler никогда не
+ходит в repo напрямую; вся авторизация владения — в service.
+
+### Доска
+
+| Слой    | Метод | Суть |
+|---------|-------|------|
+| handler | `GetBoardByCourse` | читает `tutorID` из контекста, делегирует, маппит ошибку |
+| service | `GetOrCreateBoard` | (1) `CourseBelongsToTutor`, (2) upsert, (3) сверка `board.TutorID`, (4) создаёт «Страница 1» если страниц 0 |
+| repo    | `GetOrCreateBoard` | `INSERT … ON CONFLICT (course_id) DO UPDATE … RETURNING` — `DO UPDATE` (не `DO NOTHING`) чтобы `RETURNING` вернул строку и при конфликте |
+| repo    | `CourseBelongsToTutor`, `GetBoardByID` | вспомогательные проверки |
+
+Двойная проверка владения (до upsert через курс + после через `board.TutorID`)
+закрывает дыру: upsert игнорирует `tutor_id` при конфликте и мог бы вернуть чужую доску.
+
+### Страницы
+
+| Слой    | Метод | Суть |
+|---------|-------|------|
+| handler | `CreatePage` / `UpdatePage` / `DeletePage` | bind+validate, делегация |
+| service | `CreatePage` | `verifyBoardOwnership` → `position = len(pages)` (в конец) |
+| service | `UpdatePage` / `DeletePage` | грузит страницу → `verifyBoardOwnership` по её `board_id` → delegate |
+| repo    | `UpdatePage` | `SET title = COALESCE($2, title)` — partial update: `nil`-указатель оставляет старое значение |
+| repo    | `DeletePage` | условие `id = $1 AND board_id = $2` — второй фактор от удаления чужой страницы |
+| repo    | `SaveSnapshot` / `GetPageSnapshot` | чтение/запись `snapshot JSONB`; вызывается из WS-хаба, не из REST |
+
+### Инвайты
+
+| Слой    | Метод | Суть |
+|---------|-------|------|
+| handler | `CreateInvite` / `DeleteInvite` | JWT, делегация |
+| handler | `JoinByInvite` | **публичный**, без JWT — вход по токену |
+| service | `CreateInvite` / `DeleteInvite` | `verifyBoardOwnership` + delegate |
+| service | `ValidateInvite` | находит доску по инвайту, возвращает доску+страницы (без проверки владения — ссылка и есть пропуск) |
+| repo    | `CreateInvite` | `ON CONFLICT (board_id) DO UPDATE SET id = gen_random_uuid()` — создать-или-ротировать; старая ссылка протухает |
+| repo    | `GetBoardByInvite` | JOIN `board_invites` → `boards` |
+
+### Ассеты
+
+| Слой    | Метод | Суть |
+|---------|-------|------|
+| handler | `UploadAsset` | `MaxBytesReader` + `header.Size` → `store.Put` в S3 → `SaveAsset`; при ошибке БД — `store.Remove` (откат объекта) |
+| handler | `ServeAsset` | **публичный**, presigned-редирект на S3 (TODO: TTL + формат ответа) |
+| service | `SaveAsset` | `verifyBoardOwnership` + `CreateAsset` |
+| service | `GetAsset` | **без** проверки владения — read публичный |
+| repo    | `CreateAsset` / `GetAsset` | INSERT/SELECT по `board_assets` (`file_path` хранит S3 object key) |
+
+Асимметрия осознанная: **запись** ассета проверяет владельца, **чтение** — нет, потому
+что `ServeAsset` отдаёт картинки студенту без JWT. Безопасность держится на
+неугадываемом UUID ассета + коротком TTL presigned-ссылки.
+
+### Сквозные паттерны
+
+- `verifyBoardOwnership` (service) — единая точка авторизации: грузит доску, сверяет
+  `TutorID`, на несовпадении/отсутствии → `ErrNotFound` (не `Forbidden`, чтобы не
+  раскрывать существование чужих досок).
+- `PageBelongsToTutor` — проверка владения страницей (через её доску); используется
+  WS-хабом при авторизации хендшейка.
+- `handleServiceError` маппит доменные ошибки в HTTP-коды; handler не знает про статусы.
 
 ## Реал-тайм: WebSocket-хаб
 
@@ -132,5 +194,6 @@ ServeWS: авторизация → загрузить snapshot из БД → up
   сервере (undo живёт в tldraw на клиенте).
 - Персистентность курсоров и `update`-diff отсутствует by design — пережили
   reconnect только через полный `snapshot`.
-- Ассеты — на локальном диске сервера (`uploads/`), не в объектном хранилище.
+- Ассеты — в S3-совместимом хранилище (Supabase Storage) через `storage.Client`
+  (`aws-sdk-go-v2`, path-style, presigned URL). См. `docs/p2-assets-object-storage.md`.
 ```
