@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import '@livekit/components-styles'
 
@@ -10,13 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Link, Check } from 'lucide-react'
 import { CallRoom } from '@/components/call/CallRoom'
 
-type Stage = 'idle' | 'starting' | 'connecting' | 'in-room'
-
 export default function CallPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
 
-  const [stage, setStage]     = useState<Stage>('idle')
   const [room, setRoom]       = useState<RoomTokenResponse | null>(null)
   const [courseId, setCourseId] = useState<string | null>(null)
   const [error, setError]     = useState<string | null>(null)
@@ -29,26 +26,27 @@ export default function CallPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function handleStart() {
-    setStage('starting')
-    setError(null)
-    try {
-      await callsApi.startRoom(id)
-      const [data, lesson] = await Promise.all([
-        callsApi.getRoomToken(id),
-        lessonsApi.get(id).catch(() => null),
-      ])
-      navigator.clipboard.writeText(`${window.location.origin}/join/${id}`)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-      if (lesson?.course_id) setCourseId(lesson.course_id)
-      setRoom(data)
-      setStage('in-room')
-    } catch {
-      setError('Не удалось запустить урок')
-      setStage('idle')
-    }
-  }
+  // Auto-start on mount — the tutor already started the call from the calendar,
+  // so there's no separate "Начать урок" step. start-room is an idempotent
+  // UPDATE, so re-running it on every refresh is safe and re-enters the room.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        await callsApi.startRoom(id)
+        const [data, lesson] = await Promise.all([
+          callsApi.getRoomToken(id),
+          lessonsApi.get(id).catch(() => null),
+        ])
+        if (cancelled) return
+        if (lesson?.course_id) setCourseId(lesson.course_id)
+        setRoom(data)
+      } catch {
+        if (!cancelled) setError('Не удалось запустить урок')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [id])
 
   async function handleDisconnected() {
     try { await callsApi.endRoom(id) } catch {}
@@ -64,21 +62,10 @@ export default function CallPage() {
     )
   }
 
-  if (stage === 'idle') {
-    return (
-      <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
-        <p className="text-muted-foreground">Нажмите кнопку, чтобы открыть комнату для учеников</p>
-        <Button onClick={handleStart}>Начать урок</Button>
-      </div>
-    )
-  }
-
   if (!room) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
-        <p className="text-muted-foreground">
-          {stage === 'starting' ? 'Открываем комнату...' : 'Подключение...'}
-        </p>
+        <p className="text-muted-foreground">Подключение...</p>
       </div>
     )
   }

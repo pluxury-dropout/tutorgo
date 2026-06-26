@@ -59,8 +59,13 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
 
   const sendSnapshot = useCallback(() => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return
+    // Persist ONLY the document (shapes + pages). getSnapshot() also returns
+    // `session` (camera, current page, focus mode) which is per-client — sharing
+    // it makes a reload yank the local view and hide the toolbar. tldraw's docs
+    // sync the document only and keep session state local.
+    const { document } = getSnapshot(store)
     wsRef.current.send(
-      JSON.stringify({ type: 'snapshot', payload: getSnapshot(store) })
+      JSON.stringify({ type: 'snapshot', payload: { document } })
     )
   }, [store])
 
@@ -92,10 +97,17 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
       }
 
       if (msg.type === 'snapshot' && msg.payload) {
-        // Full document load (seeded from DB or latest client snapshot).
+        // Document load (seeded from DB or latest client snapshot). Load ONLY the
+        // document so a remote/seed snapshot can never overwrite local session
+        // state (camera, current page, focus mode) — that was hiding the toolbar
+        // and freezing the board. Older snapshots stored the full {document,
+        // session}; unwrap `.document` for them, else treat payload as a bare
+        // store snapshot.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = msg.payload as any
+        const document = p?.document ?? p
         store.mergeRemoteChanges(() => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          loadSnapshot(store, msg.payload as any)
+          loadSnapshot(store, { document })
         })
         return
       }
