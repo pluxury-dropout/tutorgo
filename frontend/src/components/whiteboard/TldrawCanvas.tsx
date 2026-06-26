@@ -88,6 +88,8 @@ export function TldrawCanvas({
           store={store}
           onMount={(editor) => {
             editorRef.current = editor
+            // TEMP debug: expose editor so we can inspect why the toolbar hides.
+            ;(window as unknown as { __tlEditor?: Editor }).__tlEditor = editor
           }}
           colorScheme="system"
           components={{
