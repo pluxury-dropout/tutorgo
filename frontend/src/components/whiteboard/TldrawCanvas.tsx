@@ -83,31 +83,12 @@ export function TldrawCanvas({
         <Tldraw
           key={page?.id ?? 'empty'}
           store={store}
-          // Don't block the whole UI on font loading — tldraw hides .tlui-layout
-          // while loadRequiredFontsForCurrentPage() is pending, and on prod that
-          // request to tldraw's CDN can hang, leaving the board with no toolbar.
-          options={{ maxFontsToLoadBeforeRender: 0 }}
+          // tldraw hard-blocks the editor on production (https, non-localhost)
+          // ~5s after mount unless a license key is provided. Read from
+          // NEXT_PUBLIC_TLDRAW_LICENSE_KEY (set it in the deploy env).
+          licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
           onMount={(editor) => {
             editorRef.current = editor
-            // TEMP diag: log key state every 2s to catch what changes when the
-            // tldraw UI layer vanishes a few seconds in. Remove once root-caused.
-            const w = window as unknown as { __tlEditor?: Editor; __tlDiag?: number }
-            w.__tlEditor = editor
-            if (w.__tlDiag) clearInterval(w.__tlDiag)
-            let n = 0
-            w.__tlDiag = window.setInterval(() => {
-              const c = document.querySelector('.tl-container')
-              // eslint-disable-next-line no-console
-              console.log('[tldiag]', n, {
-                uiLayer: !!document.querySelector('.tlui-layout'),
-                focus: editor.getInstanceState().isFocusMode,
-                readonly: editor.getInstanceState().isReadonly,
-                sameEditor: w.__tlEditor === editor,
-                records: editor.store.allRecords().length,
-                kids: c ? Array.from(c.children).map((x) => String(x.className).slice(0, 32)) : null,
-              })
-              if (++n > 7) clearInterval(w.__tlDiag)
-            }, 2000)
           }}
           colorScheme="system"
         />
