@@ -5,7 +5,6 @@ import {
   createTLStore,
   defaultShapeUtils,
   getSnapshot,
-  loadSnapshot,
   type TLRecord,
 } from '@tldraw/tldraw'
 import { getWsUrl } from '@/lib/api/whiteboard'
@@ -97,18 +96,21 @@ export function useWhiteboardSync(page: BoardPage | null, token?: string): SyncR
       }
 
       if (msg.type === 'snapshot' && msg.payload) {
-        // Document load (seeded from DB or latest client snapshot). Load ONLY the
-        // document so a remote/seed snapshot can never overwrite local session
-        // state (camera, current page, focus mode) — that was hiding the toolbar
-        // and freezing the board. Older snapshots stored the full {document,
-        // session}; unwrap `.document` for them, else treat payload as a bare
-        // store snapshot.
+        // Seed the document (shapes + pages) from DB / latest client snapshot.
+        // Do NOT use loadSnapshot — it calls store.clear() and, with a
+        // document-only payload, wipes the session-scoped `instance`/`camera`
+        // records, which removes tldraw's entire UI layer (.tlui-layout) a few
+        // seconds after connect. Instead put the document records directly via
+        // mergeRemoteChanges so the editor's instance/UI is never touched.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const p = msg.payload as any
-        const document = p?.document ?? p
-        store.mergeRemoteChanges(() => {
-          loadSnapshot(store, { document })
-        })
+        const records: Record<string, TLRecord> | undefined =
+          p?.document?.store ?? p?.store
+        if (records) {
+          store.mergeRemoteChanges(() => {
+            store.put(Object.values(records))
+          })
+        }
         return
       }
 
