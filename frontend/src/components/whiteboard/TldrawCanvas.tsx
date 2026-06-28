@@ -115,7 +115,10 @@ export function TldrawCanvas({
         editor.createShape({ type: 'image', x, y, props: { assetId, w: p.width, h: p.height } })
         x += p.width // встык по горизонтали
       }
+    } catch {
+      toast.error('Не удалось обработать PDF')
     } finally {
+      void pdf.cleanup() // освобождаем ресурсы документа pdfjs
       pdfRef.current = null
       setPdfProgress(null)
       setPdfDialog(null)
