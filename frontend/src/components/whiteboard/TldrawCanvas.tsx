@@ -91,8 +91,9 @@ export function TldrawCanvas({
         let result
         try {
           result = await whiteboardApi.uploadAsset(boardId, pngFile)
-        } catch {
-          toast.error(`Не удалось загрузить страницу ${from + i}`)
+        } catch (e) {
+          const msg = (e as { message?: string })?.message
+          toast.error(`Не удалось загрузить страницу ${from + i}${msg ? `: ${msg}` : ''}`)
           break
         }
         const assetId = AssetRecordType.createId()

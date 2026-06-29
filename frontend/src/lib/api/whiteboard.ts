@@ -30,7 +30,10 @@ export const whiteboardApi = {
     form.append('file', file)
     return api
       .post<BoardAssetResponse>(`/boards/${boardId}/assets`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        // false → axios удаляет заголовок, и браузер сам выставит
+        // multipart/form-data c boundary. Со строкой 'multipart/form-data'
+        // boundary теряется и Go не может распарсить тело (FormFile → 400).
+        headers: { 'Content-Type': false },
       })
       .then((r) => r.data)
   },
