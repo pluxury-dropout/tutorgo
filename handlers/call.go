@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	lkauth "github.com/livekit/protocol/auth"
 	livekit "github.com/livekit/protocol/livekit"
+	"github.com/livekit/protocol/webhook"
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
@@ -176,6 +178,44 @@ func (h *CallHandler) EndRoom(c *gin.Context) {
 		_, _ = h.roomClient.DeleteRoom(c.Request.Context(), &livekit.DeleteRoomRequest{Room: roomName})
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "room ended"})
+}
+
+// POST /webhooks/livekit — public; LiveKit posts room lifecycle events here.
+// No JWT: the request is authenticated by its signature, verified with our
+// LiveKit API key/secret. LiveKit fires "room_finished" once a room has been
+// empty for its empty_timeout (e.g. after the last tab closes), which is how a
+// call that was never explicitly ended still gets closed in our DB.
+func (h *CallHandler) LiveKitWebhook(c *gin.Context) {
+	if h.apiKey == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
+		return
+	}
+
+	event, err := webhook.ReceiveWebhookEvent(c.Request, lkauth.NewSimpleKeyProvider(h.apiKey, h.apiSecret))
+	if err != nil {
+		h.log.Warn("Rejected LiveKit webhook", slog.String("error", err.Error()))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid webhook"})
+		return
+	}
+
+	// We only act on a room shutting down. Scheduled-lesson rooms are named
+	// "lesson-<lessonID>"; quick rooms ("quick-") have no DB row, so skip them.
+	if event.GetEvent() != webhook.EventRoomFinished {
+		c.Status(http.StatusOK)
+		return
+	}
+	lessonID, ok := strings.CutPrefix(event.GetRoom().GetName(), "lesson-")
+	if !ok {
+		c.Status(http.StatusOK)
+		return
+	}
+	if err := h.lessonService.EndRoomByID(c.Request.Context(), lessonID); err != nil {
+		h.log.Error("Failed to end room from webhook",
+			slog.String("lessonID", lessonID), slog.String("error", err.Error()))
+		c.Status(http.StatusInternalServerError) // 5xx → LiveKit redelivers; EndRoomByID is idempotent
+		return
+	}
+	c.Status(http.StatusOK)
 }
 
 // GET /public/lessons/:id/room-status

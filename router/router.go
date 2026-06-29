@@ -93,6 +93,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
 	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
+	r.POST("/webhooks/livekit", callHandler.LiveKitWebhook)
 
 	// Whiteboard public routes (no JWT required)
 	r.GET("/public/board/join/:token", whiteboardHandler.JoinByInvite)

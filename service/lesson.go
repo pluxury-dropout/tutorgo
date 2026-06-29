@@ -27,6 +27,7 @@ type LessonService interface {
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
+	EndRoomByID(ctx context.Context, lessonID string) error
 	GetRoomStatus(ctx context.Context, id string) (string, error)
 }
 
@@ -394,6 +395,10 @@ func (s *lessonService) StartRoom(ctx context.Context, lessonID string, tutorID 
 
 func (s *lessonService) EndRoom(ctx context.Context, lessonID string, tutorID string) error {
 	return s.repo.EndRoom(ctx, lessonID, tutorID)
+}
+
+func (s *lessonService) EndRoomByID(ctx context.Context, lessonID string) error {
+	return s.repo.EndRoomByID(ctx, lessonID)
 }
 
 func (s *lessonService) GetRoomStatus(ctx context.Context, id string) (string, error) {

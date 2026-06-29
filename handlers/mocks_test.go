@@ -325,6 +325,10 @@ func (m *mockLessonService) EndRoom(ctx context.Context, lessonID string, tutorI
 	return m.Called(ctx, lessonID, tutorID).Error(0)
 }
 
+func (m *mockLessonService) EndRoomByID(ctx context.Context, lessonID string) error {
+	return m.Called(ctx, lessonID).Error(0)
+}
+
 func (m *mockLessonService) GetRoomStatus(ctx context.Context, id string) (string, error) {
 	args := m.Called(ctx, id)
 	return args.String(0), args.Error(1)

@@ -1,15 +1,24 @@
 package handlers_test
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 	"tutorgo/handlers"
 
 	"github.com/gin-gonic/gin"
+	lkauth "github.com/livekit/protocol/auth"
+	livekit "github.com/livekit/protocol/livekit"
+	"github.com/livekit/protocol/webhook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func newCallRouter(svc *mockLessonService) *gin.Engine {
@@ -17,6 +26,7 @@ func newCallRouter(svc *mockLessonService) *gin.Engine {
 	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret")
 	r.GET("/public/lessons/:id/guest-token", h.GetGuestToken)
 	r.GET("/public/lessons/:id/room-status", h.GetRoomStatus)
+	r.POST("/webhooks/livekit", h.LiveKitWebhook)
 	auth := r.Group("/")
 	auth.Use(withTutorID(testTutorID))
 	auth.POST("/lessons/:id/start-room", h.StartRoom)
@@ -109,4 +119,59 @@ func TestGetRoomStatus_NotFound(t *testing.T) {
 	w := makeRequest(t, r, http.MethodGet, "/public/lessons/"+testLessonID+"/room-status", nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
+}
+
+// signedWebhookRequest builds a LiveKit webhook POST signed the same way LiveKit
+// signs it: protojson body + an Authorization JWT whose sha256 claim matches the
+// body. newCallRouter wires the handler with key="key", secret="secret".
+func signedWebhookRequest(t *testing.T, event *livekit.WebhookEvent) *http.Request {
+	t.Helper()
+	body, err := protojson.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(body)
+	token, err := lkauth.NewAccessToken("key", "secret").
+		SetValidFor(5 * time.Minute).
+		SetSha256(base64.StdEncoding.EncodeToString(sum[:])).
+		ToJWT()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/livekit", bytes.NewReader(body))
+	req.Header.Set("Authorization", token)
+	return req
+}
+
+func TestLiveKitWebhook_RoomFinished_EndsRoom(t *testing.T) {
+	svc := new(mockLessonService)
+	r := newCallRouter(svc)
+	svc.On("EndRoomByID", mock.Anything, testLessonID).Return(nil)
+
+	req := signedWebhookRequest(t, &livekit.WebhookEvent{
+		Event: webhook.EventRoomFinished,
+		Room:  &livekit.Room{Name: "lesson-" + testLessonID},
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	svc.AssertExpectations(t) // proves EndRoomByID was called with the parsed lessonID
+}
+
+func TestLiveKitWebhook_BadSignature_Rejected(t *testing.T) {
+	svc := new(mockLessonService)
+	r := newCallRouter(svc)
+
+	req := signedWebhookRequest(t, &livekit.WebhookEvent{
+		Event: webhook.EventRoomFinished,
+		Room:  &livekit.Room{Name: "lesson-" + testLessonID},
+	})
+	req.Header.Set("Authorization", "garbage") // tamper with the signature
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	svc.AssertNotCalled(t, "EndRoomByID", mock.Anything, mock.Anything)
 }

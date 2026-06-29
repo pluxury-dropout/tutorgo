@@ -32,6 +32,7 @@ type LessonRepository interface {
 	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
+	EndRoomByID(ctx context.Context, lessonID string) error
 	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
 	GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error)
 }
@@ -394,10 +395,25 @@ func (r *lessonRepository) EndRoom(ctx context.Context, lessonID string, tutorID
 	return nil
 }
 
+// EndRoomByID marks a room ended without a tutor scope — used by the LiveKit
+// webhook, which is authenticated by signature, not by a logged-in tutor.
+// Idempotent: only the first call (room started, not yet ended) writes; a
+// re-delivered webhook or an already-ended room is a no-op, not an error.
+func (r *lessonRepository) EndRoomByID(ctx context.Context, lessonID string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE lessons
+		SET room_ended_at = NOW()
+		WHERE id = $1
+		  AND room_started_at IS NOT NULL
+		  AND room_ended_at IS NULL`,
+		lessonID)
+	return err
+}
+
 func (r *lessonRepository) GetRoomStatus(ctx context.Context, lessonID string) (string, error) {
 	var startedAt, endedAt *time.Time
 	err := r.pool.QueryRow(ctx,
-		`SELECT room_started_at, room_ended_at FROM lessons WHERE id =$ 1`, lessonID).Scan(&startedAt, endedAt)
+		`SELECT room_started_at, room_ended_at FROM lessons WHERE id = $1`, lessonID).Scan(&startedAt, &endedAt)
 	if err != nil {
 		return "", err
 	}
