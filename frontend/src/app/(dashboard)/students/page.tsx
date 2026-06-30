@@ -7,7 +7,7 @@ import { Users, Plus, Pencil, Trash2, ChevronRight } from 'lucide-react'
 
 import { useStudentsPaged, useCreateStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
 import { StudentForm } from '@/components/students/StudentForm'
-import { PageHeader } from '@/components/common/PageHeader'
+import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Pagination } from '@/components/common/Pagination'
 import { StudentFormValues } from '@/schemas/student'
@@ -87,13 +87,10 @@ function StudentsPageInner() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ maxWidth: 680 }}>
       <PageHeader
         title="Ученики"
-        description={`${total} учеников`}
-        icon={Users}
-        iconBg="oklch(0.94 0.03 280)"
-        iconColor="oklch(0.42 0.14 280)"
+        meta={<HeaderMetric color="var(--purple)">{total} учеников</HeaderMetric>}
         actions={
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" /> Добавить
@@ -125,36 +122,17 @@ function StudentsPageInner() {
         />
       ) : (
         <>
-          <div>
-            {/* Column headers */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr 16px 72px',
-              alignItems: 'baseline',
-              gap: 12,
-              paddingBottom: 8,
-              borderBottom: '1px solid var(--border)',
-            }}>
-              {(['Имя', 'Email', 'Телефон', '', ''] as const).map((label, i) => (
-                <span key={i} style={{
-                  fontSize: 11.5, fontWeight: 500,
-                  color: 'var(--muted-foreground)',
-                  letterSpacing: '0.05em',
-                  textTransform: 'uppercase',
-                }}>{label}</span>
-              ))}
-            </div>
-            {/* Rows */}
-            {students.map((student, i) => (
+          <div style={{ borderTop: '1px solid var(--border)' }}>
+            {students.map((student) => (
               <div
                 key={student.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr 16px 72px',
+                  gridTemplateColumns: 'minmax(0, 1fr) auto',
                   alignItems: 'center',
-                  gap: 12,
+                  gap: 16,
                   padding: '8px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  borderBottom: '1px solid var(--border)',
                   cursor: 'pointer',
                 }}
                 className="hover:bg-muted/30 group"
@@ -163,28 +141,37 @@ function StudentsPageInner() {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/students/${student.id}`) } }}
                 onClick={() => router.push(`/students/${student.id}`)}
               >
-                <span style={{
-                  fontSize: 14, fontWeight: 600, color: 'var(--foreground)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {student.first_name}{student.last_name ? ` ${student.last_name}` : ''}
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {student.email}
-                </span>
-                <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
-                  {student.phone || '—'}
-                </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(student)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(student)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 14, fontWeight: 600, color: 'var(--foreground)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {student.first_name}{student.last_name ? ` ${student.last_name}` : ''}
+                  </div>
+                  {student.email && (
+                    <div style={{
+                      fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 1,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {student.email}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                    {student.phone || '—'}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(student)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(student)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

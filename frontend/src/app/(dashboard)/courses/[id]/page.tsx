@@ -297,7 +297,7 @@ export default function CourseDetailPage() {
 
       <PageHeader
         title={course.subject}
-        description={isGroup ? 'Групповой курс' : 'Индивидуальный курс'}
+        meta={isGroup ? 'Групповой курс' : 'Индивидуальный курс'}
         actions={
           <div className="flex gap-2">
             <Link

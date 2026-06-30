@@ -8,7 +8,7 @@ import { BookOpen, Plus, Pencil, Trash2, ChevronRight, ArchiveRestore } from 'lu
 import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, useArchivedCoursesPaged, useRestoreCourse } from '@/lib/hooks/useCourses'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
-import { PageHeader } from '@/components/common/PageHeader'
+import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Pagination } from '@/components/common/Pagination'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
@@ -134,10 +134,11 @@ function CoursesPageInner() {
     <div style={{ maxWidth: 900 }}>
       <PageHeader
         title="Курсы"
-        description={tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
-        icon={BookOpen}
-        iconBg="oklch(0.92 0.05 155)"
-        iconColor="oklch(0.36 0.10 155)"
+        meta={
+          <HeaderMetric color="var(--success)">
+            {tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
+          </HeaderMetric>
+        }
         actions={
           tab === 'active' ? (
             <Button size="sm" onClick={openCreate}>

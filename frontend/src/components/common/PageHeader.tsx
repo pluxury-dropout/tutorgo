@@ -1,34 +1,42 @@
-import { LucideIcon } from 'lucide-react'
-
 interface PageHeaderProps {
   title: string
-  description?: string
+  /** Инлайн справа от заголовка: счётчик с точкой-метрикой или подпись типа курса */
+  meta?: React.ReactNode
   actions?: React.ReactNode
-  icon?: LucideIcon
-  iconBg?: string
-  iconColor?: string
 }
 
-export function PageHeader({ title, description, actions, icon: Icon, iconBg, iconColor }: PageHeaderProps) {
+export function PageHeader({ title, meta, actions }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between mb-6">
-      <div className="flex items-center gap-3">
-        {Icon && (
-          <div
-            className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: iconBg ?? 'var(--primary-light)' }}
-          >
-            <Icon className="h-[18px] w-[18px]" style={{ color: iconColor ?? 'var(--primary)' }} />
-          </div>
-        )}
-        <div>
-          <h1 className="text-[22px] font-bold tracking-[-0.4px]">{title}</h1>
-          {description && (
-            <p className="text-sm text-muted-foreground mt-1">{description}</p>
-          )}
+    <div
+      style={{
+        borderBottom: '1px solid var(--border)',
+        paddingBottom: 14,
+        marginBottom: 18,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--foreground)' }}>
+            {title}
+          </h1>
+          {meta && <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{meta}</span>}
         </div>
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>
+  )
+}
+
+const DOT: React.CSSProperties = {
+  display: 'inline-block', width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+}
+
+/** Счётчик-метрика с цветной точкой — визуальная рифма с метриками на главной */
+export function HeaderMetric({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
+      <span style={{ ...DOT, background: color, transform: 'translateY(-1px)' }} />
+      {children}
+    </span>
   )
 }
