@@ -9,6 +9,17 @@ export function PipCameras() {
     { onlySubscribed: false },
   )
 
+  // ponytail: withPlaceholder может на миг отдать placeholder + реальный трек
+  // для одного participant+source (гонка при перепубликации камеры) → дубль ключа.
+  // Дедупим, предпочитая реальный трек (с publication) заглушке.
+  const byKey = new Map<string, (typeof tracks)[number]>()
+  for (const t of tracks) {
+    const key = `${t.participant.identity}-${t.source}`
+    const existing = byKey.get(key)
+    if (!existing || ('publication' in t && t.publication)) byKey.set(key, t)
+  }
+  const uniqueTracks = [...byKey.values()]
+
   return (
     <div
       style={{
@@ -22,7 +33,7 @@ export function PipCameras() {
         pointerEvents: 'auto',
       }}
     >
-      {tracks.map((track) => (
+      {uniqueTracks.map((track) => (
         <ParticipantTile
           key={`${track.participant.identity}-${track.source}`}
           trackRef={track}
