@@ -1,0 +1,119 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;display:flex;}
+.t{flex:1;padding:20px;}
+.l{background:#F8F8F9;color:#1B1C1F;}
+.d{background:#191919;color:#E3E2E0;}
+.lbl{font-size:10px;font-weight:600;opacity:.4;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;}
+.section{margin-bottom:16px;}
+.section-title{font-size:10px;font-weight:600;opacity:.5;margin-bottom:6px;}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;}
+.swatch{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.sw{width:36px;height:28px;border-radius:5px;}
+.sw-name{font-size:9px;opacity:.6;}
+.chips{display:flex;flex-wrap:wrap;gap:5px;}
+.radii{display:flex;gap:8px;align-items:flex-end;}
+.r{background:currentColor;opacity:.15;height:28px;}
+</style>
+</head>
+<body>
+<div class="t l">
+  <div class="lbl">Light</div>
+  <div class="section">
+    <div class="section-title">Цвета</div>
+    <div class="swatches">
+      <div class="swatch"><div class="sw" style="background:#222428;border:1px solid #E1E1E4"></div><span class="sw-name">primary</span></div>
+      <div class="swatch"><div class="sw" style="background:#ECECEE;border:1px solid #E1E1E4"></div><span class="sw-name">primary-light</span></div>
+      <div class="swatch"><div class="sw" style="background:#EFEFF1;border:1px solid #E1E1E4"></div><span class="sw-name">muted</span></div>
+      <div class="swatch"><div class="sw" style="background:#646670;border:1px solid #E1E1E4"></div><span class="sw-name">muted-fg</span></div>
+      <div class="swatch"><div class="sw" style="background:#F8F8F9;border:1px solid #E1E1E4"></div><span class="sw-name">background</span></div>
+      <div class="swatch"><div class="sw" style="background:#E1E1E4;border:1px solid #E1E1E4"></div><span class="sw-name">border</span></div>
+      <div class="swatch"><div class="sw" style="background:#C92A2A"></div><span class="sw-name">destructive</span></div>
+      <div class="swatch"><div class="sw" style="background:#077A4E"></div><span class="sw-name">success</span></div>
+      <div class="swatch"><div class="sw" style="background:#B45309"></div><span class="sw-name">warning</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Статусы</div>
+    <div class="chips">
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#DCE8FE;color:#1D4ED8">scheduled</span>
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#D2F2E2;color:#077A4E">completed</span>
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#EFEFF1;color:#646670">cancelled</span>
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#FCE2E2;color:#C92A2A">missed</span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Радиусы</div>
+    <div class="radii">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#222428;opacity:.15;border-radius:3px;"></div><span style="font-size:9px;opacity:.6">sm·0.3rem</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#222428;opacity:.15;border-radius:4px;"></div><span style="font-size:9px;opacity:.6">md·0.4rem</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#222428;opacity:.15;border-radius:8px;"></div><span style="font-size:9px;opacity:.6">default·0.5rem</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#222428;opacity:.15;border-radius:12px;"></div><span style="font-size:9px;opacity:.6">lg·0.75rem</span>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Тень карточки</div>
+    <div style="display:inline-block;padding:8px 14px;background:#FFFFFF;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.06);font-size:12px;">shadow-card</div>
+  </div>
+</div>
+<div class="t d">
+  <div class="lbl">Dark</div>
+  <div class="section">
+    <div class="section-title" style="color:#E3E2E0">Цвета</div>
+    <div class="swatches">
+      <div class="swatch"><div class="sw" style="background:#7e7e7e;border:1px solid #2e2e2e"></div><span class="sw-name" style="color:#979A9B">primary</span></div>
+      <div class="swatch"><div class="sw" style="background:#3e3e3e;border:1px solid #2e2e2e"></div><span class="sw-name" style="color:#979A9B">primary-light</span></div>
+      <div class="swatch"><div class="sw" style="background:#2a2a2a;border:1px solid #2e2e2e"></div><span class="sw-name" style="color:#979A9B">muted</span></div>
+      <div class="swatch"><div class="sw" style="background:#979A9B;border:1px solid #2e2e2e"></div><span class="sw-name" style="color:#979A9B">muted-fg</span></div>
+      <div class="swatch"><div class="sw" style="background:#222222;border:1px solid #2e2e2e"></div><span class="sw-name" style="color:#979A9B">card</span></div>
+      <div class="swatch"><div class="sw" style="background:#2e2e2e;border:1px solid #3e3e3e"></div><span class="sw-name" style="color:#979A9B">border</span></div>
+      <div class="swatch"><div class="sw" style="background:#CD4945"></div><span class="sw-name" style="color:#979A9B">destructive</span></div>
+      <div class="swatch"><div class="sw" style="background:#2D9964"></div><span class="sw-name" style="color:#979A9B">success</span></div>
+      <div class="swatch"><div class="sw" style="background:#CA8E1B"></div><span class="sw-name" style="color:#979A9B">warning</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title" style="color:#E3E2E0">Статусы</div>
+    <div class="chips">
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#1F282D;color:#447ACB">scheduled</span>
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#242B26;color:#4F9768">completed</span>
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#252525;color:#9B9B9B">cancelled</span>
+      <span style="padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#332523;color:#BE524B">missed</span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title" style="color:#E3E2E0">Радиусы</div>
+    <div class="radii">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#E3E2E0;opacity:.15;border-radius:3px;"></div><span style="font-size:9px;color:#979A9B">sm</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#E3E2E0;opacity:.15;border-radius:4px;"></div><span style="font-size:9px;color:#979A9B">md</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#E3E2E0;opacity:.15;border-radius:8px;"></div><span style="font-size:9px;color:#979A9B">default</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="width:28px;height:20px;background:#E3E2E0;opacity:.15;border-radius:12px;"></div><span style="font-size:9px;color:#979A9B">lg</span>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title" style="color:#E3E2E0">Тень карточки</div>
+    <div style="display:inline-block;padding:8px 14px;background:#222222;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.3);font-size:12px;color:#E3E2E0;">shadow-card</div>
+  </div>
+</div>
+</body>
+</html>
