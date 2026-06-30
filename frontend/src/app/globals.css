@@ -56,82 +56,82 @@
 }
 
 :root {
-  /* Base — Notion Light */
-  --background:          #ffffff;
-  --foreground:          #37352F;
+  /* Base — Чёткий (Crisp) · высокий контраст — из Claude Design handoff */
+  --background:          #F8F8F9;   /* canvas */
+  --foreground:          #1B1C1F;   /* text */
   --card:                #FFFFFF;
-  --card-foreground:     #37352F;
+  --card-foreground:     #1B1C1F;
   --popover:             #FFFFFF;
-  --popover-foreground:  #37352F;
-  --primary:             #337EA9;   /* Notion blue icon */
-  --primary-light:       #E9F3F7;   /* Notion blue bg */
-  --primary-foreground:  #f0efed;   /* warm off-white on blue */
-  --secondary:           #F1F1EF;   /* Notion gray bg */
-  --secondary-foreground: #37352F;
-  --muted:               #F1F1EF;
-  --muted-foreground:    #787774;   /* Notion gray text */
-  --accent:              #373736;   /* Notion orange icon */
-  --accent-light:        #F8ECDF;   /* Notion orange bg */
-  --accent-foreground:   #373736;   /* Notion orange text */
-  --destructive:         #D44C47;   /* Notion red icon */
-  --success:             #448361;   /* Notion green icon */
-  --warning:             #CB912F;   /* Notion yellow icon */
-  --purple:              #9065B0;   /* Notion purple icon */
-  --danger:              #D44C47;
-  --border:              #DFDCD9;
-  --input:               #DFDCD9;
-  --ring:                #337EA9;
+  --popover-foreground:  #1B1C1F;
+  --primary:             #222428;   /* графитовый бренд (accent) */
+  --primary-light:       #ECECEE;   /* accentSoft */
+  --primary-foreground:  #FFFFFF;   /* accentInk */
+  --secondary:           #ECECEE;   /* accentSoft */
+  --secondary-foreground: #3B3D43;  /* text2 (hc) */
+  --muted:               #EFEFF1;   /* grayBg */
+  --muted-foreground:    #646670;   /* text3 (hc) */
+  --accent:              #ECECEE;   /* accentSoft — hover/focus поверхность */
+  --accent-light:        #ECECEE;   /* accentSoft */
+  --accent-foreground:   #222428;   /* accentSoftText */
+  --destructive:         #C92A2A;   /* redFg (hc) */
+  --success:             #077A4E;   /* greenFg (hc) */
+  --warning:             #B45309;   /* amberFg (hc) */
+  --purple:              #9065B0;   /* нет в палитре — оставлен Notion */
+  --danger:              #C92A2A;
+  --border:              #E1E1E4;   /* border (hc) */
+  --input:               #CACACE;   /* borderStrong (hc) */
+  --ring:                #222428;   /* графит */
   --radius:              0.5rem;
   --radius-lg:           0.75rem;
 
-  /* Shadows */
-  --shadow-sm:           0 1px 2px rgba(55, 53, 47, 0.06);
-  --shadow-card:         0 1px 3px rgba(55, 53, 47, 0.08);
+  /* Shadows — нейтральные, прохладные */
+  --shadow-sm:           0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card:         0 1px 3px rgba(0, 0, 0, 0.06);
 
   /* Sidebar */
-  --sidebar:             #F7F6F3;
-  --sidebar-foreground:  #37352F;
-  --sidebar-primary:     #337EA9;
-  --sidebar-primary-foreground: #f0efed;
-  --sidebar-accent:      #EBEBEA;
-  --sidebar-accent-foreground: #37352F;
-  --sidebar-border:      #DFDCD9;
-  --sidebar-ring:        #337EA9;
-  --sidebar-active-bg:   #EBEBEA;   /* Notion subtle active */
-  --sidebar-active-text: #37352F;   /* foreground on light active */
-  --sidebar-hover-bg:    #EBEBEA;
-  --sidebar-text:        #787774;
+  --sidebar:             #FFFFFF;
+  --sidebar-foreground:  #1B1C1F;
+  --sidebar-primary:     #222428;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent:      #ECECEE;
+  --sidebar-accent-foreground: #1B1C1F;
+  --sidebar-border:      #E1E1E4;
+  --sidebar-ring:        #222428;
+  --sidebar-active-bg:   #ECECEE;   /* accentSoft */
+  --sidebar-active-text: #1B1C1F;   /* text */
+  --sidebar-hover-bg:    #ECECEE;
+  --sidebar-text:        #646670;   /* text3 */
 
   /* Lesson / course status chips */
-  --status-scheduled-bg:   #E9F3F7;   /* Notion blue bg */
-  --status-scheduled-text: #487CA5;   /* Notion blue text */
-  --status-completed-bg:   #EEF3ED;   /* Notion green bg */
-  --status-completed-text: #548164;   /* Notion green text */
-  --status-cancelled-bg:   #F1F1EF;   /* Notion gray bg */
-  --status-cancelled-text: #787774;   /* Notion gray text */
-  --status-missed-bg:      #FAECEC;   /* Notion red bg */
-  --status-missed-text:    #C4554D;   /* Notion red text */
+  --status-scheduled-bg:   #DCE8FE;   /* blueBg */
+  --status-scheduled-text: #1D4ED8;   /* blueFg (hc) */
+  --status-completed-bg:   #D2F2E2;   /* greenBg */
+  --status-completed-text: #077A4E;   /* greenFg (hc) */
+  --status-cancelled-bg:   #EFEFF1;   /* grayBg */
+  --status-cancelled-text: #646670;   /* text3 */
+  --status-missed-bg:      #FCE2E2;   /* redBg */
+  --status-missed-text:    #C92A2A;   /* redFg (hc) */
 
-  /* Calendar event chips — Notion muted pastel, dark text */
-  --cal-scheduled-bg:      #e7f0f9;
-  --cal-scheduled-border:  #cbdef0;
-  --cal-scheduled-text:    #1e466e;
-  --cal-completed-bg:      #dde9dd;
-  --cal-completed-border:  #c2d6c2;
-  --cal-completed-text:    #2e4d2e;
-  --cal-cancelled-bg:      #efeeec;
-  --cal-cancelled-border:  #e2e1de;
-  --cal-cancelled-text:    #8c8a83;
-  --cal-missed-bg:         #fbe6e0;
-  --cal-missed-border:     #f0cfc4;
-  --cal-missed-text:       #7a3322;
+  /* Calendar event chips — пастельный фон, нейтральный текст (как в дизайне) */
+  --cal-scheduled-bg:      #DCE8FE;
+  --cal-scheduled-border:  #C3D5FB;
+  --cal-scheduled-text:    #1B1C1F;
+  --cal-completed-bg:      #D2F2E2;
+  --cal-completed-border:  #B6E5CE;
+  --cal-completed-text:    #1B1C1F;
+  --cal-cancelled-bg:      #EFEFF1;
+  --cal-cancelled-border:  #E1E1E4;
+  --cal-cancelled-text:    #646670;
+  --cal-missed-bg:         #FCE2E2;
+  --cal-missed-border:     #F5C9C9;
+  --cal-missed-text:       #C92A2A;
 
   /* Charts */
-  --chart-1: #337EA9;   /* blue */
-  --chart-2: #D87620;   /* orange */
-  --chart-3: #448361;   /* green */
-  --chart-4: #9065B0;   /* purple */
-  --chart-5: #D44C47;   /* red */
+  --chart-1: #1D4ED8;   /* blue */
+  --chart-2: #D97706;   /* amber */
+  --chart-3: #077A4E;   /* green */
+  --chart-4: #222428;   /* graphite */
+  --chart-5: #C92A2A;   /* red */
 }
 
 .dark {
@@ -241,7 +241,7 @@
   background: transparent !important;
 }
 .fc .fc-daygrid-day.fc-day-today {
-  background: #F0F8FC !important;
+  background: #ECECEE !important;   /* accentSoft — нейтральная подсветка сегодня */
 }
 .dark .fc .fc-daygrid-day.fc-day-today {
   background: #393939 !important;
@@ -263,7 +263,7 @@
 
 /* Empty slot hover — scoped to background grid only, not event container */
 .fc-timegrid-slots .fc-timegrid-col:hover {
-  background: rgba(51, 126, 169, 0.12) !important;   /* Notion blue tint */
+  background: rgba(29, 78, 216, 0.08) !important;   /* blueFg tint — слот для создания урока */
   cursor: pointer;
 }
 

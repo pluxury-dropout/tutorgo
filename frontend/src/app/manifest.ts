@@ -9,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'CRM for private tutors',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#337EA9',
+    background_color: '#F8F8F9',
+    theme_color: '#222428',
     icons: [{ src: '/favicon.ico', sizes: 'any', type: 'image/x-icon' }],
   }
 }
