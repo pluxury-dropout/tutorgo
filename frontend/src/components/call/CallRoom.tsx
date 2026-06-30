@@ -37,6 +37,17 @@ function CallRoomInner({ courseId, role }: CallRoomInnerProps) {
   const [boardLoading, setBoardLoading] = useState(false)
   const [activePageId, setActivePageId] = useState<string | null>(null)
 
+  // Enable camera+mic once per call. Must live here (not in VideoGrid): VideoGrid
+  // unmounts/remounts on every board toggle, and re-running enableCameraAndMicrophone
+  // races with itself (StrictMode double-invoke + overlapping toggles) → duplicate
+  // camera publications on the same participant. The ref guards the StrictMode replay.
+  const mediaStartedRef = useRef(false)
+  useEffect(() => {
+    if (mediaStartedRef.current) return
+    mediaStartedRef.current = true
+    room.localParticipant.enableCameraAndMicrophone().catch(() => {})
+  }, [room])
+
   // Tutor state
   const [tutorBoard, setTutorBoard] = useState<BoardWithPages | null>(null)
   const inviteTokenRef = useRef<string | null>(null)

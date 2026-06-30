@@ -13,26 +13,22 @@ export function BoardToggleButton({ mode, loading, onToggle }: BoardToggleButton
   return (
     <Button
       variant="secondary"
-      size="sm"
+      size="icon"
       onClick={onToggle}
       disabled={loading}
+      title={mode === 'call' ? 'Открыть доску' : 'Закрыть доску'}
+      aria-label={mode === 'call' ? 'Открыть доску' : 'Закрыть доску'}
       style={{
         position: 'fixed',
-        top: 12,
+        top: 850,
         left: 12,
         zIndex: 9999,
       }}
     >
       {mode === 'call' ? (
-        <>
-          <LayoutPanelTop className="h-4 w-4 mr-2" />
-          Открыть доску
-        </>
+        <LayoutPanelTop className="h-4 w-4" />
       ) : (
-        <>
-          <LayoutGrid className="h-4 w-4 mr-2" />
-          Закрыть доску
-        </>
+        <LayoutGrid className="h-4 w-4" />
       )}
     </Button>
   )

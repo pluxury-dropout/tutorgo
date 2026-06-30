@@ -19,6 +19,17 @@ function getTokenExp(token: string): number | null {
 
 let isRefreshing = false
 let refreshPromise: Promise<void> | null = null
+// Once a refresh hard-fails (no valid session server-side), stop firing it on
+// every request — otherwise the request interceptor re-triggers a doomed
+// /auth/refresh per request, draining the auth rate limiter into 429s. Reset on
+// page reload (which forceLogout triggers anyway).
+let refreshFailed = false
+
+function forceLogout(): void {
+  localStorage.removeItem('tg_token')
+  localStorage.removeItem('tg_user')
+  if (typeof window !== 'undefined') window.location.href = '/login'
+}
 
 async function refreshToken(): Promise<string> {
   const { data } = await axios.post<{ access_token: string }>(
@@ -31,10 +42,17 @@ async function refreshToken(): Promise<string> {
 }
 
 async function proactiveRefresh(): Promise<void> {
-  if (isRefreshing) return
+  if (isRefreshing || refreshFailed) return
   isRefreshing = true
-  // silently ignore — reactive 401 handler will log out if needed
-  const p = refreshToken().then(() => undefined, () => undefined)
+  const p = refreshToken().then(
+    () => undefined,
+    (err: AxiosError) => {
+      refreshFailed = true
+      // 401 = session genuinely dead → log out once. 429/network = transient,
+      // just stop hammering until reload.
+      if (err.response?.status === 401) forceLogout()
+    },
+  )
   refreshPromise = p
   try {
     await p
@@ -89,9 +107,7 @@ api.interceptors.response.use(
       } catch {
         isRefreshing = false
         refreshPromise = null
-        localStorage.removeItem('tg_token')
-        localStorage.removeItem('tg_user')
-        if (typeof window !== 'undefined') window.location.href = '/login'
+        forceLogout()
       }
     }
 
