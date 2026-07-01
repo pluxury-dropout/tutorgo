@@ -4,8 +4,12 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ParticipantTile,
+  VideoTrack,
+  ParticipantPlaceholder,
+  isTrackReference,
   useTracks,
   useLocalParticipant,
+  useTrackMutedIndicator,
   type TrackReferenceOrPlaceholder,
 } from '@livekit/components-react'
 import { Track, type LocalParticipant } from 'livekit-client'
@@ -69,6 +73,11 @@ function PipTile({ trackRef, localParticipant, camOn, micOn }: PipTileProps) {
   const [hover, setHover] = useState(false)
   const isLocal = trackRef.participant.isLocal
   const name = trackRef.participant.name || trackRef.participant.identity
+  const { isMuted } = useTrackMutedIndicator({
+    participant: trackRef.participant,
+    source: Track.Source.Microphone,
+  })
+  const micIsOn = isLocal ? micOn : !isMuted
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -83,10 +92,16 @@ function PipTile({ trackRef, localParticipant, camOn, micOn }: PipTileProps) {
           background: 'linear-gradient(150deg,#3c3c44,#1f1f24)',
         }}
       >
-        <ParticipantTile trackRef={trackRef} style={{ width: '100%', height: '100%', borderRadius: 0 }} />
+        <ParticipantTile trackRef={trackRef} style={{ width: '100%', height: '100%', borderRadius: 0 }}>
+          {isTrackReference(trackRef) ? (
+            <VideoTrack trackRef={trackRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <ParticipantPlaceholder />
+          )}
+        </ParticipantTile>
       </div>
 
-      {/* Плашка имени + (для себя) кнопки камеры/микрофона по наведению */}
+      {/* Плашка имени + значок микрофона (реальное состояние) + (для себя) кнопки по наведению */}
       <div
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -106,6 +121,7 @@ function PipTile({ trackRef, localParticipant, camOn, micOn }: PipTileProps) {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={FG} strokeWidth="2.1" strokeLinecap="round">
             <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+            {!micIsOn && <line x1="2" y1="2" x2="22" y2="22" />}
           </svg>
           <span style={{ color: FG, fontSize: 11.5, fontWeight: 600 }}>{name}</span>
         </div>
@@ -113,20 +129,20 @@ function PipTile({ trackRef, localParticipant, camOn, micOn }: PipTileProps) {
         {isLocal && hover && (
           <div style={{ display: 'flex', gap: 8 }}>
             <MediaButton
-              on={camOn}
-              title={camOn ? 'Выключить камеру' : 'Включить камеру'}
-              onClick={() => localParticipant.setCameraEnabled(!camOn)}
-            >
-              <path d="M23 7l-7 5 7 5V7z" />
-              <rect x="1" y="5" width="15" height="14" rx="2" />
-            </MediaButton>
-            <MediaButton
               on={micOn}
               title={micOn ? 'Выключить микрофон' : 'Включить микрофон'}
               onClick={() => localParticipant.setMicrophoneEnabled(!micOn)}
             >
               <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
               <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+            </MediaButton>
+            <MediaButton
+              on={camOn}
+              title={camOn ? 'Выключить камеру' : 'Включить камеру'}
+              onClick={() => localParticipant.setCameraEnabled(!camOn)}
+            >
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" />
             </MediaButton>
           </div>
         )}
