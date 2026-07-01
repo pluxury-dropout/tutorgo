@@ -194,7 +194,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
           />
         )}
 
-        {mode === 'board' && <PipCameras />}
+        {mode === 'board' && <PipCameras chatOpen={chatOpen} />}
       </div>
 
       {chatOpen && (

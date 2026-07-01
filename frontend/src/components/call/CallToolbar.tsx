@@ -59,6 +59,17 @@ export function CallToolbar({
 
   useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current) }, [])
 
+  // Закрытие меню «Ещё» по клику вне него (кнопка + попап помечены data-call-more).
+  useEffect(() => {
+    if (!moreOpen) return
+    function onDown(e: PointerEvent) {
+      if ((e.target as HTMLElement).closest('[data-call-more]')) return
+      setMoreOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [moreOpen])
+
   function copyLink() {
     if (!inviteUrl) return
     try { navigator.clipboard.writeText(inviteUrl) } catch {}
@@ -100,7 +111,7 @@ export function CallToolbar({
 
       {/* Меню «Ещё» (вверх) */}
       {moreOpen && (
-        <div style={{
+        <div data-call-more style={{
           position: 'absolute', right: 22, bottom: 72, background: c.panel,
           border: `1px solid ${c.border}`, borderRadius: 12, padding: 6,
           display: 'flex', flexDirection: 'column', minWidth: 240,
@@ -173,7 +184,7 @@ export function CallToolbar({
             }}>{chatUnread}</span>
           )}
         </button>
-        <button onClick={() => setMoreOpen((v) => !v)} title="Ещё" style={btnBase({ active: moreOpen })}>
+        <button data-call-more onClick={() => setMoreOpen((v) => !v)} title="Ещё" style={btnBase({ active: moreOpen })}>
           <Icon>{ICONS.more}</Icon>
         </button>
         <button onClick={() => setConfirmLeave(true)} title="Покинуть звонок" style={btnBase({ danger: true })}>
