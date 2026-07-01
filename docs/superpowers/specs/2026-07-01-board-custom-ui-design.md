@@ -21,7 +21,9 @@
 
 ## Что из tldraw используем (проверено по докам и node_modules v5.1.0)
 
-- `hideUi` проп на `<Tldraw>` — прячет дефолтный UI.
+- Гасим видимый UI через `components={{ Toolbar: null, StylePanel: null, ContextMenu: null, ... }}`
+  (пример `ui-components-hidden`), а НЕ через `hideUi`: так UI-обёртка tldraw продолжает
+  монтироваться и хоткеи (Ctrl+Z, Delete, клавиши инструментов) остаются рабочими.
 - Свой UI — как child `<Tldraw>`; внутри контекст редактора → `useEditor()`, реактивность
   через `track()` / `useValue`.
 - `editor.setCurrentTool(id)` для инструментов; `editor.setStyleForNextShapes(...)` и
