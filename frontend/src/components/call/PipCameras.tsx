@@ -17,7 +17,7 @@ import { Track, type LocalParticipant } from 'livekit-client'
 const PILL_BG = 'rgba(255,255,255,.8)'
 const FG = '#2f333b'
 
-export function PipCameras() {
+export function PipCameras({ chatOpen = false }: { chatOpen?: boolean }) {
   const tracks = useTracks(
     [{ source: Track.Source.Camera, withPlaceholder: true }],
     { onlySubscribed: false },
@@ -40,7 +40,9 @@ export function PipCameras() {
       style={{
         position: 'fixed',
         top: 72, // под доком
-        right: 16,
+        // сдвигаемся левее панели чата (280px + отступ), чтобы не перекрывать её
+        right: chatOpen ? 296 : 16,
+        transition: 'right .25s ease',
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',

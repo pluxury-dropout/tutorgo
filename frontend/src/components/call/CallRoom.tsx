@@ -10,9 +10,13 @@ import { RoomEvent } from 'livekit-client'
 import '@livekit/components-styles'
 import { toast } from 'sonner'
 
-import { VideoGrid } from './VideoGrid'
+import { useTheme } from 'next-themes'
 import { PipCameras } from './PipCameras'
-import { BoardToggleButton } from './BoardToggleButton'
+import { CallStage } from './CallStage'
+import { CallToolbar } from './CallToolbar'
+import { CallChat } from './CallChat'
+import { useCallChat } from './useCallChat'
+import { themeTokens } from './callTheme'
 import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
 import { whiteboardApi } from '@/lib/api/whiteboard'
 import type { BoardWithPages } from '@/types/api'
@@ -29,15 +33,20 @@ interface DataMessage {
 interface CallRoomInnerProps {
   courseId?: string
   role: 'tutor' | 'guest'
+  inviteUrl?: string
 }
 
-function CallRoomInner({ courseId, role }: CallRoomInnerProps) {
+function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const room = useRoomContext()
+  const { resolvedTheme } = useTheme()
+  const theme = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
   const [mode, setMode] = useState<Mode>('call')
   const [boardLoading, setBoardLoading] = useState(false)
   const [activePageId, setActivePageId] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
+  const { messages, send, unread } = useCallChat({ chatOpen })
 
-  // Enable camera+mic once per call. Must live here (not in VideoGrid): VideoGrid
+  // Enable camera+mic once per call. Must live here (not in CallStage): CallStage
   // unmounts/remounts on every board toggle, and re-running enableCameraAndMicrophone
   // races with itself (StrictMode double-invoke + overlapping toggles) → duplicate
   // camera publications on the same participant. The ref guards the StrictMode replay.
@@ -162,31 +171,51 @@ function CallRoomInner({ courseId, role }: CallRoomInnerProps) {
   const currentPage = activeBoard?.pages.find((p) => p.id === resolvedPageId) ?? null
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {mode === 'call' && <VideoGrid />}
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {/* Область сцены/доски ужимается при открытом чате */}
+      <div
+        style={{
+          position: 'absolute', top: 0, left: 0, bottom: 0,
+          right: chatOpen ? 280 : 0, transition: 'right .25s ease',
+        }}
+      >
+        {mode === 'call' && <CallStage />}
 
-      {mode === 'board' && activeBoard && resolvedPageId && (
-        <TldrawCanvas
-          page={currentPage}
-          boardId={activeBoard.id}
-          pages={activeBoard.pages}
-          activePageId={resolvedPageId}
-          onSelectPage={setActivePageId}
-          token={activeBoardToken}
-          courseId={role === 'tutor' ? courseId ?? undefined : undefined}
-          isGuest={role === 'guest'}
+        {mode === 'board' && activeBoard && resolvedPageId && (
+          <TldrawCanvas
+            page={currentPage}
+            boardId={activeBoard.id}
+            pages={activeBoard.pages}
+            activePageId={resolvedPageId}
+            onSelectPage={setActivePageId}
+            token={activeBoardToken}
+            courseId={role === 'tutor' ? courseId ?? undefined : undefined}
+            isGuest={role === 'guest'}
+          />
+        )}
+
+        {mode === 'board' && <PipCameras chatOpen={chatOpen} />}
+      </div>
+
+      {chatOpen && (
+        <CallChat
+          theme={theme}
+          messages={messages}
+          onSend={send}
+          onClose={() => setChatOpen(false)}
         />
       )}
 
-      {mode === 'board' && <PipCameras />}
-
-      {role === 'tutor' && (
-        <BoardToggleButton
-          mode={mode}
-          loading={boardLoading}
-          onToggle={handleToggle}
-        />
-      )}
+      <CallToolbar
+        role={role}
+        inviteUrl={inviteUrl}
+        boardActive={mode === 'board'}
+        chatActive={chatOpen}
+        chatUnread={unread}
+        onToggleBoard={handleToggle}
+        onToggleChat={() => setChatOpen((v) => !v)}
+        onLeave={() => room.disconnect()}
+      />
     </div>
   )
 }
@@ -199,6 +228,7 @@ export interface CallRoomProps {
   token: string
   role: 'tutor' | 'guest'
   enableMedia?: boolean
+  inviteUrl?: string
   onDisconnected: () => void
 }
 
@@ -208,6 +238,7 @@ export function CallRoom({
   token,
   role,
   enableMedia = false,
+  inviteUrl,
   onDisconnected,
 }: CallRoomProps) {
   return (
@@ -222,7 +253,7 @@ export function CallRoom({
       style={{ height: '100%' }}
     >
       <RoomAudioRenderer />
-      <CallRoomInner courseId={courseId} role={role} />
+      <CallRoomInner courseId={courseId} role={role} inviteUrl={inviteUrl} />
     </LiveKitRoom>
   )
 }
