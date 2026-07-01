@@ -66,7 +66,9 @@ export function PipCameras() {
               <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
               <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
             </svg>
-            <span style={{ color: '#2f333b', fontSize: 11.5, fontWeight: 600 }}>Репетитор</span>
+            <span style={{ color: '#2f333b', fontSize: 11.5, fontWeight: 600 }}>
+              {track.participant.name || track.participant.identity}
+            </span>
           </div>
         </div>
       ))}

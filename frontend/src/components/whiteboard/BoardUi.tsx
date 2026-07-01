@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   track,
@@ -116,6 +116,18 @@ export const BoardUi = track(function BoardUi({ onInsertImage, isGuest = false }
   const canRedo = editor.getCanRedo()
   const hasSel = editor.getSelectedShapeIds().length > 0
 
+  // Закрытие поповера/меню страниц по клику вне UI-дока.
+  useEffect(() => {
+    if (!openTool && !pagesOpen) return
+    function onDown(e: PointerEvent) {
+      if ((e.target as HTMLElement).closest('[data-board-ui]')) return
+      setOpenTool(null)
+      setPagesOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [openTool, pagesOpen])
+
   function pick(t: UiTool) {
     if (t === 'image') {
       onInsertImage()
@@ -189,7 +201,10 @@ export const BoardUi = track(function BoardUi({ onInsertImage, isGuest = false }
       }}
     >
       {/* ── Верхний док ── */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none' }}>
+      <div
+        data-board-ui
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none' }}
+      >
         <div
           style={{
             display: 'grid',

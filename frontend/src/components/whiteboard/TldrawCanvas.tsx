@@ -235,7 +235,7 @@ export function TldrawCanvas({
           onMount={(editor) => {
             editorRef.current = editor
           }}
-          colorScheme="system"
+          colorScheme="light"
         >
           <BoardUi onInsertImage={() => imageInputRef.current?.click()} isGuest={isGuest} />
         </Tldraw>
