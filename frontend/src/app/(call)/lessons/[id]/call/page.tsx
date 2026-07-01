@@ -7,28 +7,18 @@ import '@livekit/components-styles'
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
 import { lessonsApi } from '@/lib/api/lessons'
 import { Button } from '@/components/ui/button'
-import { Link, Check } from 'lucide-react'
 import { CallRoom } from '@/components/call/CallRoom'
 
 export default function CallPage() {
   const { id } = useParams<{ id: string }>()
-  const router  = useRouter()
+  const router = useRouter()
 
-  const [room, setRoom]       = useState<RoomTokenResponse | null>(null)
+  const [room, setRoom] = useState<RoomTokenResponse | null>(null)
   const [courseId, setCourseId] = useState<string | null>(null)
-  const [error, setError]     = useState<string | null>(null)
-  const [copied, setCopied]   = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function handleCopyLink() {
-    const url = `${window.location.origin}/join/${id}`
-    navigator.clipboard.writeText(url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  // Auto-start on mount — the tutor already started the call from the calendar,
-  // so there's no separate "Начать урок" step. start-room is an idempotent
-  // UPDATE, so re-running it on every refresh is safe and re-enters the room.
+  // Auto-start on mount — репетитор уже начал звонок из календаря.
+  // start-room идемпотентен, безопасно перезапускать при рефреше.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -70,6 +60,8 @@ export default function CallPage() {
     )
   }
 
+  const inviteUrl = `${window.location.origin}/join/${id}`
+
   return (
     <div style={{ height: '100dvh', position: 'relative' }}>
       <CallRoom
@@ -77,17 +69,9 @@ export default function CallPage() {
         serverUrl={room.server_url}
         token={room.token}
         role="tutor"
+        inviteUrl={inviteUrl}
         onDisconnected={handleDisconnected}
       />
-      <Button
-        variant="secondary"
-        size="icon"
-        onClick={handleCopyLink}
-        title="Скопировать ссылку для ученика"
-        style={{ position: 'absolute', bottom: '80px', right: '12px', zIndex: 60 }}
-      >
-        {copied ? <Check className="h-4 w-4" /> : <Link className="h-4 w-4" />}
-      </Button>
     </div>
   )
 }

@@ -46,7 +46,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const [chatOpen, setChatOpen] = useState(false)
   const { messages, send, unread } = useCallChat({ chatOpen })
 
-  // Enable camera+mic once per call. Must live here (not in VideoGrid): VideoGrid
+  // Enable camera+mic once per call. Must live here (not in CallStage): CallStage
   // unmounts/remounts on every board toggle, and re-running enableCameraAndMicrophone
   // races with itself (StrictMode double-invoke + overlapping toggles) → duplicate
   // camera publications on the same participant. The ref guards the StrictMode replay.
