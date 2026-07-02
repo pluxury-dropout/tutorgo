@@ -4,10 +4,13 @@ import (
 	"context"
 	"tutorgo/models"
 	"tutorgo/repository"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type TutorService interface {
 	Create(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error)
+	Register(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error)
 	GetAll(ctx context.Context) ([]models.Tutor, error)
 	GetByID(ctx context.Context, id string) (models.Tutor, error)
 	GetByEmail(ctx context.Context, email string) (string, string, error)
@@ -19,15 +22,34 @@ type TutorService interface {
 }
 
 type tutorService struct {
-	repo repository.TutorRepository
+	repo    repository.TutorRepository
+	subRepo repository.SubscriptionRepository
+	pool    *pgxpool.Pool
 }
 
-func NewTutorService(repo repository.TutorRepository) TutorService {
-	return &tutorService{repo: repo}
+func NewTutorService(repo repository.TutorRepository, subRepo repository.SubscriptionRepository, pool *pgxpool.Pool) TutorService {
+	return &tutorService{repo: repo, subRepo: subRepo, pool: pool}
 }
 
 func (s *tutorService) Create(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
 	return s.repo.Create(ctx, req, passwordHash)
+}
+
+func (s *tutorService) Register(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Tutor{}, err
+	}
+	defer tx.Rollback(ctx) // no-op после Commit
+
+	tutor, err := s.repo.CreateTx(ctx, tx, req, passwordHash)
+	if err != nil {
+		return models.Tutor{}, err
+	}
+	if err := s.subRepo.CreateTrialTx(ctx, tx, tutor.ID); err != nil {
+		return models.Tutor{}, err
+	}
+	return tutor, tx.Commit(ctx)
 }
 
 func (s *tutorService) GetAll(ctx context.Context) ([]models.Tutor, error) {

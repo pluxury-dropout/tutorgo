@@ -32,9 +32,10 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	attendanceRepo := repository.NewAttendanceRepository(pool)
 	taskRepo := repository.NewTaskRepository(pool)
 	whiteboardRepo := repository.NewWhiteboardRepository(pool)
+	subscriptionRepo := repository.NewSubscriptionRepository(pool)
 
 	// Services
-	tutorService := service.NewTutorService(tutorRepo)
+	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
 	studentService := service.NewStudentService(studentRepo)
 	courseService := service.NewCourseService(courseRepo, studentRepo)
@@ -44,6 +45,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
+	subscriptionService := service.NewSubscriptionService(subscriptionRepo)
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
@@ -56,6 +58,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
 	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
+	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 
 	origins := []string{"http://localhost:3000"}
 	if cfg.AllowedOrigin != "" {
@@ -100,12 +103,22 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	r.GET("/public/board-assets/:id", whiteboardHandler.ServeAsset)
 	r.GET("/ws/board/:pageId", wbHubManager.ServeWS(whiteboardService))
 
+	// open — авторизовано, но доступно даже при истёкшей подписке (чтобы заплатить)
+	open := r.Group("/")
+	open.Use(middleware.Auth(cfg.JWTSecret))
+	{
+		open.GET("/subscription", subscriptionHandler.GetStatus)
+		open.POST("/subscription/checkout", subscriptionHandler.Checkout)
+		open.POST("/subscription/confirm", subscriptionHandler.Confirm)
+		open.GET("/tutors/:id", tutorHandler.GetByID)
+		open.PUT("/tutors/:id", tutorHandler.Update)
+	}
+
 	// Protected routes
 	auth := r.Group("/")
 	auth.Use(middleware.Auth(cfg.JWTSecret))
+	auth.Use(middleware.RequireActiveSubscription(subscriptionService))
 	{
-		auth.GET("/tutors/:id", tutorHandler.GetByID)
-		auth.PUT("/tutors/:id", tutorHandler.Update)
 		auth.PUT("/tutors/:id/password", tutorHandler.ChangePassword)
 		auth.DELETE("/tutors/:id", tutorHandler.Delete)
 
