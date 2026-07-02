@@ -51,13 +51,19 @@ func (r *subscriptionRepository) GetByTutor(ctx context.Context, tutorID string)
 }
 
 func (r *subscriptionRepository) Activate(ctx context.Context, tutorID, plan string, periodEnd time.Time) error {
-	_, err := r.conn.Exec(ctx,
+	tag, err := r.conn.Exec(ctx,
 		`UPDATE subscriptions
 		 SET plan = $2, period_end = $3, updated_at = now()
 		 WHERE tutor_id = $1`,
 		tutorID, plan, periodEnd,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("subscription not found")
+	}
+	return nil
 }
 
 func (r *subscriptionRepository) CreateTrialTx(ctx context.Context, q Querier, tutorID string) error {
