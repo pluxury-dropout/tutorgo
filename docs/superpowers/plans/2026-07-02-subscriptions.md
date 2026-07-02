@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** SaaS-биллинг для репетиторов: бесплатный 30-дневный триал (без карты) → платный тариф (месяц/год-со-скидкой), грейс-период 7 дней → блокировка. Провайдер оплаты заглушён.
+**Goal (backend-фаза 1):** серверная часть SaaS-биллинга: бесплатный 30-дневный триал (без карты) → платный тариф (месяц/год-со-скидкой), грейс-период 7 дней → блокировка (402). Провайдер оплаты заглушён. UI (billing-экран, баннеры) — отдельный frontend-план, без него enforcement не выкатывается. См. «Scope и осознанные пробелы».
 
 **Architecture:** Одна таблица `subscriptions` (1:1 с репетитором). Состояние доступа вычисляется на чтении из `period_end` (без крона, без хранимого `status`). Чистая функция `EffectiveState` — ядро, тестируется первой. Gin-middleware гейтит бизнес-ручки при `blocked`. Триал создаётся в одной транзакции с регистрацией. Старые репетиторы — grandfathered.
 
@@ -711,34 +711,43 @@ Modify `router/router.go` — в блоке Repositories добавить:
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 ```
 
-- [ ] **Step 3: Разбить группу `auth` на открытую и гейтящую**
+- [ ] **Step 3: Добавить гейт на `auth` и вынести 5 открытых роутов в `open`-группу**
 
-Modify `router/router.go` — внутри `auth := r.Group("/")` / `auth.Use(middleware.Auth(...))`:
+Стратегия минимального диффа (5 перемещений вместо ~30): бизнес-роуты уже
+висят на `auth` — просто вешаем на неё gate. А немногочисленные роуты, которые
+должны работать при `blocked`, выносим в отдельную группу `open` (только
+`middleware.Auth`, без гейта). Так нельзя случайно оставить бизнес-роут негейтнутым.
 
-Открытые даже при `blocked` (добавить ПЕРЕД созданием gated-группы):
+Modify `router/router.go`:
+
+(а) На существующую группу `auth` добавить gate сразу после `auth.Use(middleware.Auth(...))`:
 ```go
-		// Subscription — доступно даже при истёкшей подписке (чтобы заплатить)
-		auth.GET("/subscription", subscriptionHandler.GetStatus)
-		auth.POST("/subscription/checkout", subscriptionHandler.Checkout)
-		auth.POST("/subscription/confirm", subscriptionHandler.Confirm)
-		// Профиль тоже открыт
-		auth.GET("/tutors/:id", tutorHandler.GetByID)
-		auth.PUT("/tutors/:id", tutorHandler.Update)
+	auth.Use(middleware.RequireActiveSubscription(subscriptionService))
 ```
 
-Затем создать gated-подгруппу и **перенести туда все остальные** существующие маршруты (students, courses, payments, lessons, enrollments, attendance, tasks, calls, whiteboard, а также `PUT /tutors/:id/password` и `DELETE /tutors/:id`):
+(б) Убрать из блока `auth` только две строки (они переезжают в `open`):
 ```go
-		gated := auth.Group("/")
-		gated.Use(middleware.RequireActiveSubscription(subscriptionService))
-		{
-			gated.PUT("/tutors/:id/password", tutorHandler.ChangePassword)
-			gated.DELETE("/tutors/:id", tutorHandler.Delete)
-			gated.GET("/students", studentHandler.GetAll)
-			// ...перенести сюда ВСЕ остальные ранее объявленные auth.* маршруты...
-		}
+		auth.GET("/tutors/:id", tutorHandler.GetByID)   // удалить отсюда
+		auth.PUT("/tutors/:id", tutorHandler.Update)     // удалить отсюда
+```
+Все остальные `auth.X(...)` остаются как есть — они теперь гейтятся.
+
+(в) Добавить новую группу `open` (авторизованную, но НЕ гейтнутую) — рядом с объявлением `auth`:
+```go
+	// open — авторизовано, но доступно даже при истёкшей подписке (чтобы заплатить)
+	open := r.Group("/")
+	open.Use(middleware.Auth(cfg.JWTSecret))
+	{
+		open.GET("/subscription", subscriptionHandler.GetStatus)
+		open.POST("/subscription/checkout", subscriptionHandler.Checkout)
+		open.POST("/subscription/confirm", subscriptionHandler.Confirm)
+		open.GET("/tutors/:id", tutorHandler.GetByID)
+		open.PUT("/tutors/:id", tutorHandler.Update)
+	}
 ```
 
-Важно: удалить старые дублирующие объявления `auth.GET("/tutors/:id", ...)` и `auth.PUT("/tutors/:id", ...)` из gated-части (они теперь в открытой). Остальные `auth.X(...)` заменить на `gated.X(...)`.
+Примечание: `PUT /tutors/:id/password` и `DELETE /tutors/:id` остаются в `auth`
+(гейтятся) — платить для них не требуется, но и открывать их при `blocked` не нужно.
 
 - [ ] **Step 4: Проверить компиляцию и сборку**
 
@@ -867,12 +876,30 @@ Modify `router/router.go` — заменить:
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
 ```
 
-- [ ] **Step 5: Проверить сборку и существующие тесты**
+- [ ] **Step 5: Починить существующий `service/tutor_test.go`**
+
+Изменение интерфейса `TutorRepository` (новый `CreateTx`) и сигнатуры
+`NewTutorService` ломают существующий тест. Modify `service/tutor_test.go`:
+
+(а) Добавить метод в `mockTutorRepo` (рядом с другими методами мока):
+```go
+func (m *mockTutorRepo) CreateTx(ctx context.Context, q repository.Querier, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
+	args := m.Called(ctx, q, req, passwordHash)
+	return args.Get(0).(models.Tutor), args.Error(1)
+}
+```
+Добавить импорт `"tutorgo/repository"` в этот тест-файл, если его ещё нет.
+
+(б) Заменить **все 5** вызовов `service.NewTutorService(repo)` на
+`service.NewTutorService(repo, nil, nil)` (существующие тесты не вызывают
+`Register`, поэтому `subRepo`/`pool` могут быть `nil`).
+
+- [ ] **Step 6: Проверить сборку и существующие тесты**
 
 Run: `go build ./... && go test ./...`
 Expected: сборка ок, все тесты PASS.
 
-- [ ] **Step 6: Ручная проверка — регистрация создаёт trial**
+- [ ] **Step 7: Ручная проверка — регистрация создаёт trial**
 
 Run (поднять сервер, зарегистрировать нового юзера):
 ```bash
@@ -882,7 +909,7 @@ psql "$DB_URL" -c "SELECT plan, period_end, grandfathered FROM subscriptions WHE
 ```
 Expected: строка с `plan=NULL`, `period_end` ≈ now+30d, `grandfathered=false`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add repository/tutor.go service/tutor.go handlers/auth.go router/router.go
@@ -890,6 +917,22 @@ git commit -m "feat(subscriptions): create trial subscription in same tx as regi
 ```
 
 ---
+
+## Scope и осознанные пробелы
+
+- **Это backend-фаза 1.** План строит только серверную половину. Enforcement
+  отдаёт `402` на бизнес-ручки, но **экрана оплаты ещё нет** — заблокированный
+  репетитор упрётся в 402 без UI, чтобы заплатить. Прежде чем enforcement можно
+  «выкатывать», нужен **отдельный frontend-план**: billing-экран, баннер при
+  `state=grace`, поток checkout→confirm. В проде это не срочно: все текущие юзеры
+  grandfathered, а у новых 30 дней триала + 7 грейса.
+- **`POST /subscription/confirm` — заглушка «выдать себе 30 дней»**, авторизованная
+  ручка без реальной оплаты. На этапе заглушки это безвредно (enforcement +
+  бесплатный confirm = всё ещё бесплатно). **Ревенью появится только когда
+  confirm заменят на реальный вебхук провайдера** — до этого система не монетизирует.
+- **Откат транзакции при регистрации** (Task 7: sub-insert падает → tutor
+  откатывается) проверяется вручную только для успешного пути. Фолт-инъекция отката
+  требует реальной БД — осознанно остаётся непокрытой тестом.
 
 ## Self-Review
 
