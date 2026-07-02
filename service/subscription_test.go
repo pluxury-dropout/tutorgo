@@ -63,3 +63,16 @@ func TestSubscriptionService_Confirm_ActivatesMonthly(t *testing.T) {
 	assert.NoError(t, err)
 	repo.AssertExpectations(t)
 }
+
+func TestSubscriptionService_Confirm_ActivatesYearly(t *testing.T) {
+	repo := new(mockSubRepo)
+	repo.On("Activate", mock.Anything, "t1", "yearly", mock.MatchedBy(func(pe time.Time) bool {
+		// период ~365 дней вперёд
+		return pe.After(time.Now().Add(364*24*time.Hour)) && pe.Before(time.Now().Add(366*24*time.Hour))
+	})).Return(nil)
+	svc := service.NewSubscriptionService(repo)
+
+	err := svc.Confirm(context.Background(), "t1", "yearly")
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+}
