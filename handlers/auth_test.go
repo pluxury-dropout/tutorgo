@@ -37,7 +37,7 @@ func TestAuthRegister_Success(t *testing.T) {
 	}
 
 	// Password is hashed internally — we can't predict the exact hash, use mock.Anything
-	svc.On("Create", mock.Anything, mock.MatchedBy(func(cr models.CreateTutorRequest) bool {
+	svc.On("Register", mock.Anything, mock.MatchedBy(func(cr models.CreateTutorRequest) bool {
 		return cr.Email == req.Email && cr.FirstName == req.FirstName
 	}), mock.AnythingOfType("string")).Return(testTutor, nil)
 
@@ -61,7 +61,7 @@ func TestAuthRegister_ValidationError(t *testing.T) {
 	})
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	svc.AssertNotCalled(t, "Create")
+	svc.AssertNotCalled(t, "Register")
 }
 
 func TestAuthRegister_ServiceError(t *testing.T) {
@@ -76,7 +76,7 @@ func TestAuthRegister_ServiceError(t *testing.T) {
 		LastName:  "Bekov",
 	}
 
-	svc.On("Create", mock.Anything, mock.Anything, mock.AnythingOfType("string")).Return(models.Tutor{}, errors.New("email already exists"))
+	svc.On("Register", mock.Anything, mock.Anything, mock.AnythingOfType("string")).Return(models.Tutor{}, errors.New("email already exists"))
 
 	w := makeRequest(t, r, http.MethodPost, "/auth/register", req)
 

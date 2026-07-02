@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 	"tutorgo/models"
+	"tutorgo/repository"
 	"tutorgo/service"
 
 	"github.com/stretchr/testify/assert"
@@ -17,6 +18,11 @@ type mockTutorRepo struct {
 
 func (m *mockTutorRepo) Create(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
 	args := m.Called(ctx, req, passwordHash)
+	return args.Get(0).(models.Tutor), args.Error(1)
+}
+
+func (m *mockTutorRepo) CreateTx(ctx context.Context, q repository.Querier, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
+	args := m.Called(ctx, q, req, passwordHash)
 	return args.Get(0).(models.Tutor), args.Error(1)
 }
 
@@ -58,7 +64,7 @@ func (m *mockTutorRepo) UpdatePassword(ctx context.Context, id string, hash stri
 
 func TestCreateTutor_Success(t *testing.T) {
 	repo := new(mockTutorRepo)
-	svc := service.NewTutorService(repo)
+	svc := service.NewTutorService(repo, nil, nil)
 
 	req := models.CreateTutorRequest{
 		FirstName: "Zhanibek",
@@ -79,7 +85,7 @@ func TestCreateTutor_Success(t *testing.T) {
 
 func TestCreateTutor_Error(t *testing.T) {
 	repo := new(mockTutorRepo)
-	svc := service.NewTutorService(repo)
+	svc := service.NewTutorService(repo, nil, nil)
 
 	req := models.CreateTutorRequest{
 		FirstName: "Zhanibek",
@@ -96,7 +102,7 @@ func TestCreateTutor_Error(t *testing.T) {
 
 func TestGetAllTutors_Success(t *testing.T) {
 	repo := new(mockTutorRepo)
-	svc := service.NewTutorService(repo)
+	svc := service.NewTutorService(repo, nil, nil)
 
 	expected := []models.Tutor{
 		{ID: "1",
@@ -118,7 +124,7 @@ func TestGetAllTutors_Success(t *testing.T) {
 }
 func TestGetAllTutors_Error(t *testing.T) {
 	repo := new(mockTutorRepo)
-	svc := service.NewTutorService(repo)
+	svc := service.NewTutorService(repo, nil, nil)
 
 	repo.On("GetAll", mock.Anything).Return([]models.Tutor{}, errors.New("db error"))
 
@@ -131,7 +137,7 @@ func TestGetAllTutors_Error(t *testing.T) {
 
 func TestDeleteTutor_Success(t *testing.T) {
 	repo := new(mockTutorRepo)
-	svc := service.NewTutorService(repo)
+	svc := service.NewTutorService(repo, nil, nil)
 
 	repo.On("Delete", mock.Anything, "tutor-1").Return(nil)
 

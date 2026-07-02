@@ -135,6 +135,10 @@ func (m *mockTutorService) Create(ctx context.Context, req models.CreateTutorReq
 	args := m.Called(ctx, req, passwordHash)
 	return args.Get(0).(models.Tutor), args.Error(1)
 }
+func (m *mockTutorService) Register(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
+	args := m.Called(ctx, req, passwordHash)
+	return args.Get(0).(models.Tutor), args.Error(1)
+}
 func (m *mockTutorService) GetAll(ctx context.Context) ([]models.Tutor, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]models.Tutor), args.Error(1)

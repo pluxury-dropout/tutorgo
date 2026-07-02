@@ -9,6 +9,7 @@ import (
 
 type TutorRepository interface {
 	Create(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error)
+	CreateTx(ctx context.Context, q Querier, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error)
 	GetAll(ctx context.Context) ([]models.Tutor, error)
 	GetByID(ctx context.Context, id string) (models.Tutor, error)
 	GetByEmail(ctx context.Context, email string) (string, string, error)
@@ -26,8 +27,12 @@ func NewTutorRepository(conn *pgxpool.Pool) TutorRepository {
 	return &tutorRepository{conn: conn}
 }
 func (r *tutorRepository) Create(ctx context.Context, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
+	return r.CreateTx(ctx, r.conn, req, passwordHash)
+}
+
+func (r *tutorRepository) CreateTx(ctx context.Context, q Querier, req models.CreateTutorRequest, passwordHash string) (models.Tutor, error) {
 	var tutor models.Tutor
-	err := r.conn.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`INSERT INTO tutors (email, password_hash, first_name, last_name, phone)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, email, first_name, last_name, phone`,

@@ -58,7 +58,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		LastName:  req.LastName,
 		Phone:     req.Phone,
 	}
-	tutor, err := h.service.Create(c.Request.Context(), createReq, string(passwordHash))
+	tutor, err := h.service.Register(c.Request.Context(), createReq, string(passwordHash))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
