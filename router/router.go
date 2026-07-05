@@ -69,7 +69,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		log.Error("failed to init object storage", "err", err)
 		os.Exit(1)
 	}
-	wbHubManager := handlers.NewWbHubManager(whiteboardService, log, cfg.JWTSecret, origins)
+	wbHubManager := handlers.NewWbHubManager(whiteboardService, subscriptionService, log, cfg.JWTSecret, origins)
 	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager, store)
 
 	r := gin.New()

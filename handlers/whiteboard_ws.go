@@ -203,17 +203,24 @@ func (c *wbClient) writePump() {
 }
 
 // WbHubManager — stores active hubs (one per pageID)
+// subState — узкий интерфейс подписки, чтобы WS-гейт не тянул весь сервис
+// (как middleware.SubscriptionState). Даёт compute-on-read состояние по tutorID.
+type subState interface {
+	State(ctx context.Context, tutorID string) (string, error)
+}
+
 type WbHubManager struct {
 	mu        sync.Mutex
 	hubs      map[string]*wbHub
 	svc       service.WhiteboardService
+	subs      subState
 	log       *slog.Logger
 	jwtSecret string
 	origins   map[string]bool
 	upgrader  websocket.Upgrader
 }
 
-func NewWbHubManager(svc service.WhiteboardService, log *slog.Logger, jwtSecret string, allowedOrigins []string) *WbHubManager {
+func NewWbHubManager(svc service.WhiteboardService, subs subState, log *slog.Logger, jwtSecret string, allowedOrigins []string) *WbHubManager {
 	origins := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		// Match gin-cors's tolerance: env vars often carry stray whitespace or a
@@ -226,6 +233,7 @@ func NewWbHubManager(svc service.WhiteboardService, log *slog.Logger, jwtSecret 
 	m := &WbHubManager{
 		hubs:      make(map[string]*wbHub),
 		svc:       svc,
+		subs:      subs,
 		log:       log,
 		jwtSecret: jwtSecret,
 		origins:   origins,
@@ -281,10 +289,19 @@ func (m *WbHubManager) authorizeWS(ctx context.Context, svc service.WhiteboardSe
 	// Try tutor access JWT first.
 	if tutorID, ok := m.parseTutorJWT(token); ok {
 		owned, err := svc.PageBelongsToTutor(ctx, pageID, tutorID)
-		if err == nil && owned {
-			return true
+		if err != nil || !owned {
+			return false
 		}
-		return false
+
+		state, _ := m.subs.State(ctx, tutorID)
+		switch state {
+		case service.StateActive, service.StateGrace:
+			return true
+		case service.StateBlocked:
+			return false
+		default: //если статус не обработается из-за БД, пусть работает дальше
+		}
+		return true
 	}
 
 	// Fall back to invite UUID: token must map to a board, and pageID must
