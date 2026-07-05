@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -163,6 +164,17 @@ export default function ProfilePage() {
             {savingPassword ? 'Сохраняю...' : 'Изменить пароль'}
           </Button>
         </form>
+
+        {/* Подписка */}
+        <div className="border rounded-lg p-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Подписка</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Тариф и оплата доступа</p>
+          </div>
+          <Link href="/subscription" className="text-sm text-primary underline underline-offset-2">
+            Управлять
+          </Link>
+        </div>
       </div>
     </>
   )
