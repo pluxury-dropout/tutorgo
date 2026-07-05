@@ -111,6 +111,14 @@ api.interceptors.response.use(
       }
     }
 
+    // 402 = подписка протухла между guard-проверкой и запросом. Страховка:
+    // уводим на paywall. Не мешает 401/refresh (другой статус, ранний выход выше).
+    if (error.response?.status === 402 && typeof window !== 'undefined') {
+      if (window.location.pathname !== '/subscription') {
+        window.location.href = '/subscription'
+      }
+    }
+
     const status = error.response?.status ?? 0
     const data = error.response?.data
 
