@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { Menu, GraduationCap } from 'lucide-react'
+import Link from 'next/link'
+import { Menu, GraduationCap, X } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
+import { subscriptionApi, SubState } from '@/lib/api/subscription'
+import { decideAccess, PAYWALL_PATH } from '@/lib/subscriptionGuard'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore()
@@ -14,6 +17,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [subState, setSubState] = useState<SubState | null>(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -21,7 +26,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (mounted && !isAuthenticated) router.replace('/login')
   }, [mounted, isAuthenticated, router])
 
+  // Guard подписки: грузим только когда аутентифицированы. Ошибка → blocked (fail-closed).
+  useEffect(() => {
+    if (!mounted || !isAuthenticated) return
+    let alive = true
+    subscriptionApi.get()
+      .then((s) => { if (alive) setSubState(s.state) })
+      .catch(() => { if (alive) setSubState('blocked') })
+    return () => { alive = false }
+  }, [mounted, isAuthenticated])
+
+  // Редирект на paywall — в эффекте, а не в теле рендера (иначе "Cannot update
+  // Router while rendering"). Тот же паттерн, что у auth-редиректа выше.
+  useEffect(() => {
+    if (subState && decideAccess(subState, pathname).action === 'redirect') {
+      router.replace(PAYWALL_PATH)
+    }
+  }, [subState, pathname, router])
+
   if (!mounted || !isAuthenticated) return null
+
+  // Ждём статус подписки — не мигаем содержимым.
+  if (subState === null) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+      </div>
+    )
+  }
+
+  // Навигацию выполняет эффект выше; здесь только не рендерим children,
+  // пока идёт редирект (иначе мелькнёт защищённая страница).
+  const decision = decideAccess(subState, pathname)
+  if (decision.action === 'redirect') return null
 
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: '100dvh' }}>
@@ -58,6 +95,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <MobileBottomNav />
+
+      {decision.banner && !bannerDismissed && (
+        <div className="fixed bottom-4 left-4 z-50 max-w-xs rounded-lg border bg-card shadow-lg px-4 py-3 text-sm animate-in slide-in-from-bottom-2">
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+            aria-label="Закрыть"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <p className="pr-4 font-medium">Тариф истёк</p>
+          <p className="pr-4 mt-0.5 text-muted-foreground">
+            Оплатите — доступ скоро закроется.{' '}
+            <Link href={PAYWALL_PATH} className="text-primary underline underline-offset-2">
+              Перейти к оплате
+            </Link>
+          </p>
+        </div>
+      )}
     </div>
   )
 }
