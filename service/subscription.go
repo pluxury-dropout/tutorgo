@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	PriceMonthly = 5000
-	PriceYearly  = 48000
+	PriceMonthly = 10000
+	PriceYearly  = 90000
 	Currency     = "KZT"
 )
 
