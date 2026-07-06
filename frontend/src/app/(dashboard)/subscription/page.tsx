@@ -23,12 +23,15 @@ function formatPrice(amount: number, currency: string): string {
 
 export default function SubscriptionPage() {
   const [sub, setSub] = useState<Subscription | null>(null)
+  const [failed, setFailed] = useState(false)
   const [paying, setPaying] = useState<Plan | null>(null)
 
   async function load() {
+    setFailed(false)
     try {
       setSub(await subscriptionApi.get())
     } catch {
+      setFailed(true)
       toast.error('Не удалось загрузить статус подписки')
     }
   }
@@ -56,6 +59,18 @@ export default function SubscriptionPage() {
     } finally {
       setPaying(null)
     }
+  }
+
+  if (failed) {
+    return (
+      <>
+        <PageHeader title="Подписка" />
+        <div className="mt-6 max-w-2xl space-y-4">
+          <p className="text-sm text-muted-foreground">Не удалось загрузить статус подписки.</p>
+          <Button onClick={load}>Повторить</Button>
+        </div>
+      </>
+    )
   }
 
   if (!sub) {
