@@ -28,6 +28,39 @@ func (m *mockSubRepo) CreateTrialTx(ctx context.Context, q repository.Querier, t
 	args := m.Called(ctx, q, tutorID)
 	return args.Error(0)
 }
+func (m *mockSubRepo) InsertPendingPayment(ctx context.Context, tutorID, orderID, plan string, amount int) (bool, error) {
+	args := m.Called(ctx, tutorID, orderID, plan, amount)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockSubRepo) MarkPaymentSuccess(ctx context.Context, orderID, ppid string) (bool, error) {
+	args := m.Called(ctx, orderID, ppid)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockSubRepo) MarkPaymentFailed(ctx context.Context, orderID string) error {
+	return m.Called(ctx, orderID).Error(0)
+}
+func (m *mockSubRepo) GetPaymentByOrderID(ctx context.Context, orderID string) (*models.SubscriptionPayment, error) {
+	args := m.Called(ctx, orderID)
+	p, _ := args.Get(0).(*models.SubscriptionPayment)
+	return p, args.Error(1)
+}
+func (m *mockSubRepo) StartPaidPeriod(ctx context.Context, tutorID, plan, token string, pe time.Time) error {
+	return m.Called(ctx, tutorID, plan, token, pe).Error(0)
+}
+func (m *mockSubRepo) RenewPeriod(ctx context.Context, tutorID, plan string, pe time.Time) error {
+	return m.Called(ctx, tutorID, plan, pe).Error(0)
+}
+func (m *mockSubRepo) ListDueAutopay(ctx context.Context, now time.Time) ([]models.DueSubscription, error) {
+	args := m.Called(ctx, now)
+	d, _ := args.Get(0).([]models.DueSubscription)
+	return d, args.Error(1)
+}
+func (m *mockSubRepo) Cancel(ctx context.Context, tutorID string) error {
+	return m.Called(ctx, tutorID).Error(0)
+}
+func (m *mockSubRepo) SetPendingPlan(ctx context.Context, tutorID, plan string) error {
+	return m.Called(ctx, tutorID, plan).Error(0)
+}
 
 func TestSubscriptionService_State_NoRowBlocked(t *testing.T) {
 	repo := new(mockSubRepo)

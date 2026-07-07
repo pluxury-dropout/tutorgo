@@ -26,3 +26,21 @@ type SubscriptionStatus struct {
 type SubscriptionPlanRequest struct {
 	Plan string `json:"plan" validate:"required,oneof=monthly yearly"`
 }
+
+// SubscriptionPayment — строка лога платежей (аудит + идемпотентность).
+type SubscriptionPayment struct {
+	TutorID string
+	OrderID string
+	Plan    string
+	Amount  int
+	Status  string
+}
+
+// DueSubscription — подписка, у которой пора списывать автопродление.
+type DueSubscription struct {
+	TutorID     string
+	Plan        string
+	PendingPlan *string
+	CardToken   string
+	PeriodEnd   time.Time
+}
