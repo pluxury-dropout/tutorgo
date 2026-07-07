@@ -342,6 +342,46 @@ func TestRenewDue_OneSubErrorDoesNotAbortTick(t *testing.T) {
 	assert.Equal(t, int64(1), n)
 }
 
+func TestRenewDue_RecoveryAmbiguousStatus_SkipsCharge(t *testing.T) {
+	// Вчерашняя pending-строка, CheckStatus упал: судьба списания неизвестна —
+	// новое списание в этот тик запрещено.
+	repo := new(mockSubRepo)
+	prov := &fakeProvider{statusErr: errors.New("status timeout")}
+	pe := time.Now().Add(-48 * time.Hour)
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	priorOrderID := "t1:" + pe.Format(time.RFC3339) + ":" + yesterday
+	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
+		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: pe}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).
+		Return([]models.SubscriptionPayment{{TutorID: "t1", OrderID: priorOrderID, Plan: "monthly", Amount: 10000, Status: "pending"}}, nil)
+	svc := service.NewSubscriptionService(repo, prov)
+
+	n, err := svc.RenewDue(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), n)
+	assert.Equal(t, "", prov.lastCharge.token) // Charge НЕ вызывался
+	repo.AssertNotCalled(t, "InsertPendingPayment", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "MarkPaymentFailed", mock.Anything, mock.Anything)
+}
+
+func TestRenewDue_ChargeErrAmbiguous_LeavesPending(t *testing.T) {
+	// Charge упал и CheckStatus упал: строка должна остаться pending
+	// (НЕ failed), чтобы recovery следующего тика могла её доразрулить.
+	repo := new(mockSubRepo)
+	prov := &fakeProvider{chargeErr: errors.New("charge timeout"), statusErr: errors.New("status timeout")}
+	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
+		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
+	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(true, nil)
+	svc := service.NewSubscriptionService(repo, prov)
+
+	n, err := svc.RenewDue(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), n)
+	repo.AssertNotCalled(t, "MarkPaymentFailed", mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "MarkSuccessAndRenew", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestCancel(t *testing.T) {
 	repo := new(mockSubRepo)
 	repo.On("Cancel", mock.Anything, "t1").Return(nil)

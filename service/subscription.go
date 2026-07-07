@@ -142,26 +142,32 @@ func (s *subscriptionService) RenewDue(ctx context.Context) (int64, error) {
 		if err != nil {
 			continue // без картины периода не списываем; ретрай следующим тиком
 		}
-		recovered := false
+		skipCharge := false
 		for _, p := range prior {
 			if p.OrderID == orderID || p.Status != "pending" {
-				continue // сегодняшняя строка (может быть в полёте у другого инстанса) или терминальная
+				continue // сегодняшняя строка (может быть в полёте) или терминальная
 			}
 			st, sErr := s.provider.CheckStatus(ctx, p.OrderID)
-			if sErr == nil && st == "success" {
-				// Деньги уже взяты (по плану p.Plan) — активируем без нового списания.
+			switch {
+			case sErr == nil && st == "success":
+				// Деньги уже взяты (план p.Plan) — активируем без нового списания.
 				newEnd := d.PeriodEnd.AddDate(0, 0, planDays(p.Plan))
 				if ok, rErr := s.repo.MarkSuccessAndRenew(ctx, p.OrderID, p.OrderID, d.TutorID, p.Plan, newEnd); rErr == nil && ok {
 					renewed++
 				}
-				recovered = true
+				skipCharge = true
+			case sErr == nil && st == "failed":
+				_ = s.repo.MarkPaymentFailed(ctx, p.OrderID) // подтверждённый провал — строка закрыта
+			default:
+				// CheckStatus упал или статус не-терминальный: судьба прошлого
+				// Charge неизвестна → новое списание запрещено. Ретрай следующим тиком.
+				skipCharge = true
+			}
+			if skipCharge {
 				break
 			}
-			if sErr == nil && st == "failed" {
-				_ = s.repo.MarkPaymentFailed(ctx, p.OrderID) // гигиена: прошлый день не в полёте
-			}
 		}
-		if recovered {
+		if skipCharge {
 			continue
 		}
 
@@ -176,10 +182,15 @@ func (s *subscriptionService) RenewDue(ctx context.Context) (int64, error) {
 		ppid, err := s.provider.Charge(ctx, orderID, d.CardToken, planAmount(plan))
 		if err != nil {
 			// Reconciliation: g2g не дедупит, Charge мог пройти (таймаут).
-			if st, sErr := s.provider.CheckStatus(ctx, orderID); sErr == nil && st == "success" {
+			st, sErr := s.provider.CheckStatus(ctx, orderID)
+			switch {
+			case sErr == nil && st == "success":
 				ppid = orderID // прошёл; provider_payment_id недоступен — пишем orderID
-			} else {
-				_ = s.repo.MarkPaymentFailed(ctx, orderID) // остаётся в grace, ретрай завтра
+			case sErr == nil && st == "failed":
+				_ = s.repo.MarkPaymentFailed(ctx, orderID) // подтверждённый провал; ретрай завтра
+				continue
+			default:
+				// Неоднозначно: оставляем pending — recovery следующего тика доразрулит.
 				continue
 			}
 		}
