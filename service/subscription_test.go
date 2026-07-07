@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -12,6 +13,35 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+type fakeProvider struct {
+	initURL     string
+	initErr     error
+	chargeID    string
+	chargeErr   error
+	statusValue string // ответ CheckStatus (reconciliation)
+	statusErr   error
+	callback    service.Callback
+	callbackErr error
+	lastCharge  struct {
+		orderID, token string
+		amount         int
+	}
+}
+
+func (f *fakeProvider) InitPayment(_ context.Context, _, _, _ string, _ int) (string, error) {
+	return f.initURL, f.initErr
+}
+func (f *fakeProvider) Charge(_ context.Context, orderID, token string, amount int) (string, error) {
+	f.lastCharge.orderID, f.lastCharge.token, f.lastCharge.amount = orderID, token, amount
+	return f.chargeID, f.chargeErr
+}
+func (f *fakeProvider) CheckStatus(_ context.Context, _ string) (string, error) {
+	return f.statusValue, f.statusErr
+}
+func (f *fakeProvider) ParseCallback(_ *http.Request) (service.Callback, error) {
+	return f.callback, f.callbackErr
+}
 
 type mockSubRepo struct{ mock.Mock }
 
@@ -65,7 +95,7 @@ func (m *mockSubRepo) SetPendingPlan(ctx context.Context, tutorID, plan string) 
 func TestSubscriptionService_State_NoRowBlocked(t *testing.T) {
 	repo := new(mockSubRepo)
 	repo.On("GetByTutor", mock.Anything, "t1").Return((*models.Subscription)(nil), nil)
-	svc := service.NewSubscriptionService(repo)
+	svc := service.NewSubscriptionService(repo, &fakeProvider{})
 
 	state, err := svc.State(context.Background(), "t1")
 	assert.NoError(t, err)
@@ -75,7 +105,7 @@ func TestSubscriptionService_State_NoRowBlocked(t *testing.T) {
 func TestSubscriptionService_GetStatus_IncludesPrices(t *testing.T) {
 	repo := new(mockSubRepo)
 	repo.On("GetByTutor", mock.Anything, "t1").Return(&models.Subscription{Grandfathered: true}, nil)
-	svc := service.NewSubscriptionService(repo)
+	svc := service.NewSubscriptionService(repo, &fakeProvider{})
 
 	st, err := svc.GetStatus(context.Background(), "t1")
 	assert.NoError(t, err)
@@ -90,7 +120,7 @@ func TestSubscriptionService_Confirm_ActivatesMonthly(t *testing.T) {
 		// период ~30 дней вперёд
 		return pe.After(time.Now().Add(29*24*time.Hour)) && pe.Before(time.Now().Add(31*24*time.Hour))
 	})).Return(nil)
-	svc := service.NewSubscriptionService(repo)
+	svc := service.NewSubscriptionService(repo, &fakeProvider{})
 
 	err := svc.Confirm(context.Background(), "t1", "monthly")
 	assert.NoError(t, err)
@@ -103,9 +133,22 @@ func TestSubscriptionService_Confirm_ActivatesYearly(t *testing.T) {
 		// период ~365 дней вперёд
 		return pe.After(time.Now().Add(364*24*time.Hour)) && pe.Before(time.Now().Add(366*24*time.Hour))
 	})).Return(nil)
-	svc := service.NewSubscriptionService(repo)
+	svc := service.NewSubscriptionService(repo, &fakeProvider{})
 
 	err := svc.Confirm(context.Background(), "t1", "yearly")
 	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestCheckout_InsertsPendingAndReturnsURL(t *testing.T) {
+	repo := new(mockSubRepo)
+	prov := &fakeProvider{initURL: "https://pay.freedom/redirect"}
+	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).
+		Return(true, nil)
+	svc := service.NewSubscriptionService(repo, prov)
+
+	url, err := svc.Checkout(context.Background(), "t1", "monthly")
+	assert.NoError(t, err)
+	assert.Equal(t, "https://pay.freedom/redirect", url)
 	repo.AssertExpectations(t)
 }

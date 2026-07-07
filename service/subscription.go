@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -23,11 +25,26 @@ type SubscriptionService interface {
 }
 
 type subscriptionService struct {
-	repo repository.SubscriptionRepository
+	repo     repository.SubscriptionRepository
+	provider PaymentProvider
 }
 
-func NewSubscriptionService(repo repository.SubscriptionRepository) SubscriptionService {
-	return &subscriptionService{repo: repo}
+func NewSubscriptionService(repo repository.SubscriptionRepository, provider PaymentProvider) SubscriptionService {
+	return &subscriptionService{repo: repo, provider: provider}
+}
+
+func planAmount(plan string) int {
+	if plan == "yearly" {
+		return PriceYearly
+	}
+	return PriceMonthly
+}
+
+func planDays(plan string) int {
+	if plan == "yearly" {
+		return 365
+	}
+	return 30
 }
 
 func (s *subscriptionService) State(ctx context.Context, tutorID string) (string, error) {
@@ -54,9 +71,17 @@ func (s *subscriptionService) GetStatus(ctx context.Context, tutorID string) (mo
 	return st, nil
 }
 
-// Checkout — заглушка. Позже: создание платёжной сессии у провайдера.
 func (s *subscriptionService) Checkout(ctx context.Context, tutorID, plan string) (string, error) {
-	return fmt.Sprintf("https://pay.example.invalid/checkout?tutor=%s&plan=%s", tutorID, plan), nil
+	orderID := uuid.NewString()
+	amount := planAmount(plan)
+	claimed, err := s.repo.InsertPendingPayment(ctx, tutorID, orderID, plan, amount)
+	if err != nil {
+		return "", err
+	}
+	if !claimed {
+		return "", fmt.Errorf("duplicate order_id %s", orderID) // uuid-коллизия ~ невозможна
+	}
+	return s.provider.InitPayment(ctx, orderID, tutorID, plan, amount)
 }
 
 // Confirm — заглушка вместо вебхука провайдера: активирует подписку.

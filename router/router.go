@@ -45,7 +45,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
-	subscriptionService := service.NewSubscriptionService(subscriptionRepo)
+	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
