@@ -196,6 +196,7 @@ git commit -m "feat(subscriptions): PaymentProvider interface + Callback + StubP
 - Modify: `models/subscription.go` (add structs)
 - Modify: `repository/subscription.go` (extend interface + SQL impl)
 - Test: `repository/subscription_integration_test.go` (build tag `integration`)
+- Modify: `service/subscription_test.go` (add stub methods to `mockSubRepo` so it still satisfies the extended interface — otherwise `go test ./service/` won't compile until T4)
 
 **Interfaces:**
 - Consumes: `models.Subscription` (task-независимо), `repository.Querier`.
@@ -478,17 +479,56 @@ func TestClaim_MarkSuccess_OnlyOneActivatesConcurrently(t *testing.T) {
 
 > `seedTutorWithSubscription` — маленький helper в этом же файле: `INSERT INTO tutors ...; INSERT INTO subscriptions (tutor_id, plan, period_end) VALUES ($1,'monthly', now())`, возвращает UUID, регистрирует cleanup. Написать по образцу существующих INSERT в migration 018.
 
-- [ ] **Step 4: Скомпилировать оба варианта**
+- [ ] **Step 4: Добавить stub-методы в `mockSubRepo` (чтобы service-тесты компилировались)**
 
-Run: `go build ./...` (обычная сборка — integration-тест исключён тегом).
-Expected: без ошибок.
-Run (если есть локальная БД с применённой 019): `go test -tags=integration ./repository/ -run TestClaim -v`
-Expected: PASS (оба «ровно один»). Без БД: `t.Skip`.
+В `service/subscription_test.go` в `mockSubRepo` дописать заглушки для всех новых методов интерфейса (реальную настройку `.On(...)` добавит T4/T5):
 
-- [ ] **Step 5: Commit**
+```go
+func (m *mockSubRepo) InsertPendingPayment(ctx context.Context, tutorID, orderID, plan string, amount int) (bool, error) {
+	args := m.Called(ctx, tutorID, orderID, plan, amount)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockSubRepo) MarkPaymentSuccess(ctx context.Context, orderID, ppid string) (bool, error) {
+	args := m.Called(ctx, orderID, ppid)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockSubRepo) MarkPaymentFailed(ctx context.Context, orderID string) error {
+	return m.Called(ctx, orderID).Error(0)
+}
+func (m *mockSubRepo) GetPaymentByOrderID(ctx context.Context, orderID string) (*models.SubscriptionPayment, error) {
+	args := m.Called(ctx, orderID)
+	p, _ := args.Get(0).(*models.SubscriptionPayment)
+	return p, args.Error(1)
+}
+func (m *mockSubRepo) StartPaidPeriod(ctx context.Context, tutorID, plan, token string, pe time.Time) error {
+	return m.Called(ctx, tutorID, plan, token, pe).Error(0)
+}
+func (m *mockSubRepo) RenewPeriod(ctx context.Context, tutorID, plan string, pe time.Time) error {
+	return m.Called(ctx, tutorID, plan, pe).Error(0)
+}
+func (m *mockSubRepo) ListDueAutopay(ctx context.Context, now time.Time) ([]models.DueSubscription, error) {
+	args := m.Called(ctx, now)
+	d, _ := args.Get(0).([]models.DueSubscription)
+	return d, args.Error(1)
+}
+func (m *mockSubRepo) Cancel(ctx context.Context, tutorID string) error {
+	return m.Called(ctx, tutorID).Error(0)
+}
+func (m *mockSubRepo) SetPendingPlan(ctx context.Context, tutorID, plan string) error {
+	return m.Called(ctx, tutorID, plan).Error(0)
+}
+```
+
+- [ ] **Step 5: Скомпилировать и прогнать тесты**
+
+Run: `go build ./...` (integration-тест исключён тегом) — без ошибок.
+Run: `go test ./...` — PASS (существующие service-тесты компилируются с расширенным моком).
+Run (если есть локальная БД с применённой 019): `go test -tags=integration ./repository/ -run TestClaim -v` — PASS. Без БД: `t.Skip`.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add models/subscription.go repository/subscription.go repository/subscription_integration_test.go
+git add models/subscription.go repository/subscription.go repository/subscription_integration_test.go service/subscription_test.go
 git commit -m "feat(subscriptions): payment repo methods + atomicity integration test"
 ```
 
@@ -556,43 +596,7 @@ func TestCheckout_InsertsPendingAndReturnsURL(t *testing.T) {
 }
 ```
 
-Добавить в `mockSubRepo` метод-заглушку для `InsertPendingPayment` (и остальные новые методы репо — чтобы мок удовлетворял расширенному интерфейсу):
-
-```go
-func (m *mockSubRepo) InsertPendingPayment(ctx context.Context, tutorID, orderID, plan string, amount int) (bool, error) {
-	args := m.Called(ctx, tutorID, orderID, plan, amount)
-	return args.Bool(0), args.Error(1)
-}
-func (m *mockSubRepo) MarkPaymentSuccess(ctx context.Context, orderID, ppid string) (bool, error) {
-	args := m.Called(ctx, orderID, ppid)
-	return args.Bool(0), args.Error(1)
-}
-func (m *mockSubRepo) MarkPaymentFailed(ctx context.Context, orderID string) error {
-	return m.Called(ctx, orderID).Error(0)
-}
-func (m *mockSubRepo) GetPaymentByOrderID(ctx context.Context, orderID string) (*models.SubscriptionPayment, error) {
-	args := m.Called(ctx, orderID)
-	p, _ := args.Get(0).(*models.SubscriptionPayment)
-	return p, args.Error(1)
-}
-func (m *mockSubRepo) StartPaidPeriod(ctx context.Context, tutorID, plan, token string, pe time.Time) error {
-	return m.Called(ctx, tutorID, plan, token, pe).Error(0)
-}
-func (m *mockSubRepo) RenewPeriod(ctx context.Context, tutorID, plan string, pe time.Time) error {
-	return m.Called(ctx, tutorID, plan, pe).Error(0)
-}
-func (m *mockSubRepo) ListDueAutopay(ctx context.Context, now time.Time) ([]models.DueSubscription, error) {
-	args := m.Called(ctx, now)
-	d, _ := args.Get(0).([]models.DueSubscription)
-	return d, args.Error(1)
-}
-func (m *mockSubRepo) Cancel(ctx context.Context, tutorID string) error {
-	return m.Called(ctx, tutorID).Error(0)
-}
-func (m *mockSubRepo) SetPendingPlan(ctx context.Context, tutorID, plan string) error {
-	return m.Called(ctx, tutorID, plan).Error(0)
-}
-```
+> `mockSubRepo` уже имеет stub-методы для всех новых репо-методов (добавлены в T3). Здесь только `.On("InsertPendingPayment", ...)` в самом тесте + `fakeProvider`.
 
 Обновить существующие `service.NewSubscriptionService(repo)` в файле на `service.NewSubscriptionService(repo, &fakeProvider{})` (тесты State/GetStatus/Confirm).
 
