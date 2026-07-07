@@ -117,15 +117,12 @@ func (s *subscriptionService) HandleWebhook(ctx context.Context, r *http.Request
 	if cb.Status != "success" {
 		return s.repo.MarkPaymentFailed(ctx, cb.OrderID)
 	}
-	activated, err := s.repo.MarkPaymentSuccess(ctx, cb.OrderID, cb.ProviderPaymentID)
-	if err != nil {
-		return err
-	}
-	if !activated {
-		return nil // повторный webhook — уже активировано
-	}
 	periodEnd := time.Now().AddDate(0, 0, planDays(pay.Plan))
-	return s.repo.StartPaidPeriod(ctx, pay.TutorID, pay.Plan, cb.CardToken, periodEnd)
+	// Атомарно: платёж → success + активация периода. Ошибка → rollback обоих,
+	// платёж остаётся pending, хендлер отдаст 5xx → провайдер передоставит.
+	// false = повторный webhook (уже активировано) → no-op.
+	_, err = s.repo.MarkSuccessAndStartPeriod(ctx, cb.OrderID, cb.ProviderPaymentID, pay.TutorID, pay.Plan, cb.CardToken, periodEnd)
+	return err
 }
 
 func (s *subscriptionService) RenewDue(ctx context.Context) (int64, error) {
@@ -136,41 +133,61 @@ func (s *subscriptionService) RenewDue(ctx context.Context) (int64, error) {
 	today := time.Now().Format("2006-01-02")
 	var renewed int64
 	for _, d := range due {
+		periodKey := fmt.Sprintf("%s:%s:", d.TutorID, d.PeriodEnd.Format(time.RFC3339))
+		orderID := periodKey + today
+
+		// Recovery: незавершённые попытки ПРОШЛЫХ дней этого периода.
+		// Charge мог пройти, а активация упасть — тогда списывать снова нельзя.
+		prior, err := s.repo.ListPeriodPayments(ctx, periodKey)
+		if err != nil {
+			continue // без картины периода не списываем; ретрай следующим тиком
+		}
+		recovered := false
+		for _, p := range prior {
+			if p.OrderID == orderID || p.Status != "pending" {
+				continue // сегодняшняя строка (может быть в полёте у другого инстанса) или терминальная
+			}
+			st, sErr := s.provider.CheckStatus(ctx, p.OrderID)
+			if sErr == nil && st == "success" {
+				// Деньги уже взяты (по плану p.Plan) — активируем без нового списания.
+				newEnd := d.PeriodEnd.AddDate(0, 0, planDays(p.Plan))
+				if ok, rErr := s.repo.MarkSuccessAndRenew(ctx, p.OrderID, p.OrderID, d.TutorID, p.Plan, newEnd); rErr == nil && ok {
+					renewed++
+				}
+				recovered = true
+				break
+			}
+			if sErr == nil && st == "failed" {
+				_ = s.repo.MarkPaymentFailed(ctx, p.OrderID) // гигиена: прошлый день не в полёте
+			}
+		}
+		if recovered {
+			continue
+		}
+
 		plan := d.Plan
 		if d.PendingPlan != nil {
 			plan = *d.PendingPlan // отложенная смена тарифа применяется на этом списании
 		}
-		orderID := fmt.Sprintf("%s:%s:%s", d.TutorID, d.PeriodEnd.Format(time.RFC3339), today)
 		claimed, err := s.repo.InsertPendingPayment(ctx, d.TutorID, orderID, plan, planAmount(plan))
-		if err != nil {
-			return renewed, err
-		}
-		if !claimed {
-			continue // сегодня уже пытались (другой инстанс / повтор тика)
+		if err != nil || !claimed {
+			continue // ошибка → ретрай следующим тиком; !claimed → сегодня уже пытались
 		}
 		ppid, err := s.provider.Charge(ctx, orderID, d.CardToken, planAmount(plan))
 		if err != nil {
-			// Reconciliation: g2g не дедупит, а Charge мог реально пройти (таймаут).
-			// Спрашиваем статус; MarkFailed только при подтверждённом не-успехе.
+			// Reconciliation: g2g не дедупит, Charge мог пройти (таймаут).
 			if st, sErr := s.provider.CheckStatus(ctx, orderID); sErr == nil && st == "success" {
-				ppid = orderID // платёж прошёл; provider_payment_id недоступен — пишем orderID
+				ppid = orderID // прошёл; provider_payment_id недоступен — пишем orderID
 			} else {
 				_ = s.repo.MarkPaymentFailed(ctx, orderID) // остаётся в grace, ретрай завтра
 				continue
 			}
 		}
-		activated, err := s.repo.MarkPaymentSuccess(ctx, orderID, ppid)
-		if err != nil {
-			return renewed, err
+		newEnd := d.PeriodEnd.AddDate(0, 0, planDays(plan))
+		if ok, rErr := s.repo.MarkSuccessAndRenew(ctx, orderID, ppid, d.TutorID, plan, newEnd); rErr == nil && ok {
+			renewed++
 		}
-		if !activated {
-			continue
-		}
-		newEnd := d.PeriodEnd.AddDate(0, 0, planDays(plan)) // аддитивно от старого period_end
-		if err := s.repo.RenewPeriod(ctx, d.TutorID, plan, newEnd); err != nil {
-			return renewed, err
-		}
-		renewed++
+		// rErr != nil: платёж остался pending — recovery следующего тика доразрулит через CheckStatus.
 	}
 	return renewed, nil
 }

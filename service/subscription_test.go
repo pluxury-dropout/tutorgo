@@ -64,10 +64,6 @@ func (m *mockSubRepo) InsertPendingPayment(ctx context.Context, tutorID, orderID
 	args := m.Called(ctx, tutorID, orderID, plan, amount)
 	return args.Bool(0), args.Error(1)
 }
-func (m *mockSubRepo) MarkPaymentSuccess(ctx context.Context, orderID, ppid string) (bool, error) {
-	args := m.Called(ctx, orderID, ppid)
-	return args.Bool(0), args.Error(1)
-}
 func (m *mockSubRepo) MarkPaymentFailed(ctx context.Context, orderID string) error {
 	return m.Called(ctx, orderID).Error(0)
 }
@@ -76,11 +72,18 @@ func (m *mockSubRepo) GetPaymentByOrderID(ctx context.Context, orderID string) (
 	p, _ := args.Get(0).(*models.SubscriptionPayment)
 	return p, args.Error(1)
 }
-func (m *mockSubRepo) StartPaidPeriod(ctx context.Context, tutorID, plan, token string, pe time.Time) error {
-	return m.Called(ctx, tutorID, plan, token, pe).Error(0)
+func (m *mockSubRepo) MarkSuccessAndStartPeriod(ctx context.Context, orderID, ppid, tutorID, plan, token string, pe time.Time) (bool, error) {
+	args := m.Called(ctx, orderID, ppid, tutorID, plan, token, pe)
+	return args.Bool(0), args.Error(1)
 }
-func (m *mockSubRepo) RenewPeriod(ctx context.Context, tutorID, plan string, pe time.Time) error {
-	return m.Called(ctx, tutorID, plan, pe).Error(0)
+func (m *mockSubRepo) MarkSuccessAndRenew(ctx context.Context, orderID, ppid, tutorID, plan string, pe time.Time) (bool, error) {
+	args := m.Called(ctx, orderID, ppid, tutorID, plan, pe)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockSubRepo) ListPeriodPayments(ctx context.Context, prefix string) ([]models.SubscriptionPayment, error) {
+	args := m.Called(ctx, prefix)
+	p, _ := args.Get(0).([]models.SubscriptionPayment)
+	return p, args.Error(1)
 }
 func (m *mockSubRepo) ListDueAutopay(ctx context.Context, now time.Time) ([]models.DueSubscription, error) {
 	args := m.Called(ctx, now)
@@ -162,8 +165,7 @@ func TestHandleWebhook_Success_StartsPeriod(t *testing.T) {
 	}}
 	repo.On("GetPaymentByOrderID", mock.Anything, "o1").
 		Return(&models.SubscriptionPayment{TutorID: "t1", OrderID: "o1", Plan: "monthly", Amount: 10000, Status: "pending"}, nil)
-	repo.On("MarkPaymentSuccess", mock.Anything, "o1", "pp1").Return(true, nil)
-	repo.On("StartPaidPeriod", mock.Anything, "t1", "monthly", "tok1", mock.AnythingOfType("time.Time")).Return(nil)
+	repo.On("MarkSuccessAndStartPeriod", mock.Anything, "o1", "pp1", "t1", "monthly", "tok1", mock.AnythingOfType("time.Time")).Return(true, nil)
 	svc := service.NewSubscriptionService(repo, prov)
 
 	err := svc.HandleWebhook(context.Background(), httptest.NewRequest("POST", "/subscription/webhook", nil))
@@ -176,12 +178,12 @@ func TestHandleWebhook_Dedup_NoOp(t *testing.T) {
 	prov := &fakeProvider{callback: service.Callback{OrderID: "o1", ProviderPaymentID: "pp1", Status: "success"}}
 	repo.On("GetPaymentByOrderID", mock.Anything, "o1").
 		Return(&models.SubscriptionPayment{TutorID: "t1", Plan: "monthly", Status: "success"}, nil)
-	repo.On("MarkPaymentSuccess", mock.Anything, "o1", "pp1").Return(false, nil) // уже success
+	repo.On("MarkSuccessAndStartPeriod", mock.Anything, "o1", "pp1", "t1", "monthly", "", mock.AnythingOfType("time.Time")).Return(false, nil) // уже success
 	svc := service.NewSubscriptionService(repo, prov)
 
 	err := svc.HandleWebhook(context.Background(), httptest.NewRequest("POST", "/subscription/webhook", nil))
 	assert.NoError(t, err)
-	repo.AssertNotCalled(t, "StartPaidPeriod", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertExpectations(t)
 }
 
 func TestHandleWebhook_BadSignature(t *testing.T) {
@@ -199,9 +201,9 @@ func TestRenewDue_ChargesAndExtends(t *testing.T) {
 	pe := time.Now().Add(-time.Hour)
 	repo.On("ListDueAutopay", mock.Anything, mock.AnythingOfType("time.Time")).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: pe}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(true, nil)
-	repo.On("MarkPaymentSuccess", mock.Anything, mock.AnythingOfType("string"), "pp-mit").Return(true, nil)
-	repo.On("RenewPeriod", mock.Anything, "t1", "monthly", mock.AnythingOfType("time.Time")).Return(nil)
+	repo.On("MarkSuccessAndRenew", mock.Anything, mock.AnythingOfType("string"), "pp-mit", "t1", "monthly", mock.AnythingOfType("time.Time")).Return(true, nil)
 	svc := service.NewSubscriptionService(repo, prov)
 
 	n, err := svc.RenewDue(context.Background())
@@ -216,10 +218,10 @@ func TestRenewDue_AppliesPendingPlan(t *testing.T) {
 	yearly := "yearly"
 	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", PendingPlan: &yearly, CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	// эффективный план — yearly: claim и charge на yearly-сумму, продление на yearly
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "yearly", service.PriceYearly).Return(true, nil)
-	repo.On("MarkPaymentSuccess", mock.Anything, mock.AnythingOfType("string"), "pp-mit").Return(true, nil)
-	repo.On("RenewPeriod", mock.Anything, "t1", "yearly", mock.AnythingOfType("time.Time")).Return(nil)
+	repo.On("MarkSuccessAndRenew", mock.Anything, mock.AnythingOfType("string"), "pp-mit", "t1", "yearly", mock.AnythingOfType("time.Time")).Return(true, nil)
 	svc := service.NewSubscriptionService(repo, prov)
 
 	n, err := svc.RenewDue(context.Background())
@@ -233,6 +235,7 @@ func TestRenewDue_ChargeFails_MarksFailedNoExtend(t *testing.T) {
 	prov := &fakeProvider{chargeErr: errors.New("declined")}
 	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(true, nil)
 	repo.On("MarkPaymentFailed", mock.Anything, mock.AnythingOfType("string")).Return(nil)
 	svc := service.NewSubscriptionService(repo, prov)
@@ -240,7 +243,7 @@ func TestRenewDue_ChargeFails_MarksFailedNoExtend(t *testing.T) {
 	n, err := svc.RenewDue(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), n)
-	repo.AssertNotCalled(t, "RenewPeriod", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "MarkSuccessAndRenew", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestRenewDue_ChargeErrButReconcileSuccess_Extends(t *testing.T) {
@@ -249,9 +252,9 @@ func TestRenewDue_ChargeErrButReconcileSuccess_Extends(t *testing.T) {
 	prov := &fakeProvider{chargeErr: errors.New("timeout"), statusValue: "success"}
 	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(true, nil)
-	repo.On("MarkPaymentSuccess", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(true, nil)
-	repo.On("RenewPeriod", mock.Anything, "t1", "monthly", mock.AnythingOfType("time.Time")).Return(nil)
+	repo.On("MarkSuccessAndRenew", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"), "t1", "monthly", mock.AnythingOfType("time.Time")).Return(true, nil)
 	svc := service.NewSubscriptionService(repo, prov)
 
 	n, err := svc.RenewDue(context.Background())
@@ -265,6 +268,7 @@ func TestRenewDue_ChargeErrReconcileFailed_MarksFailed(t *testing.T) {
 	prov := &fakeProvider{chargeErr: errors.New("declined"), statusValue: "failed"}
 	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(true, nil)
 	repo.On("MarkPaymentFailed", mock.Anything, mock.AnythingOfType("string")).Return(nil)
 	svc := service.NewSubscriptionService(repo, prov)
@@ -272,7 +276,7 @@ func TestRenewDue_ChargeErrReconcileFailed_MarksFailed(t *testing.T) {
 	n, err := svc.RenewDue(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), n)
-	repo.AssertNotCalled(t, "RenewPeriod", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "MarkSuccessAndRenew", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestRenewDue_NotClaimed_SkipsCharge(t *testing.T) {
@@ -280,6 +284,7 @@ func TestRenewDue_NotClaimed_SkipsCharge(t *testing.T) {
 	prov := &fakeProvider{}
 	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(false, nil)
 	svc := service.NewSubscriptionService(repo, prov)
 
@@ -287,6 +292,54 @@ func TestRenewDue_NotClaimed_SkipsCharge(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), n)
 	assert.Equal(t, "", prov.lastCharge.token) // Charge не вызывался
+	repo.AssertNotCalled(t, "MarkSuccessAndRenew", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRenewDue_RecoversPriorPendingChargedYesterday(t *testing.T) {
+	// Вчерашний Charge прошёл, активация упала: сегодня recovery должен
+	// активировать БЕЗ нового списания.
+	repo := new(mockSubRepo)
+	prov := &fakeProvider{statusValue: "success"}
+	pe := time.Now().Add(-48 * time.Hour)
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	priorOrderID := "t1:" + pe.Format(time.RFC3339) + ":" + yesterday
+	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
+		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: pe}}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).
+		Return([]models.SubscriptionPayment{{TutorID: "t1", OrderID: priorOrderID, Plan: "monthly", Amount: 10000, Status: "pending"}}, nil)
+	repo.On("MarkSuccessAndRenew", mock.Anything, priorOrderID, priorOrderID, "t1", "monthly", mock.AnythingOfType("time.Time")).
+		Return(true, nil)
+	svc := service.NewSubscriptionService(repo, prov)
+
+	n, err := svc.RenewDue(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+	assert.Equal(t, "", prov.lastCharge.token) // Charge НЕ вызывался
+	repo.AssertNotCalled(t, "InsertPendingPayment", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRenewDue_OneSubErrorDoesNotAbortTick(t *testing.T) {
+	// Ошибка InsertPendingPayment у первого репетитора не должна хоронить второго.
+	repo := new(mockSubRepo)
+	prov := &fakeProvider{chargeID: "pp-mit"}
+	pe := time.Now().Add(-time.Hour)
+	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
+		Return([]models.DueSubscription{
+			{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: pe},
+			{TutorID: "t2", Plan: "monthly", CardToken: "tok2", PeriodEnd: pe},
+		}, nil)
+	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
+	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).
+		Return(false, errors.New("db blip"))
+	repo.On("InsertPendingPayment", mock.Anything, "t2", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).
+		Return(true, nil)
+	repo.On("MarkSuccessAndRenew", mock.Anything, mock.AnythingOfType("string"), "pp-mit", "t2", "monthly", mock.AnythingOfType("time.Time")).
+		Return(true, nil)
+	svc := service.NewSubscriptionService(repo, prov)
+
+	n, err := svc.RenewDue(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), n)
 }
 
 func TestCancel(t *testing.T) {

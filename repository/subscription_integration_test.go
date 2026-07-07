@@ -104,7 +104,7 @@ func TestClaim_MarkSuccess_OnlyOneActivatesConcurrently(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			activated, err := repo.MarkPaymentSuccess(ctx, orderID, "pp-"+orderID)
+			activated, err := repo.MarkSuccessAndRenew(ctx, orderID, "pp-"+orderID, tutorID, "monthly", time.Now().AddDate(0, 0, 30))
 			assert.NoError(t, err)
 			acts[i] = activated
 		}(i)

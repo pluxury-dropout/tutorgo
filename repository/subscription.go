@@ -25,11 +25,11 @@ type SubscriptionRepository interface {
 	Activate(ctx context.Context, tutorID, plan string, periodEnd time.Time) error
 	CreateTrialTx(ctx context.Context, q Querier, tutorID string) error
 	InsertPendingPayment(ctx context.Context, tutorID, orderID, plan string, amount int) (bool, error)
-	MarkPaymentSuccess(ctx context.Context, orderID, providerPaymentID string) (bool, error)
 	MarkPaymentFailed(ctx context.Context, orderID string) error
 	GetPaymentByOrderID(ctx context.Context, orderID string) (*models.SubscriptionPayment, error)
-	StartPaidPeriod(ctx context.Context, tutorID, plan, cardToken string, periodEnd time.Time) error
-	RenewPeriod(ctx context.Context, tutorID, plan string, periodEnd time.Time) error
+	MarkSuccessAndStartPeriod(ctx context.Context, orderID, providerPaymentID, tutorID, plan, cardToken string, periodEnd time.Time) (bool, error)
+	MarkSuccessAndRenew(ctx context.Context, orderID, providerPaymentID, tutorID, plan string, periodEnd time.Time) (bool, error)
+	ListPeriodPayments(ctx context.Context, prefix string) ([]models.SubscriptionPayment, error)
 	ListDueAutopay(ctx context.Context, now time.Time) ([]models.DueSubscription, error)
 	Cancel(ctx context.Context, tutorID string) error
 	SetPendingPlan(ctx context.Context, tutorID, plan string) error
@@ -97,19 +97,6 @@ func (r *subscriptionRepository) InsertPendingPayment(ctx context.Context, tutor
 	return tag.RowsAffected() == 1, nil
 }
 
-func (r *subscriptionRepository) MarkPaymentSuccess(ctx context.Context, orderID, providerPaymentID string) (bool, error) {
-	tag, err := r.conn.Exec(ctx,
-		`UPDATE subscription_payments
-		 SET status = 'success', provider_payment_id = $2
-		 WHERE order_id = $1 AND status = 'pending'`,
-		orderID, providerPaymentID,
-	)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() == 1, nil
-}
-
 func (r *subscriptionRepository) MarkPaymentFailed(ctx context.Context, orderID string) error {
 	_, err := r.conn.Exec(ctx,
 		`UPDATE subscription_payments SET status = 'failed'
@@ -135,8 +122,30 @@ func (r *subscriptionRepository) GetPaymentByOrderID(ctx context.Context, orderI
 	return &p, nil
 }
 
-func (r *subscriptionRepository) StartPaidPeriod(ctx context.Context, tutorID, plan, cardToken string, periodEnd time.Time) error {
-	tag, err := r.conn.Exec(ctx,
+// MarkSuccessAndStartPeriod — атомарно (одна транзакция) помечает платёж успешным
+// и запускает платный период (CIT-активация из webhook). false = платёж уже не
+// pending (повторный webhook) — подписка не трогается. Ошибка → rollback обоих
+// шагов: платёж остаётся pending, провайдер передоставит webhook.
+func (r *subscriptionRepository) MarkSuccessAndStartPeriod(ctx context.Context, orderID, providerPaymentID, tutorID, plan, cardToken string, periodEnd time.Time) (bool, error) {
+	tx, err := r.conn.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx,
+		`UPDATE subscription_payments
+		 SET status = 'success', provider_payment_id = $2
+		 WHERE order_id = $1 AND status = 'pending'`,
+		orderID, providerPaymentID,
+	)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil // уже обработан — no-op (rollback пустой tx через defer)
+	}
+	subTag, err := tx.Exec(ctx,
 		`UPDATE subscriptions
 		 SET plan = $2, period_end = $3, card_token = $4, autopay = TRUE,
 		     pending_plan = NULL, updated_at = now()
@@ -144,28 +153,78 @@ func (r *subscriptionRepository) StartPaidPeriod(ctx context.Context, tutorID, p
 		tutorID, plan, periodEnd, cardToken,
 	)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if tag.RowsAffected() == 0 {
-		return errors.New("subscription not found")
+	if subTag.RowsAffected() == 0 {
+		return false, errors.New("subscription not found")
 	}
-	return nil
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func (r *subscriptionRepository) RenewPeriod(ctx context.Context, tutorID, plan string, periodEnd time.Time) error {
-	tag, err := r.conn.Exec(ctx,
+// MarkSuccessAndRenew — то же для MIT-продления: платёж → success + сдвиг
+// period_end (+ применение плана, pending_plan сбрасывается) в одной транзакции.
+func (r *subscriptionRepository) MarkSuccessAndRenew(ctx context.Context, orderID, providerPaymentID, tutorID, plan string, periodEnd time.Time) (bool, error) {
+	tx, err := r.conn.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx,
+		`UPDATE subscription_payments
+		 SET status = 'success', provider_payment_id = $2
+		 WHERE order_id = $1 AND status = 'pending'`,
+		orderID, providerPaymentID,
+	)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	subTag, err := tx.Exec(ctx,
 		`UPDATE subscriptions
 		 SET plan = $2, period_end = $3, pending_plan = NULL, updated_at = now()
 		 WHERE tutor_id = $1`,
 		tutorID, plan, periodEnd,
 	)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if tag.RowsAffected() == 0 {
-		return errors.New("subscription not found")
+	if subTag.RowsAffected() == 0 {
+		return false, errors.New("subscription not found")
 	}
-	return nil
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ListPeriodPayments — платежи периода по префиксу order_id ("tutorID:periodEnd:").
+// Для recovery: находит незавершённые попытки прошлых дней. Таблица маленькая,
+// LIKE без спец-индекса достаточен (order_id не содержит '%'/'_').
+func (r *subscriptionRepository) ListPeriodPayments(ctx context.Context, prefix string) ([]models.SubscriptionPayment, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT tutor_id, order_id, plan, amount, status
+		 FROM subscription_payments WHERE order_id LIKE $1 || '%'`,
+		prefix,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.SubscriptionPayment
+	for rows.Next() {
+		var p models.SubscriptionPayment
+		if err := rows.Scan(&p.TutorID, &p.OrderID, &p.Plan, &p.Amount, &p.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 func (r *subscriptionRepository) ListDueAutopay(ctx context.Context, now time.Time) ([]models.DueSubscription, error) {
