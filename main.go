@@ -19,17 +19,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func runAutoCompleteLoop(ctx context.Context, interval time.Duration, autoComplete func(context.Context) (int64, error), log *slog.Logger) {
+func runIntervalLoop(ctx context.Context, interval time.Duration, name string, job func(context.Context) (int64, error), log *slog.Logger) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			count, err := autoComplete(ctx)
+			count, err := job(ctx)
 			if err != nil && !errors.Is(err, context.Canceled) {
-				log.Error("Auto-complete failed", slog.String("error", err.Error()))
+				log.Error(name+" failed", slog.String("error", err.Error()))
 			} else if count > 0 {
-				log.Info("Auto-completed lessons", slog.Int64("count", count))
+				log.Info(name+" done", slog.Int64("count", count))
 			}
 		case <-ctx.Done():
 			return
@@ -44,14 +44,17 @@ func main() {
 	pool := database.Connect(cfg.DBUrl, log)
 	defer pool.Close()
 
-	r := router.Setup(pool, log, &cfg)
+	r, subscriptionService := router.Setup(pool, log, &cfg)
 
 	// Auto-complete: mark expired lessons as completed every minute
 	lessonRepo := repository.NewLessonRepository(pool)
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	var bgWg sync.WaitGroup
 	bgWg.Go(func() {
-		runAutoCompleteLoop(bgCtx, 1*time.Minute, lessonRepo.AutoComplete, log)
+		runIntervalLoop(bgCtx, 1*time.Minute, "auto-complete lessons", lessonRepo.AutoComplete, log)
+	})
+	bgWg.Go(func() {
+		runIntervalLoop(bgCtx, 24*time.Hour, "subscription renew", subscriptionService.RenewDue, log)
 	})
 
 	r.GET("/health", func(c *gin.Context) {

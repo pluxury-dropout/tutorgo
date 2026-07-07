@@ -20,7 +20,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine {
+func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engine, service.SubscriptionService) {
 	// Repositories
 	tutorRepo := repository.NewTutorRepository(pool)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
@@ -190,5 +190,5 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		auth.POST("/boards/:boardId/assets", whiteboardHandler.UploadAsset)
 	}
 
-	return r
+	return r, subscriptionService
 }

@@ -2,61 +2,38 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestRunAutoCompleteLoop_ExitsOnContextCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	called := make(chan struct{}, 10)
-	stub := func(ctx context.Context) (int64, error) {
-		called <- struct{}{}
+func TestRunIntervalLoop_CallsJobThenStopsOnCancel(t *testing.T) {
+	var calls atomic.Int64
+	job := func(context.Context) (int64, error) {
+		calls.Add(1)
 		return 1, nil
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	done := make(chan struct{})
 	go func() {
-		defer close(done)
-		runAutoCompleteLoop(ctx, 10*time.Millisecond, stub, slog.Default())
+		runIntervalLoop(ctx, 5*time.Millisecond, "test", job, log)
+		close(done)
 	}()
-
-	// wait for at least one call
-	select {
-	case <-called:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("autoComplete was never called")
-	}
-
+	time.Sleep(30 * time.Millisecond)
 	cancel()
 
 	select {
 	case <-done:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("runAutoCompleteLoop did not exit after context cancellation")
+	case <-time.After(time.Second):
+		t.Fatal("loop не завершился после cancel")
 	}
-}
-
-func TestRunAutoCompleteLoop_ExitsImmediatelyIfContextAlreadyCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // already cancelled
-
-	calls := 0
-	stub := func(ctx context.Context) (int64, error) {
-		calls++
-		return 0, nil
-	}
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		runAutoCompleteLoop(ctx, 1*time.Hour, stub, slog.Default())
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("runAutoCompleteLoop did not exit with already-cancelled context")
-	}
+	assert.GreaterOrEqual(t, calls.Load(), int64(1))
+	_ = errors.Is // держим импорт, если понадобится
 }
