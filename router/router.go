@@ -97,6 +97,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
 	r.POST("/webhooks/livekit", callHandler.LiveKitWebhook)
+	r.POST("/subscription/webhook", subscriptionHandler.Webhook)
 
 	// Whiteboard public routes (no JWT required)
 	r.GET("/public/board/join/:token", whiteboardHandler.JoinByInvite)
@@ -110,6 +111,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 		open.GET("/subscription", subscriptionHandler.GetStatus)
 		open.POST("/subscription/checkout", subscriptionHandler.Checkout)
 		open.POST("/subscription/confirm", subscriptionHandler.Confirm)
+		open.POST("/subscription/cancel", subscriptionHandler.Cancel)
+		open.POST("/subscription/change-plan", subscriptionHandler.ChangePlan)
 		open.GET("/tutors/:id", tutorHandler.GetByID)
 		open.PUT("/tutors/:id", tutorHandler.Update)
 	}
