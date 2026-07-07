@@ -54,24 +54,6 @@ func (h *SubscriptionHandler) Checkout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"checkout_url": url})
 }
 
-func (h *SubscriptionHandler) Confirm(c *gin.Context) {
-	tutorID := c.GetString("tutorID")
-	if tutorID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	var req models.SubscriptionPlanRequest
-	if !bindAndValidate(c, &req) {
-		return
-	}
-	if err := h.svc.Confirm(c.Request.Context(), tutorID, req.Plan); err != nil {
-		h.log.Error("confirm", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
 // POST /subscription/webhook — публичный, без JWT (шлёт провайдер).
 func (h *SubscriptionHandler) Webhook(c *gin.Context) {
 	err := h.svc.HandleWebhook(c.Request.Context(), c.Request)

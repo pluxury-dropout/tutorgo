@@ -110,7 +110,6 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) *gin.Engine
 	{
 		open.GET("/subscription", subscriptionHandler.GetStatus)
 		open.POST("/subscription/checkout", subscriptionHandler.Checkout)
-		open.POST("/subscription/confirm", subscriptionHandler.Confirm)
 		open.POST("/subscription/cancel", subscriptionHandler.Cancel)
 		open.POST("/subscription/change-plan", subscriptionHandler.ChangePlan)
 		open.GET("/tutors/:id", tutorHandler.GetByID)

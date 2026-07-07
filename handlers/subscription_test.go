@@ -35,10 +35,6 @@ func (m *mockSubscriptionService) Checkout(ctx context.Context, tutorID, plan st
 	return args.String(0), args.Error(1)
 }
 
-func (m *mockSubscriptionService) Confirm(ctx context.Context, tutorID, plan string) error {
-	return m.Called(ctx, tutorID, plan).Error(0)
-}
-
 func (m *mockSubscriptionService) HandleWebhook(ctx context.Context, r *http.Request) error {
 	return m.Called(ctx, r).Error(0)
 }

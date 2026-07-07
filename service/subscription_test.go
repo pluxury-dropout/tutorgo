@@ -119,32 +119,6 @@ func TestSubscriptionService_GetStatus_IncludesPrices(t *testing.T) {
 	assert.Equal(t, service.Currency, st.Prices.Currency)
 }
 
-func TestSubscriptionService_Confirm_ActivatesMonthly(t *testing.T) {
-	repo := new(mockSubRepo)
-	repo.On("Activate", mock.Anything, "t1", "monthly", mock.MatchedBy(func(pe time.Time) bool {
-		// период ~30 дней вперёд
-		return pe.After(time.Now().Add(29*24*time.Hour)) && pe.Before(time.Now().Add(31*24*time.Hour))
-	})).Return(nil)
-	svc := service.NewSubscriptionService(repo, &fakeProvider{})
-
-	err := svc.Confirm(context.Background(), "t1", "monthly")
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
-func TestSubscriptionService_Confirm_ActivatesYearly(t *testing.T) {
-	repo := new(mockSubRepo)
-	repo.On("Activate", mock.Anything, "t1", "yearly", mock.MatchedBy(func(pe time.Time) bool {
-		// период ~365 дней вперёд
-		return pe.After(time.Now().Add(364*24*time.Hour)) && pe.Before(time.Now().Add(366*24*time.Hour))
-	})).Return(nil)
-	svc := service.NewSubscriptionService(repo, &fakeProvider{})
-
-	err := svc.Confirm(context.Background(), "t1", "yearly")
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
 func TestCheckout_InsertsPendingAndReturnsURL(t *testing.T) {
 	repo := new(mockSubRepo)
 	prov := &fakeProvider{initURL: "https://pay.freedom/redirect"}

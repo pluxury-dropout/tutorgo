@@ -23,7 +23,6 @@ type SubscriptionService interface {
 	GetStatus(ctx context.Context, tutorID string) (models.SubscriptionStatus, error)
 	State(ctx context.Context, tutorID string) (string, error)
 	Checkout(ctx context.Context, tutorID, plan string) (string, error)
-	Confirm(ctx context.Context, tutorID, plan string) error
 	HandleWebhook(ctx context.Context, r *http.Request) error
 	RenewDue(ctx context.Context) (int64, error)
 	Cancel(ctx context.Context, tutorID string) error
@@ -90,16 +89,6 @@ func (s *subscriptionService) Checkout(ctx context.Context, tutorID, plan string
 		return "", fmt.Errorf("duplicate order_id %s", orderID) // uuid-коллизия ~ невозможна
 	}
 	return s.provider.InitPayment(ctx, orderID, tutorID, plan, amount)
-}
-
-// Confirm — заглушка вместо вебхука провайдера: активирует подписку.
-func (s *subscriptionService) Confirm(ctx context.Context, tutorID, plan string) error {
-	days := 30
-	if plan == "yearly" {
-		days = 365
-	}
-	periodEnd := time.Now().Add(time.Duration(days) * 24 * time.Hour)
-	return s.repo.Activate(ctx, tutorID, plan, periodEnd)
 }
 
 func (s *subscriptionService) HandleWebhook(ctx context.Context, r *http.Request) error {
