@@ -138,7 +138,8 @@ func (r *subscriptionRepository) GetPaymentByOrderID(ctx context.Context, orderI
 func (r *subscriptionRepository) StartPaidPeriod(ctx context.Context, tutorID, plan, cardToken string, periodEnd time.Time) error {
 	tag, err := r.conn.Exec(ctx,
 		`UPDATE subscriptions
-		 SET plan = $2, period_end = $3, card_token = $4, autopay = TRUE, updated_at = now()
+		 SET plan = $2, period_end = $3, card_token = $4, autopay = TRUE,
+		     pending_plan = NULL, updated_at = now()
 		 WHERE tutor_id = $1`,
 		tutorID, plan, periodEnd, cardToken,
 	)
