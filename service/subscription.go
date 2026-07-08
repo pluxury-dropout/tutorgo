@@ -74,6 +74,8 @@ func (s *subscriptionService) GetStatus(ctx context.Context, tutorID string) (mo
 	if sub != nil {
 		st.Plan = sub.Plan
 		st.PeriodEnd = sub.PeriodEnd
+		st.Autopay = sub.Autopay
+		st.PendingPlan = sub.PendingPlan
 	}
 	return st, nil
 }

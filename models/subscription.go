@@ -8,6 +8,8 @@ type Subscription struct {
 	Plan          *string    `json:"plan"`       // nil = пробный период
 	PeriodEnd     *time.Time `json:"period_end"` // nil только для grandfathered
 	Grandfathered bool       `json:"-"`
+	Autopay       bool       `json:"-"`
+	PendingPlan   *string    `json:"-"`
 }
 
 type Prices struct {
@@ -17,10 +19,12 @@ type Prices struct {
 }
 
 type SubscriptionStatus struct {
-	State     string     `json:"state"`
-	Plan      *string    `json:"plan"`
-	PeriodEnd *time.Time `json:"period_end"`
-	Prices    Prices     `json:"prices"`
+	State       string     `json:"state"`
+	Plan        *string    `json:"plan"`
+	PeriodEnd   *time.Time `json:"period_end"`
+	Prices      Prices     `json:"prices"`
+	Autopay     bool       `json:"autopay"`
+	PendingPlan *string    `json:"pending_plan"`
 }
 
 type SubscriptionPlanRequest struct {

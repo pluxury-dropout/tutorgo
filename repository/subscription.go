@@ -45,10 +45,10 @@ func NewSubscriptionRepository(conn *pgxpool.Pool) SubscriptionRepository {
 func (r *subscriptionRepository) GetByTutor(ctx context.Context, tutorID string) (*models.Subscription, error) {
 	var s models.Subscription
 	err := r.conn.QueryRow(ctx,
-		`SELECT tutor_id, plan, period_end, grandfathered
+		`SELECT tutor_id, plan, period_end, grandfathered, autopay, pending_plan
 		 FROM subscriptions WHERE tutor_id = $1`,
 		tutorID,
-	).Scan(&s.TutorID, &s.Plan, &s.PeriodEnd, &s.Grandfathered)
+	).Scan(&s.TutorID, &s.Plan, &s.PeriodEnd, &s.Grandfathered, &s.Autopay, &s.PendingPlan)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil // нет строки — вызывающий трактует как blocked
 	}

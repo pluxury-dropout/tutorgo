@@ -115,6 +115,22 @@ func TestSubscriptionService_GetStatus_IncludesPrices(t *testing.T) {
 	assert.Equal(t, service.Currency, st.Prices.Currency)
 }
 
+func TestSubscriptionService_GetStatus_ExposesAutopayAndPendingPlan(t *testing.T) {
+	repo := new(mockSubRepo)
+	pending := "yearly"
+	repo.On("GetByTutor", mock.Anything, "t1").Return(&models.Subscription{
+		Autopay:     true,
+		PendingPlan: &pending,
+	}, nil)
+	svc := service.NewSubscriptionService(repo, &fakeProvider{})
+
+	st, err := svc.GetStatus(context.Background(), "t1")
+
+	assert.NoError(t, err)
+	assert.True(t, st.Autopay)
+	assert.Equal(t, &pending, st.PendingPlan)
+}
+
 func TestCheckout_InsertsPendingAndReturnsURL(t *testing.T) {
 	repo := new(mockSubRepo)
 	prov := &fakeProvider{initURL: "https://pay.freedom/redirect"}
