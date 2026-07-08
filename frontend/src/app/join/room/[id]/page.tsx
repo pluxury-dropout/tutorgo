@@ -69,7 +69,7 @@ export default function JoinRoomPage() {
         <div className="w-full max-w-sm space-y-6">
           <div className="flex items-center gap-2 justify-center">
             <GraduationCap className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-lg">TutorGo</span>
+            <span className="font-semibold text-lg">TutorHub</span>
           </div>
           <div className="rounded-lg border p-6 text-center space-y-2">
             <p className="font-semibold">Урок завершён</p>
@@ -85,7 +85,7 @@ export default function JoinRoomPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="flex items-center gap-2 justify-center">
           <GraduationCap className="h-6 w-6 text-primary" />
-          <span className="font-semibold text-lg">TutorGo</span>
+          <span className="font-semibold text-lg">TutorHub</span>
         </div>
         <div className="rounded-lg border p-6 space-y-4">
           <h1 className="text-base font-semibold">Присоединиться к уроку</h1>

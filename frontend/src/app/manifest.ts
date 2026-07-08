@@ -4,8 +4,8 @@ import type { MetadataRoute } from 'next'
 // Иконка — favicon.ico как фолбэк; добавить 192/512 PNG, когда появится настоящий логотип (нужно для install-промпта).
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'TutorGo',
-    short_name: 'TutorGo',
+    name: 'TutorHub',
+    short_name: 'TutorHub',
     description: 'CRM for private tutors',
     start_url: '/',
     display: 'standalone',
