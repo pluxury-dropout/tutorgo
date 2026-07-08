@@ -20,17 +20,21 @@ import (
 )
 
 func runIntervalLoop(ctx context.Context, interval time.Duration, name string, job func(context.Context) (int64, error), log *slog.Logger) {
+	runJob := func() {
+		count, err := job(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			log.Error(name+" failed", slog.String("error", err.Error()))
+		} else if count > 0 {
+			log.Info(name+" done", slog.Int64("count", count))
+		}
+	}
+	runJob() // сразу при старте: при частых рестартах тик "раз в interval" иначе никогда не наступает
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			count, err := job(ctx)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				log.Error(name+" failed", slog.String("error", err.Error()))
-			} else if count > 0 {
-				log.Info(name+" done", slog.Int64("count", count))
-			}
+			runJob()
 		case <-ctx.Done():
 			return
 		}

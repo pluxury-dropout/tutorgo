@@ -52,10 +52,6 @@ func (m *mockSubRepo) GetByTutor(ctx context.Context, tutorID string) (*models.S
 	sub, _ := args.Get(0).(*models.Subscription)
 	return sub, args.Error(1)
 }
-func (m *mockSubRepo) Activate(ctx context.Context, tutorID, plan string, periodEnd time.Time) error {
-	args := m.Called(ctx, tutorID, plan, periodEnd)
-	return args.Error(0)
-}
 func (m *mockSubRepo) CreateTrialTx(ctx context.Context, q repository.Querier, tutorID string) error {
 	args := m.Called(ctx, q, tutorID)
 	return args.Error(0)
@@ -204,20 +200,21 @@ func TestRenewDue_AppliesPendingPlan(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-func TestRenewDue_ChargeFails_MarksFailedNoExtend(t *testing.T) {
+func TestRenewDue_AmbiguousChargeError_SkipsWithoutMarkingFailed(t *testing.T) {
 	repo := new(mockSubRepo)
 	prov := &fakeProvider{chargeErr: errors.New("declined")}
 	repo.On("ListDueAutopay", mock.Anything, mock.Anything).
 		Return([]models.DueSubscription{{TutorID: "t1", Plan: "monthly", CardToken: "tok1", PeriodEnd: time.Now()}}, nil)
 	repo.On("ListPeriodPayments", mock.Anything, mock.AnythingOfType("string")).Return(nil, nil)
 	repo.On("InsertPendingPayment", mock.Anything, "t1", mock.AnythingOfType("string"), "monthly", service.PriceMonthly).Return(true, nil)
-	repo.On("MarkPaymentFailed", mock.Anything, mock.AnythingOfType("string")).Return(nil)
 	svc := service.NewSubscriptionService(repo, prov)
 
 	n, err := svc.RenewDue(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), n)
 	repo.AssertNotCalled(t, "MarkSuccessAndRenew", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	// Судьба Charge неизвестна (CheckStatus не дал терминального статуса) — строка обязана остаться pending.
+	repo.AssertNotCalled(t, "MarkPaymentFailed", mock.Anything, mock.Anything)
 }
 
 func TestRenewDue_ChargeErrButReconcileSuccess_Extends(t *testing.T) {

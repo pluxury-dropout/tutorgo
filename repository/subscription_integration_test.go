@@ -87,6 +87,33 @@ func TestClaim_InsertPending_OnlyOneWinsConcurrently(t *testing.T) {
 	assert.Equal(t, 1, won, "ровно один инстанс должен выиграть insert-claim")
 }
 
+func TestListDueAutopay_ExcludesPastGraceWindow(t *testing.T) {
+	pool := connect(t)
+	repo := repository.NewSubscriptionRepository(pool)
+	ctx := context.Background()
+
+	inGrace := seedTutorWithSubscription(t, pool)
+	pastGrace := seedTutorWithSubscription(t, pool)
+	_, err := pool.Exec(ctx,
+		`UPDATE subscriptions SET autopay = TRUE, card_token = 'tok', period_end = now() - interval '1 day'
+		 WHERE tutor_id = $1`, inGrace)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`UPDATE subscriptions SET autopay = TRUE, card_token = 'tok', period_end = now() - interval '30 days'
+		 WHERE tutor_id = $1`, pastGrace)
+	require.NoError(t, err)
+
+	due, err := repo.ListDueAutopay(ctx, time.Now())
+	require.NoError(t, err)
+
+	ids := map[string]bool{}
+	for _, d := range due {
+		ids[d.TutorID] = true
+	}
+	assert.True(t, ids[inGrace], "просроченный внутри grace-окна должен попадать в dunning")
+	assert.False(t, ids[pastGrace], "вышедший из grace не должен списываться")
+}
+
 func TestClaim_MarkSuccess_OnlyOneActivatesConcurrently(t *testing.T) {
 	pool := connect(t)
 	repo := repository.NewSubscriptionRepository(pool)

@@ -22,7 +22,6 @@ type Querier interface {
 
 type SubscriptionRepository interface {
 	GetByTutor(ctx context.Context, tutorID string) (*models.Subscription, error)
-	Activate(ctx context.Context, tutorID, plan string, periodEnd time.Time) error
 	CreateTrialTx(ctx context.Context, q Querier, tutorID string) error
 	InsertPendingPayment(ctx context.Context, tutorID, orderID, plan string, amount int) (bool, error)
 	MarkPaymentFailed(ctx context.Context, orderID string) error
@@ -57,22 +56,6 @@ func (r *subscriptionRepository) GetByTutor(ctx context.Context, tutorID string)
 		return nil, err
 	}
 	return &s, nil
-}
-
-func (r *subscriptionRepository) Activate(ctx context.Context, tutorID, plan string, periodEnd time.Time) error {
-	tag, err := r.conn.Exec(ctx,
-		`UPDATE subscriptions
-		 SET plan = $2, period_end = $3, updated_at = now()
-		 WHERE tutor_id = $1`,
-		tutorID, plan, periodEnd,
-	)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return errors.New("subscription not found")
-	}
-	return nil
 }
 
 func (r *subscriptionRepository) CreateTrialTx(ctx context.Context, q Querier, tutorID string) error {
@@ -231,7 +214,8 @@ func (r *subscriptionRepository) ListDueAutopay(ctx context.Context, now time.Ti
 	rows, err := r.conn.Query(ctx,
 		`SELECT tutor_id, plan, pending_plan, card_token, period_end
 		 FROM subscriptions
-		 WHERE autopay = TRUE AND card_token IS NOT NULL AND period_end <= $1`,
+		 WHERE autopay = TRUE AND card_token IS NOT NULL AND period_end <= $1
+		   AND period_end > $1 - interval '8 days'`, // дуннинг только в grace-окне; 8 = service.GraceDays+1, держать в синхроне
 		now,
 	)
 	if err != nil {
