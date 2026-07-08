@@ -19,3 +19,7 @@ test('blocked на обычном пути → redirect', () => {
 test('blocked на самом paywall → render без цикла', () => {
   assert.deepEqual(decideAccess('blocked', PAYWALL_PATH), { action: 'render', banner: false })
 })
+
+test('blocked на success-странице → render (дополлить активацию)', () => {
+  assert.deepEqual(decideAccess('blocked', '/subscription/success'), { action: 'render', banner: false })
+})
