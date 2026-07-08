@@ -1275,6 +1275,22 @@ git commit -m "feat(subscriptions): daily MIT renew scheduler wired into main"
 
 ---
 
+## Carry-forward в freedompay-план (из финального ревью 2026-07-08, ДО реальных денег)
+
+1. **Important — ограничить dunning grace-окном.** `ListDueAutopay` не имеет нижней
+   границы по `period_end` → ретраи идут вечно после grace. Сценарий: карта ожила на
+   30-й день → списание за период, полностью прожитый в blocked, и назавтра ещё одно.
+   Фикс: нижняя граница `period_end > now() - (GraceDays+1) days` в запросе, либо
+   `autopay=false` при выходе из grace.
+2. Лог/метрика на ambiguous/застрявшие pending-строки (default-ветки RenewDue) — для ops.
+3. `ParseCallback` обязан маппить в `Callback.Status` ТОЛЬКО терминальные статусы
+   провайдера: не-терминальный «processing» в текущей семантике закроет строку как
+   failed навсегда (service/subscription.go: `cb.Status != "success"` → MarkPaymentFailed).
+4. Minor: первый тик шедулера через 24ч после старта — при частых рестартах продления
+   голодают; один прогон при старте цикла. Minor: мёртвый `Activate` в репо-интерфейсе
+   (обходит оплату) — удалить. Minor: переименовать `TestRenewDue_ChargeFails_MarksFailedNoExtend`
+   (реально тестирует ambiguous-путь).
+
 ## Follow-up (отдельные планы, вне этого)
 
 1. **freedompay-адаптер** — `payment/freedompay` реализует `service.PaymentProvider`: `InitPayment` (`POST /init_payment`, hosted CIT, `pg_idempotency_key`), `Charge` (`POST /g2g/payment` + `pg_card_token`, синхронный XML), `CheckStatus` (`status_v2` для reconcile), `ParseCallback` (проверка `pg_sig` = MD5(script_name + поля по алфавиту c `pg_salt` + `secret_key`); подтвердить `script_name` для callback-URL). Свапнуть `service.StubProvider{}` в `router.go:48` на реальный конструктор с `merchant_id`/секретом из `config`. Гейт: аппрув Freedom Pay (активация `pg_card_token` менеджером).
