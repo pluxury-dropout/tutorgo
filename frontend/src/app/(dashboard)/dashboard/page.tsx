@@ -101,7 +101,7 @@ export default function DashboardPage() {
     : 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
       {/* Заголовок */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -112,7 +112,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI + доход */}
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <div style={{
           border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)',
           padding: '10px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px',
@@ -150,7 +150,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Три карточки */}
-      <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: 20, alignItems: 'start' }}>
+      <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: 10, alignItems: 'start' }}>
 
         <SectionCard title="Уроки сегодня" action={<SectionLink href="/calendar">Расписание →</SectionLink>}>
           {sortedLessons.length === 0
