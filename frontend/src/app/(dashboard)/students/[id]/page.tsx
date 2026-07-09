@@ -69,12 +69,12 @@ export default function StudentDetailPage() {
         }
       />
 
-      <div className="border rounded-lg bg-card p-5 max-w-md space-y-3">
+      <div className="border rounded-xl bg-card p-5 max-w-md space-y-3">
         <Row label="Email"   value={student.email} />
         <Row label="Телефон" value={student.phone || '—'} />
       </div>
 
-      <div className="border rounded-lg p-4 mt-4">
+      <div className="border rounded-xl bg-card p-4 mt-4">
         <h2 className="text-sm font-semibold mb-3">Курсы ({courses.length})</h2>
         {courses.length === 0 ? (
           <p className="text-sm text-muted-foreground">Нет курсов</p>

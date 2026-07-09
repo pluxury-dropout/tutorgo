@@ -9,6 +9,7 @@ import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, use
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
+import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Pagination } from '@/components/common/Pagination'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
@@ -197,13 +198,13 @@ function CoursesPageInner() {
           />
         ) : (
           <>
-            <div>
+            <SectionCard>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
                 alignItems: 'baseline',
                 gap: 12,
-                paddingBottom: 8,
+                padding: '10px 18px 8px',
                 borderBottom: '1px solid var(--border)',
               }}>
                 {(['Предмет', 'Тип', 'Ученик', 'Цена за цикл', 'Начало', '', ''] as const).map((label, i) => (
@@ -220,8 +221,8 @@ function CoursesPageInner() {
                     gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 72px',
                     alignItems: 'center',
                     gap: 12,
-                    padding: '8px 0',
-                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                    padding: '10px 18px',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--row-border)',
                     cursor: 'pointer',
                   }}
                   className="hover:bg-muted/30 group"
@@ -252,7 +253,7 @@ function CoursesPageInner() {
                   </div>
                 </div>
               ))}
-            </div>
+            </SectionCard>
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-3 px-1">
                 <span className="text-xs text-muted-foreground">Страница {page} из {totalPages}</span>
@@ -277,13 +278,13 @@ function CoursesPageInner() {
           />
         ) : (
           <>
-            <div>
+            <SectionCard>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 120px',
                 alignItems: 'baseline',
                 gap: 12,
-                paddingBottom: 8,
+                padding: '10px 18px 8px',
                 borderBottom: '1px solid var(--border)',
               }}>
                 {(['Предмет', 'Тип', 'Ученик', 'Цена за цикл', 'Начало', '', ''] as const).map((label, i) => (
@@ -298,8 +299,8 @@ function CoursesPageInner() {
                     gridTemplateColumns: '1.5fr 130px 1fr 160px 90px 16px 120px',
                     alignItems: 'center',
                     gap: 12,
-                    padding: '8px 0',
-                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                    padding: '10px 18px',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--row-border)',
                     opacity: 0.7,
                   }}
                 >
@@ -324,7 +325,7 @@ function CoursesPageInner() {
                   </div>
                 </div>
               ))}
-            </div>
+            </SectionCard>
             {archivedPages > 1 && (
               <div className="flex items-center justify-between mt-3 px-1">
                 <span className="text-xs text-muted-foreground">Страница {archivePage} из {archivedPages}</span>

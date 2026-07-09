@@ -92,7 +92,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Profile form */}
-        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="border rounded-lg p-5 space-y-4">
+        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="border rounded-xl bg-card p-5 space-y-4">
           <h2 className="text-sm font-semibold">Личные данные</h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -133,7 +133,7 @@ export default function ProfilePage() {
         </form>
 
         {/* Password form */}
-        <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="border rounded-lg p-5 space-y-4">
+        <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="border rounded-xl bg-card p-5 space-y-4">
           <h2 className="text-sm font-semibold">Смена пароля</h2>
 
           <div className="space-y-1.5">
@@ -166,7 +166,7 @@ export default function ProfilePage() {
         </form>
 
         {/* Подписка */}
-        <div className="border rounded-lg p-5 flex items-center justify-between">
+        <div className="border rounded-xl bg-card p-5 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Подписка</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Тариф и оплата доступа</p>

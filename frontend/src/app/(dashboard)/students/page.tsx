@@ -8,6 +8,7 @@ import { Users, Plus, Pencil, Trash2, ChevronRight } from 'lucide-react'
 import { useStudentsPaged, useCreateStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
 import { StudentForm } from '@/components/students/StudentForm'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
+import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Pagination } from '@/components/common/Pagination'
 import { StudentFormValues } from '@/schemas/student'
@@ -122,8 +123,8 @@ function StudentsPageInner() {
         />
       ) : (
         <>
-          <div style={{ borderTop: '1px solid var(--border)' }}>
-            {students.map((student) => (
+          <SectionCard>
+            {students.map((student, i) => (
               <div
                 key={student.id}
                 style={{
@@ -131,8 +132,8 @@ function StudentsPageInner() {
                   gridTemplateColumns: 'minmax(0, 1fr) auto',
                   alignItems: 'center',
                   gap: 16,
-                  padding: '8px 0',
-                  borderBottom: '1px solid var(--border)',
+                  padding: '10px 18px',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--row-border)',
                   cursor: 'pointer',
                 }}
                 className="hover:bg-muted/30 group"
@@ -175,7 +176,7 @@ function StudentsPageInner() {
                 </div>
               </div>
             ))}
-          </div>
+          </SectionCard>
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-3 px-1">
               <span className="text-xs text-muted-foreground">

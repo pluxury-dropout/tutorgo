@@ -24,14 +24,12 @@ const COLUMNS = [
 ] as const
 
 const cardBaseStyle: React.CSSProperties = {
-  borderRadius: 6,
-  padding: '8px 10px',
-  marginBottom: 6,
-  background: 'var(--card)',
-  borderTop: '1px solid var(--border)',
-  borderRight: '1px solid var(--border)',
-  borderBottom: '1px solid var(--border)',
-  fontSize: 13,
+  borderRadius: 9,
+  padding: '9px 11px',
+  marginBottom: 7,
+  background: 'var(--background)',
+  border: '1px solid var(--border)',
+  fontSize: 12.5,
 }
 
 function TaskCard({
@@ -84,6 +82,7 @@ function TaskCard({
 function Column({
   col,
   tasks,
+  isLast,
   editingId,
   draftOpen,
   onCardClick,
@@ -96,6 +95,7 @@ function Column({
 }: {
   col: typeof COLUMNS[number]
   tasks: Task[]
+  isLast: boolean
   editingId: string | null
   draftOpen: boolean
   onCardClick: (task: Task) => void
@@ -108,19 +108,23 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id })
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: col.color, letterSpacing: '-0.01em' }}>
-          {col.label}
+    <div style={{ minWidth: 0, padding: '14px 16px', borderRight: isLast ? 'none' : '1px solid var(--row-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>{col.label}</span>
+        <span style={{
+          fontSize: 10.5, color: 'var(--muted-foreground)', background: 'var(--muted)',
+          borderRadius: 20, padding: '1px 7px', marginLeft: 'auto',
+        }}>
+          {tasks.length}
         </span>
       </div>
       <div
         ref={setNodeRef}
         onClick={(e) => { if (e.target === e.currentTarget && !draftOpen) onOpenDraft() }}
         style={{
-          minHeight: 80,
+          minHeight: 90,
           borderRadius: 6,
-          padding: 4,
           background: isOver ? 'var(--muted)' : 'transparent',
           transition: 'background 0.15s',
           cursor: 'text',
@@ -196,12 +200,13 @@ export default function KanbanWidget() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div style={{ display: 'flex', gap: 12 }}>
-        {COLUMNS.map(col => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        {COLUMNS.map((col, i) => (
           <Column
             key={col.id}
             col={col}
             tasks={tasks.filter(t => t.status === col.id)}
+            isLast={i === COLUMNS.length - 1}
             editingId={editingId}
             draftOpen={draftStatus === col.id}
             onCardClick={(task) => { setDraftStatus(null); setEditingId(task.id) }}

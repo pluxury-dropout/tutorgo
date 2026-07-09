@@ -79,6 +79,7 @@
   --purple:              #9065B0;   /* нет в палитре — оставлен Notion */
   --danger:              #C92A2A;
   --border:              #E1E1E4;   /* border (hc) */
+  --row-border:          #EDEDEF;   /* внутренний разделитель строк в карточке — тоньше рамки */
   --input:               #CACACE;   /* borderStrong (hc) */
   --ring:                #222428;   /* графит */
   --radius:              0.5rem;
@@ -135,10 +136,10 @@
 }
 
 .dark {
-  /* Base — Notion Dark */
-  --background:          #191919;
+  /* Base — из Claude Design handoff (макет главной), глубина: sidebar < page < card */
+  --background:          #141414;
   --foreground:          #E3E2E0;
-  --card:                #222222;
+  --card:                #181818;
   --card-foreground:     #E3E2E0;
   --popover:             #222222;
   --popover-foreground:  #E3E2E0;
@@ -148,7 +149,7 @@
   --secondary:           #2a2a2a;
   --secondary-foreground: #E3E2E0;
   --muted:               #2a2a2a;
-  --muted-foreground:    #979A9B;
+  --muted-foreground:    #8a8a8a;   /* приглушённый текст из макета */
   --accent:              #373736;   /* Notion orange icon dark */
   --accent-light:        #36291F;   /* Notion orange bg dark */
   --accent-foreground:   #e3e2e0;
@@ -157,7 +158,8 @@
   --warning:             #CA8E1B;   /* Notion yellow icon dark */
   --purple:              #8D5BC1;   /* Notion purple icon dark */
   --danger:              #CD4945;
-  --border:              #2e2e2e;
+  --border:              #262626;
+  --row-border:          #1e1e1e;   /* внутренний разделитель строк в карточке — тоньше рамки */
   --input:               rgba(255, 255, 255, 0.1);
   --ring:                #737373;
 
@@ -168,14 +170,14 @@
   --chart-4: #8D5BC1;
   --chart-5: #CD4945;
 
-  /* Sidebar */
-  --sidebar:             #222222;
+  /* Sidebar — темнее контента (глубина как в макете) */
+  --sidebar:             #111111;
   --sidebar-foreground:  #E3E2E0;
   --sidebar-primary:     #c4c4c4;
   --sidebar-primary-foreground: #f0efed;
   --sidebar-accent:      #3F4448;
   --sidebar-accent-foreground: #E3E2E0;
-  --sidebar-border:      #2e2e2e;
+  --sidebar-border:      #262626;
   --sidebar-ring:        #2E7CD1;
   --sidebar-active-bg:   #393939;
   --sidebar-active-text: #f0efed;

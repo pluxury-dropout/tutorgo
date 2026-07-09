@@ -122,7 +122,7 @@ export default function SubscriptionPage() {
         </div>
 
         {sub.plan !== null && (
-          <div className="border rounded-lg p-5 space-y-3">
+          <div className="border rounded-xl bg-card p-5 space-y-3">
             <h2 className="text-sm font-semibold">Управление</h2>
             {sub.pending_plan ? (
               <p className="text-sm text-muted-foreground">
@@ -148,7 +148,7 @@ export default function SubscriptionPage() {
         {(sub.plan === null || sub.state !== 'active') && (
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Месяц */}
-            <div className="border rounded-lg p-5 space-y-3">
+            <div className="border rounded-xl bg-card p-5 space-y-3">
               <h2 className="text-sm font-semibold">Помесячно</h2>
               <p className="text-2xl font-bold">{formatPrice(monthly, currency)}<span className="text-sm font-normal text-muted-foreground"> / мес</span></p>
               <Button className="w-full" disabled={paying !== null} onClick={() => onPay('monthly')}>
@@ -157,7 +157,7 @@ export default function SubscriptionPage() {
             </div>
 
             {/* Год */}
-            <div className="border rounded-lg p-5 space-y-3 relative">
+            <div className="border rounded-xl bg-card p-5 space-y-3 relative">
               {discount > 0 && (
                 <span className="absolute top-3 right-3 rounded-[20px] bg-primary/10 text-primary px-2 py-px text-[11px] font-semibold">
                   −{discount}%

@@ -302,7 +302,7 @@ export default function CourseDetailPage() {
           <div className="flex gap-2">
             <Link
               href={`/boards/${id}`}
-              className="text-sm px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50 text-gray-700 inline-flex items-center"
+              className="text-sm px-3 py-1.5 rounded border border-border hover:bg-muted text-foreground inline-flex items-center"
             >
               Доска
             </Link>
@@ -318,7 +318,7 @@ export default function CourseDetailPage() {
 
       <div className="grid gap-4 md:grid-cols-2 mt-4">
         {/* Info */}
-        <div className="border rounded-lg p-4">
+        <div className="border rounded-xl bg-card p-4">
           <h2 className="text-sm font-semibold mb-2">Информация</h2>
           <Row label="Предмет" value={course.subject} />
           <Row label="Тип" value={<CourseTypeBadge isGroup={isGroup} />} />
@@ -331,7 +331,7 @@ export default function CourseDetailPage() {
         </div>
 
         {/* Balance */}
-        <div className="border rounded-lg p-4">
+        <div className="border rounded-xl bg-card p-4">
           <h2 className="text-sm font-semibold mb-3">Баланс уроков</h2>
           {balance ? (
             <div className="grid grid-cols-3 gap-3 text-center">

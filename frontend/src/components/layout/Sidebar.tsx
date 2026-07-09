@@ -112,8 +112,8 @@ function MiniCalendar({
     year === today.getFullYear() && month === today.getMonth() && d === today.getDate()
 
   return (
-    <div className="p-2 select-none shrink-0">
-      <div className="flex items-center justify-between mb-1">
+    <div className="p-3 select-none shrink-0">
+      <div className="flex items-center justify-between mb-1.5">
         <button
           onClick={() => setMiniMonth(new Date(year, month - 1, 1))}
           className="h-6 w-6 flex items-center justify-center rounded hover:bg-[var(--sidebar-hover-bg)] text-[var(--sidebar-text)] transition-colors"
@@ -288,38 +288,37 @@ function CalendarSidebarPanel() {
   }
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col min-h-0 border-t border-border">
-      <MiniCalendar displayedDates={displayedDates} onNavigate={handleNavigate} />
-      <div className="border-t border-border" />
-      <TodayList lessons={todayLessons} />
-      <div className="px-2 py-2 border-t border-border shrink-0">
-        <style>{`
-          @keyframes liveDot {
-            0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-            50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
-          }
-        `}</style>
-        <button
-          onClick={handleStartLesson}
-          disabled={starting}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors border border-border hover:bg-[var(--sidebar-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: 'var(--sidebar-bg, transparent)' }}
-        >
-          <span
-            style={{
-              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-              background: starting ? '#888' : '#22c55e',
-              animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
-            }}
-          />
-          <span style={{ flex: 1, textAlign: 'left', color: 'var(--foreground)', fontWeight: 600 }}>
-            {starting ? 'Подключение...' : 'Начать урок'}
-          </span>
-          {!starting && (
-            <span style={{ color: 'var(--muted-foreground)', fontSize: 11 }}>→</span>
-          )}
-        </button>
+    <div className="flex-1 overflow-hidden flex flex-col min-h-0 gap-3 px-3 pt-1 pb-3">
+      <div className="rounded-[12px] border border-border bg-card shrink-0 overflow-hidden">
+        <MiniCalendar displayedDates={displayedDates} onNavigate={handleNavigate} />
       </div>
+      <div className="rounded-[12px] border border-border bg-card flex flex-col min-h-0 overflow-hidden">
+        <TodayList lessons={todayLessons} />
+      </div>
+      <div className="flex-1 min-h-0" />
+      <style>{`
+        @keyframes liveDot {
+          0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+          50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+        }
+      `}</style>
+      <button
+        onClick={handleStartLesson}
+        disabled={starting}
+        className="shrink-0 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-[10px] transition-colors hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ background: 'var(--secondary)' }}
+      >
+        <span
+          style={{
+            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+            background: starting ? '#888' : '#2D9964',
+            animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
+          }}
+        />
+        <span style={{ fontSize: 13, color: 'var(--foreground)', fontWeight: 600 }}>
+          {starting ? 'Подключение...' : 'Начать урок'}
+        </span>
+      </button>
     </div>
   )
 }

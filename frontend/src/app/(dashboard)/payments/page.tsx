@@ -16,6 +16,7 @@ import {
 import { HeaderPanel } from '@/components/HeaderPanel'
 import type { KpiSegment } from '@/components/HeaderPanel'
 import { Pagination } from '@/components/common/Pagination'
+import { SectionCard } from '@/components/common/SectionCard'
 import { PaymentForm } from '@/components/payments/PaymentForm'
 import { Button } from '@/components/ui/button'
 import type { Payment } from '@/types/api'
@@ -125,14 +126,14 @@ function PaymentsPageInner() {
         onSegmentChange={setActiveSegment}
       />
 
-      <div style={{ marginTop: 16 }}>
+      <SectionCard style={{ marginTop: 16 }}>
         {/* Column headers */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '90px 1fr 110px 70px 64px',
           alignItems: 'baseline',
           gap: 12,
-          paddingBottom: 8,
+          padding: '10px 18px 8px',
           borderBottom: '1px solid var(--border)',
         }}>
           {(['Дата', 'Курс', 'Сумма', 'Уроков', ''] as const).map((label, i) => (
@@ -147,13 +148,13 @@ function PaymentsPageInner() {
         </div>
         {/* Rows */}
         {isLoading ? (
-          <div className="space-y-2" style={{ paddingTop: 8 }}>
+          <div className="space-y-2" style={{ padding: '10px 18px' }}>
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-4 rounded bg-muted animate-pulse" />
             ))}
           </div>
         ) : payments.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', padding: '24px 0' }}>
+          <p style={{ fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', padding: '24px 18px' }}>
             Нет оплат
           </p>
         ) : (
@@ -167,8 +168,8 @@ function PaymentsPageInner() {
                 gridTemplateColumns: '90px 1fr 110px 70px 64px',
                 alignItems: 'center',
                 gap: 12,
-                padding: '8px 0',
-                borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                padding: '10px 18px',
+                borderTop: i === 0 ? 'none' : '1px solid var(--row-border)',
                 cursor: 'pointer',
               }}
               className="hover:bg-muted/30 group"
@@ -203,7 +204,7 @@ function PaymentsPageInner() {
             </div>
           ))
         )}
-      </div>
+      </SectionCard>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-3 px-1">
