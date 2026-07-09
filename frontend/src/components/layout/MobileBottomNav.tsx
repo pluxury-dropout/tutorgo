@@ -2,12 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CalendarDays, Users, CreditCard, User } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, CreditCard, User } from 'lucide-react'
 
 const NAV_TABS = [
   { href: '/dashboard', label: 'Главная',    Icon: LayoutDashboard },
   { href: '/calendar',  label: 'Расписание', Icon: CalendarDays    },
-  { href: '/students',  label: 'Ученики',    Icon: Users           },
   { href: '/payments',  label: 'Платежи',    Icon: CreditCard      },
   { href: '/profile',   label: 'Профиль',    Icon: User            },
 ]
