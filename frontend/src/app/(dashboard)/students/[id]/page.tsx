@@ -35,7 +35,7 @@ export default function StudentDetailPage() {
     if (!confirm(`Удалить ${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}?`)) return
     await deleteStudent.mutateAsync(student.id)
     toast.success('Ученик удалён')
-    router.push('/students')
+    router.push('/courses?tab=students')
   }
 
   if (isLoading) {
@@ -49,7 +49,7 @@ export default function StudentDetailPage() {
   return (
     <>
       <button
-        onClick={() => router.push('/students')}
+        onClick={() => router.push('/courses?tab=students')}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
       >
         <ArrowLeft className="h-4 w-4" /> Все ученики
