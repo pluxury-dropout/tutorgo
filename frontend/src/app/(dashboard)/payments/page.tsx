@@ -13,8 +13,6 @@ import {
   useUpdatePayment,
   useDeletePayment,
 } from '@/lib/hooks/usePayments'
-import { HeaderPanel } from '@/components/HeaderPanel'
-import type { KpiSegment } from '@/components/HeaderPanel'
 import { Pagination } from '@/components/common/Pagination'
 import { SectionCard } from '@/components/common/SectionCard'
 import { PaymentForm } from '@/components/payments/PaymentForm'
@@ -24,10 +22,11 @@ import type { PaymentFormValues } from '@/schemas/payment'
 
 const LIMIT = 20
 
+const fmtAmt = (n: number) => '₸' + n.toLocaleString('ru-RU')
+
 function PaymentsPageInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const [activeSegment, setActiveSegment] = useState('received')
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
   const [formOpen, setFormOpen] = useState(false)
 
@@ -82,49 +81,39 @@ function PaymentsPageInner() {
     toast.success('Платёж удалён')
   }
 
-  const segments: KpiSegment[] = [
-    {
-      id:       'received',
-      label:    'Получено',
-      value:    '₸ ' + monthlyIncome.toLocaleString('ru-RU'),
-      dotColor: 'var(--success)',
-      meta:     'этот месяц',
-      loading:  incomeLoading,
-    },
-    {
-      id:       'count',
-      label:    'Операций',
-      value:    String(total),
-      dotColor: 'var(--primary)',
-      meta:     'всего записей',
-      loading:  isLoading,
-    },
-    {
-      id:       'avg',
-      label:    'Средний чек',
-      value:    '—',
-      dotColor: 'var(--warning)',
-      meta:     'нет данных',
-    },
-    {
-      id:       'pending',
-      label:    'Ожидается',
-      value:    '₸ ' + monthlyExpected.toLocaleString('ru-RU'),
-      dotColor: 'var(--purple)',
-      meta:     'этот месяц',
-      loading:  expectedLoading,
-    },
+  const kpis = [
+    { color: 'var(--success)', value: incomeLoading   ? '…' : fmtAmt(monthlyIncome),   label: 'получено'    },
+    { color: 'var(--primary)', value: isLoading        ? '…' : String(total),          label: 'операций'    },
+    { color: 'var(--warning)', value: '—',                                             label: 'средний чек' },
+    { color: 'var(--purple)',  value: expectedLoading  ? '…' : fmtAmt(monthlyExpected), label: 'ожидается'   },
   ]
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <HeaderPanel
-        title="Платежи"
-        subtitle={`${total} записей`}
-        segments={segments}
-        activeSegment={activeSegment}
-        onSegmentChange={setActiveSegment}
-      />
+      {/* Заголовок */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--foreground)', letterSpacing: '-0.01em' }}>
+          Платежи
+        </h1>
+        <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{total} записей</span>
+      </div>
+
+      {/* KPI — стандартный формат главной */}
+      <div style={{
+        border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)',
+        padding: '10px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px',
+        width: 360, marginTop: 14,
+      }}>
+        {kpis.map((k, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: k.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums' }}>
+              {k.value}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{k.label}</span>
+          </div>
+        ))}
+      </div>
 
       <SectionCard style={{ marginTop: 16 }}>
         {/* Column headers */}
