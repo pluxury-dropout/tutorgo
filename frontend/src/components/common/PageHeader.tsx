@@ -7,16 +7,10 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, meta, actions }: PageHeaderProps) {
   return (
-    <div
-      style={{
-        borderBottom: '1px solid var(--border)',
-        paddingBottom: 14,
-        marginBottom: 18,
-      }}
-    >
+    <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--foreground)' }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--foreground)' }}>
             {title}
           </h1>
           {meta && <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{meta}</span>}
