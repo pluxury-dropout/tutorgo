@@ -3,18 +3,21 @@
 import { Suspense, useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { BookOpen, Plus, Pencil, Trash2, ChevronRight, ArchiveRestore } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, ChevronRight, ArchiveRestore, Users } from 'lucide-react'
 
 import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, useArchivedCoursesPaged, useRestoreCourse } from '@/lib/hooks/useCourses'
-import { useStudents } from '@/lib/hooks/useStudents'
+import { useStudents, useStudentsPaged, useCreateStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
+import { StudentForm } from '@/components/students/StudentForm'
+import { StudentsList } from '@/components/students/StudentsList'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Pagination } from '@/components/common/Pagination'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { CourseFormValues } from '@/schemas/course'
-import { Course } from '@/types/api'
+import { StudentFormValues } from '@/schemas/student'
+import { Course, Student } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -50,6 +53,14 @@ function CoursesPageInner() {
     router.push(`/courses?${p}`)
   }
 
+  function changeTab(next: 'active' | 'students' | 'archive') {
+    setTab(next)
+    const p = new URLSearchParams(searchParams.toString())
+    if (next === 'active') p.delete('tab')
+    else p.set('tab', next)
+    router.replace(`/courses?${p}`)
+  }
+
   const { data, isLoading } = useCoursesPaged({ page, limit: LIMIT, search })
   const courses    = data?.data ?? []
   const total      = data?.total ?? 0
@@ -70,8 +81,48 @@ function CoursesPageInner() {
   const updateCourse = useUpdateCourse(editing?.id ?? '')
   const deleteCourse = useDeleteCourse()
 
-  const [tab, setTab] = useState<'active' | 'archive'>('active')
+  const tabParam = searchParams.get('tab')
+  const [tab, setTab] = useState<'active' | 'students' | 'archive'>(
+    tabParam === 'students' ? 'students' : tabParam === 'archive' ? 'archive' : 'active'
+  )
   const [archivePage, setArchivePage] = useState(1)
+
+  const [studentSearch, setStudentSearch] = useState('')
+  const [studentPage, setStudentPage] = useState(1)
+  useEffect(() => { setStudentPage(1) }, [studentSearch])
+
+  const { data: studentsData, isLoading: studentsLoading } = useStudentsPaged({
+    page: studentPage, limit: LIMIT, search: studentSearch,
+  })
+  const studentList  = studentsData?.data ?? []
+  const studentTotal = studentsData?.total ?? 0
+  const studentPages  = Math.ceil(studentTotal / LIMIT)
+
+  const [studentFormOpen, setStudentFormOpen] = useState(false)
+  const [editingStudent, setEditingStudent]   = useState<Student | undefined>()
+
+  const createStudent = useCreateStudent()
+  const updateStudent = useUpdateStudent(editingStudent?.id ?? '')
+  const deleteStudent = useDeleteStudent()
+
+  function openCreateStudent() { setEditingStudent(undefined); setStudentFormOpen(true) }
+  function openEditStudent(s: Student) { setEditingStudent(s); setStudentFormOpen(true) }
+
+  async function handleStudentSubmit(values: StudentFormValues) {
+    if (editingStudent) {
+      await updateStudent.mutateAsync(values)
+      toast.success('Ученик обновлён')
+    } else {
+      await createStudent.mutateAsync(values)
+      toast.success('Ученик добавлен')
+    }
+  }
+
+  async function handleStudentDelete(s: Student) {
+    if (!confirm(`Удалить ${s.first_name}${s.last_name ? ` ${s.last_name}` : ''}?`)) return
+    await deleteStudent.mutateAsync(s.id)
+    toast.success('Ученик удалён')
+  }
 
   const { data: archivedData, isLoading: archivedLoading } = useArchivedCoursesPaged({
     page: archivePage, limit: LIMIT, search,
@@ -134,15 +185,23 @@ function CoursesPageInner() {
   return (
     <div style={{ maxWidth: 900 }}>
       <PageHeader
-        title="Курсы"
+        title={tab === 'students' ? 'Ученики' : 'Курсы'}
         meta={
-          <HeaderMetric color="var(--success)">
-            {tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
-          </HeaderMetric>
+          tab === 'students' ? (
+            <HeaderMetric color="var(--purple)">{studentTotal} учеников</HeaderMetric>
+          ) : (
+            <HeaderMetric color="var(--success)">
+              {tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
+            </HeaderMetric>
+          )
         }
         actions={
           tab === 'active' ? (
             <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1.5" /> Добавить
+            </Button>
+          ) : tab === 'students' ? (
+            <Button size="sm" onClick={openCreateStudent}>
               <Plus className="h-4 w-4 mr-1.5" /> Добавить
             </Button>
           ) : null
@@ -151,10 +210,10 @@ function CoursesPageInner() {
 
       {/* Tab switcher */}
       <div className="flex gap-1 mb-4" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
-        {(['active', 'archive'] as const).map((t) => (
+        {(['active', 'students', 'archive'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => changeTab(t)}
             style={{
               padding: '6px 16px',
               fontSize: 13,
@@ -167,21 +226,49 @@ function CoursesPageInner() {
               marginBottom: -1,
             }}
           >
-            {t === 'active' ? 'Активные' : 'Архив'}
+            {t === 'active' ? 'Активные' : t === 'students' ? 'Ученики' : 'Архив'}
           </button>
         ))}
       </div>
 
       <div className="mb-4">
         <Input
-          placeholder="Поиск по предмету..."
-          value={localSearch}
-          onChange={(e) => setLocalSearch(e.target.value)}
+          placeholder={tab === 'students' ? 'Поиск по имени или email...' : 'Поиск по предмету...'}
+          value={tab === 'students' ? studentSearch : localSearch}
+          onChange={(e) => tab === 'students' ? setStudentSearch(e.target.value) : setLocalSearch(e.target.value)}
           className="max-w-sm"
         />
       </div>
 
-      {tab === 'active' ? (
+      {tab === 'students' ? (
+        /* ── Students tab ── */
+        studentsLoading ? (
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : studentList.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={studentSearch ? 'Ничего не найдено' : 'Нет учеников'}
+            description={studentSearch ? 'Попробуй другой запрос' : 'Добавь первого ученика'}
+            action={!studentSearch ? { label: 'Добавить ученика', onClick: openCreateStudent } : undefined}
+          />
+        ) : (
+          <>
+            <StudentsList students={studentList} onEdit={openEditStudent} onDelete={handleStudentDelete} />
+            {studentPages > 1 && (
+              <div className="flex items-center justify-between mt-3 px-1">
+                <span className="text-xs text-muted-foreground">
+                  Страница {studentPage} из {studentPages}
+                </span>
+                <Pagination page={studentPage} totalPages={studentPages} onPageChange={setStudentPage} />
+              </div>
+            )}
+          </>
+        )
+      ) : tab === 'active' ? (
         /* ── Active tab ── */
         isLoading ? (
           <div className="space-y-2">
@@ -341,6 +428,13 @@ function CoursesPageInner() {
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
         initial={editing}
+      />
+
+      <StudentForm
+        open={studentFormOpen}
+        onClose={() => setStudentFormOpen(false)}
+        onSubmit={handleStudentSubmit}
+        initial={editingStudent}
       />
     </div>
   )
