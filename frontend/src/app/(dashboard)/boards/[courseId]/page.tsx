@@ -2,8 +2,17 @@
 
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useBoardByCourse } from '@/lib/hooks/useWhiteboard'
-import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
+
+// Excalidraw трогает window при инициализации — только клиент, без SSR.
+const ExcalidrawCanvas = dynamic(
+  () =>
+    import('@/components/whiteboard/ExcalidrawCanvas').then(
+      (m) => m.ExcalidrawCanvas
+    ),
+  { ssr: false }
+)
 
 export default function BoardPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -28,7 +37,7 @@ export default function BoardPage() {
 
   return (
     <div className="h-screen">
-      <TldrawCanvas
+      <ExcalidrawCanvas
         page={currentPage}
         boardId={board.id}
         pages={board.pages}
