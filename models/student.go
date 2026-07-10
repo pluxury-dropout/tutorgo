@@ -26,3 +26,14 @@ type UpdateStudentRequest struct {
 	Email     string `json:"email"      validate:"omitempty,email"`
 	Notes     string `json:"notes"      validate:"omitempty,max=500"`
 }
+
+type AcceptInviteRequest struct {
+	Token    string `json:"token"    validate:"required,uuid"`
+	Username string `json:"username" validate:"required,min=3,max=32,alphanum"`
+	Password string `json:"password" validate:"required,min=6"`
+}
+
+type StudentLoginRequest struct {
+	Identifier string `json:"identifier" validate:"required"` // телефон или username
+	Password   string `json:"password"   validate:"required,min=6"`
+}

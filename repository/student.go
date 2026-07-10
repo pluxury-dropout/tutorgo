@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 	"tutorgo/models"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +14,12 @@ type StudentRepository interface {
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error
+	GetByInviteToken(ctx context.Context, token string) (string, time.Time, error)
+	ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error
+	GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error)
+	EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error)
+	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
 }
 
 type studentRepository struct {
@@ -97,4 +104,57 @@ func (r *studentRepository) Delete(ctx context.Context, id string, tutorID strin
 	_, err := r.conn.Exec(ctx,
 		`DELETE FROM students WHERE id = $1 AND tutor_id = $2`, id, tutorID)
 	return err
+}
+
+func (r *studentRepository) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE students SET invite_token=$2, invite_expires_at=$3 WHERE id=$1`,
+		studentID, token, expiresAt)
+	return err
+}
+
+func (r *studentRepository) GetByInviteToken(ctx context.Context, token string) (string, time.Time, error) {
+	var id string
+	var exp time.Time
+	err := r.conn.QueryRow(ctx,
+		`SELECT id, invite_expires_at FROM students WHERE invite_token=$1`, token,
+	).Scan(&id, &exp)
+	return id, exp, err
+}
+
+func (r *studentRepository) ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE students SET username=$2, password_hash=$3, invite_token=NULL, invite_expires_at=NULL WHERE id=$1`,
+		studentID, username, passwordHash)
+	return err
+}
+
+func (r *studentRepository) GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error) {
+	var id, hash string
+	err := r.conn.QueryRow(ctx,
+		`SELECT id, password_hash FROM students
+		 WHERE password_hash IS NOT NULL AND (username=$1 OR phone=$1) LIMIT 1`, identifier,
+	).Scan(&id, &hash)
+	return id, hash, err
+}
+
+func (r *studentRepository) EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error) {
+	var ok bool
+	err := r.conn.QueryRow(ctx,
+		`SELECT EXISTS (
+		   SELECT 1 FROM lessons l JOIN courses c ON c.id=l.course_id
+		   WHERE l.id=$2 AND (
+		     c.student_id=$1
+		     OR EXISTS (SELECT 1 FROM course_enrollments ce WHERE ce.course_id=c.id AND ce.student_id=$1)
+		   ))`, studentID, lessonID,
+	).Scan(&ok)
+	return ok, err
+}
+
+func (r *studentRepository) CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error) {
+	var courseID, tutorID string
+	err := r.conn.QueryRow(ctx,
+		`SELECT c.id, c.tutor_id FROM lessons l JOIN courses c ON c.id=l.course_id WHERE l.id=$1`, lessonID,
+	).Scan(&courseID, &tutorID)
+	return courseID, tutorID, err
 }

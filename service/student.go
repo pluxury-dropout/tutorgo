@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -13,6 +14,12 @@ type StudentService interface {
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error
+	GetByInviteToken(ctx context.Context, token string) (string, time.Time, error)
+	ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error
+	GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error)
+	EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error)
+	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
 }
 
 type studentService struct {
@@ -51,4 +58,28 @@ func (s *studentService) Delete(ctx context.Context, id string, tutorID string) 
 		return fmt.Errorf("student: %w", ErrNotFound)
 	}
 	return s.repo.Delete(ctx, id, tutorID)
+}
+
+func (s *studentService) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {
+	return s.repo.SetInvite(ctx, studentID, token, expiresAt)
+}
+
+func (s *studentService) GetByInviteToken(ctx context.Context, token string) (string, time.Time, error) {
+	return s.repo.GetByInviteToken(ctx, token)
+}
+
+func (s *studentService) ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error {
+	return s.repo.ActivateAccount(ctx, studentID, username, passwordHash)
+}
+
+func (s *studentService) GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error) {
+	return s.repo.GetCredentialsByLogin(ctx, identifier)
+}
+
+func (s *studentService) EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error) {
+	return s.repo.EnrolledInLesson(ctx, studentID, lessonID)
+}
+
+func (s *studentService) CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error) {
+	return s.repo.CourseAndTutorForLesson(ctx, lessonID)
 }

@@ -126,6 +126,30 @@ func (m *mockStudentService) Update(ctx context.Context, id string, tutorID stri
 func (m *mockStudentService) Delete(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }
+func (m *mockStudentService) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {
+	args := m.Called(ctx, studentID, token, expiresAt)
+	return args.Error(0)
+}
+func (m *mockStudentService) GetByInviteToken(ctx context.Context, token string) (string, time.Time, error) {
+	args := m.Called(ctx, token)
+	return args.String(0), args.Get(1).(time.Time), args.Error(2)
+}
+func (m *mockStudentService) ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error {
+	args := m.Called(ctx, studentID, username, passwordHash)
+	return args.Error(0)
+}
+func (m *mockStudentService) GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error) {
+	args := m.Called(ctx, identifier)
+	return args.String(0), args.String(1), args.Error(2)
+}
+func (m *mockStudentService) EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error) {
+	args := m.Called(ctx, studentID, lessonID)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockStudentService) CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error) {
+	args := m.Called(ctx, lessonID)
+	return args.String(0), args.String(1), args.Error(2)
+}
 
 // --- Mock: TutorService ---
 
