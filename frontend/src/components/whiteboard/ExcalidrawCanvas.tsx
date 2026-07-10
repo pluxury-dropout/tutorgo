@@ -221,6 +221,8 @@ export function ExcalidrawCanvas({
     void (async () => {
       try {
         const pdf = await loadPdf(file)
+        // Повторный drop поверх незакрытого документа — чистим старый.
+        void pdfRef.current?.cleanup()
         pdfRef.current = pdf
         setPdfDialog({ numPages: pdf.numPages, point })
       } catch {
@@ -358,6 +360,7 @@ export function ExcalidrawCanvas({
             progress={pdfProgress}
             onConfirm={handlePdfConfirm}
             onCancel={() => {
+              void pdfRef.current?.cleanup()
               pdfRef.current = null
               setPdfDialog(null)
             }}
