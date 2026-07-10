@@ -22,8 +22,12 @@ import (
 )
 
 func newCallRouter(svc *mockLessonService) *gin.Engine {
+	return newCallRouterWithStudentSvc(svc, new(mockStudentService))
+}
+
+func newCallRouterWithStudentSvc(svc *mockLessonService, studentSvc *mockStudentService) *gin.Engine {
 	r := gin.New()
-	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret")
+	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret", studentSvc)
 	r.GET("/public/lessons/:id/guest-token", h.GetGuestToken)
 	r.GET("/public/lessons/:id/room-status", h.GetRoomStatus)
 	r.POST("/webhooks/livekit", h.LiveKitWebhook)
@@ -31,6 +35,9 @@ func newCallRouter(svc *mockLessonService) *gin.Engine {
 	auth.Use(withTutorID(testTutorID))
 	auth.POST("/lessons/:id/start-room", h.StartRoom)
 	auth.POST("/lessons/:id/end-room", h.EndRoom)
+	student := r.Group("/")
+	student.Use(withStudentID(testStudentID))
+	student.POST("/student/lessons/:id/room-token", h.GetStudentToken)
 	return r
 }
 
@@ -157,6 +164,48 @@ func TestLiveKitWebhook_RoomFinished_EndsRoom(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	svc.AssertExpectations(t) // proves EndRoomByID was called with the parsed lessonID
+}
+
+func TestStudentToken_NotEnrolled_Forbidden(t *testing.T) {
+	svc := new(mockLessonService)
+	studentSvc := new(mockStudentService)
+	r := newCallRouterWithStudentSvc(svc, studentSvc)
+
+	studentSvc.On("EnrolledInLesson", mock.Anything, testStudentID, testLessonID).Return(false, nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/student/lessons/"+testLessonID+"/room-token", nil)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	studentSvc.AssertExpectations(t)
+}
+
+func TestStudentToken_Enrolled_Success(t *testing.T) {
+	svc := new(mockLessonService)
+	studentSvc := new(mockStudentService)
+	r := newCallRouterWithStudentSvc(svc, studentSvc)
+
+	studentSvc.On("EnrolledInLesson", mock.Anything, testStudentID, testLessonID).Return(true, nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/student/lessons/"+testLessonID+"/room-token", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var body map[string]string
+	decodeJSON(t, w, &body)
+	assert.NotEmpty(t, body["token"])
+	assert.Equal(t, "lesson-"+testLessonID, body["room_name"])
+	assert.Equal(t, "http://livekit.test", body["server_url"])
+
+	verifier, err := lkauth.ParseAPIToken(body["token"])
+	if err != nil {
+		t.Fatalf("failed to parse token: %v", err)
+	}
+	_, grants, err := verifier.Verify("secret")
+	if err != nil {
+		t.Fatalf("failed to verify token: %v", err)
+	}
+	assert.Equal(t, "student-"+testStudentID, grants.Identity)
+
+	studentSvc.AssertExpectations(t)
 }
 
 func TestLiveKitWebhook_BadSignature_Rejected(t *testing.T) {

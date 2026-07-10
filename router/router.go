@@ -57,7 +57,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
-	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
+	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, studentService)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 
 	origins := []string{"http://localhost:3000"}

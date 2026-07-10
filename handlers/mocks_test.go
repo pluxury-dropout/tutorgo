@@ -103,6 +103,13 @@ func withTutorID(tutorID string) gin.HandlerFunc {
 	}
 }
 
+func withStudentID(studentID string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("studentID", studentID)
+		c.Next()
+	}
+}
+
 // --- Mock: StudentService ---
 
 type mockStudentService struct{ mock.Mock }

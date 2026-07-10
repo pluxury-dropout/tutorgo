@@ -23,30 +23,32 @@ type quickRoom struct {
 }
 
 type CallHandler struct {
-	lessonService service.LessonService
-	log           *slog.Logger
-	livekitURL    string
-	apiKey        string
-	apiSecret     string
-	roomClient    *lksdk.RoomServiceClient
+	lessonService  service.LessonService
+	studentService service.StudentService
+	log            *slog.Logger
+	livekitURL     string
+	apiKey         string
+	apiSecret      string
+	roomClient     *lksdk.RoomServiceClient
 
 	quickMu    sync.RWMutex
 	quickRooms map[string]*quickRoom
 }
 
-func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string) *CallHandler {
+func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string, studentSvc service.StudentService) *CallHandler {
 	var roomClient *lksdk.RoomServiceClient
 	if key != "" {
 		roomClient = lksdk.NewRoomServiceClient(url, key, secret)
 	}
 	return &CallHandler{
-		lessonService: svc,
-		log:           log,
-		livekitURL:    url,
-		apiKey:        key,
-		apiSecret:     secret,
-		roomClient:    roomClient,
-		quickRooms:    make(map[string]*quickRoom),
+		lessonService:  svc,
+		studentService: studentSvc,
+		log:            log,
+		livekitURL:     url,
+		apiKey:         key,
+		apiSecret:      secret,
+		roomClient:     roomClient,
+		quickRooms:     make(map[string]*quickRoom),
 	}
 }
 
@@ -99,6 +101,39 @@ func (h *CallHandler) GetToken(c *gin.Context) {
 		"room_name":  roomName,
 		"server_url": h.livekitURL,
 	})
+}
+
+// POST /student/lessons/:id/room-token — только для записанного залогиненного ученика
+func (h *CallHandler) GetStudentToken(c *gin.Context) {
+	if h.apiKey == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
+		return
+	}
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	lessonID := c.Param("id")
+	ok, err := h.studentService.EnrolledInLesson(c.Request.Context(), studentID, lessonID)
+	if err != nil || !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not enrolled in this lesson"})
+		return
+	}
+	roomName := "lesson-" + lessonID
+	canPublish, canSubscribe := true, true
+	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
+	at.SetVideoGrant(&lkauth.VideoGrant{
+		RoomJoin: true, Room: roomName,
+		CanPublish: &canPublish, CanSubscribe: &canSubscribe,
+	}).SetIdentity("student-" + studentID).SetName("Ученик").SetValidFor(3 * time.Hour)
+	token, err := at.ToJWT()
+	if err != nil {
+		h.log.Error("Failed to generate student token", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": token, "room_name": roomName, "server_url": h.livekitURL})
 }
 
 // GET /public/lessons/:id/guest-token — публичный, для учеников по ссылке
