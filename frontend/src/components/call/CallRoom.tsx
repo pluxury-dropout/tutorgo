@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -17,7 +18,15 @@ import { CallToolbar } from './CallToolbar'
 import { CallChat } from './CallChat'
 import { useCallChat } from './useCallChat'
 import { themeTokens } from './callTheme'
-import { TldrawCanvas } from '@/components/whiteboard/TldrawCanvas'
+
+// Excalidraw трогает window при инициализации — только клиент, без SSR.
+const ExcalidrawCanvas = dynamic(
+  () =>
+    import('@/components/whiteboard/ExcalidrawCanvas').then(
+      (m) => m.ExcalidrawCanvas
+    ),
+  { ssr: false }
+)
 import { whiteboardApi } from '@/lib/api/whiteboard'
 import type { BoardWithPages } from '@/types/api'
 
@@ -182,7 +191,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
         {mode === 'call' && <CallStage />}
 
         {mode === 'board' && activeBoard && resolvedPageId && (
-          <TldrawCanvas
+          <ExcalidrawCanvas
             page={currentPage}
             boardId={activeBoard.id}
             pages={activeBoard.pages}
