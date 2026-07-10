@@ -70,7 +70,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		os.Exit(1)
 	}
 	wbHubManager := handlers.NewWbHubManager(whiteboardService, subscriptionService, log, cfg.JWTSecret, origins)
-	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager, store)
+	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager, store, studentService)
 
 	r := gin.New()
 	r.Use(gin.Recovery())

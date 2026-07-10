@@ -158,6 +158,56 @@ func (m *mockStudentService) CourseAndTutorForLesson(ctx context.Context, lesson
 	return args.String(0), args.String(1), args.Error(2)
 }
 
+// --- Mock: WhiteboardService ---
+
+type mockWhiteboardService struct{ mock.Mock }
+
+func (m *mockWhiteboardService) GetOrCreateBoard(ctx context.Context, courseID, tutorID string) (models.BoardWithPages, error) {
+	args := m.Called(ctx, courseID, tutorID)
+	return args.Get(0).(models.BoardWithPages), args.Error(1)
+}
+func (m *mockWhiteboardService) ValidateInvite(ctx context.Context, inviteID string) (models.BoardWithPages, error) {
+	args := m.Called(ctx, inviteID)
+	return args.Get(0).(models.BoardWithPages), args.Error(1)
+}
+func (m *mockWhiteboardService) CreatePage(ctx context.Context, boardID, tutorID, title string) (models.BoardPage, error) {
+	args := m.Called(ctx, boardID, tutorID, title)
+	return args.Get(0).(models.BoardPage), args.Error(1)
+}
+func (m *mockWhiteboardService) UpdatePage(ctx context.Context, pageID, tutorID string, req models.UpdateBoardPageRequest) (models.BoardPage, error) {
+	args := m.Called(ctx, pageID, tutorID, req)
+	return args.Get(0).(models.BoardPage), args.Error(1)
+}
+func (m *mockWhiteboardService) DeletePage(ctx context.Context, pageID, tutorID string) error {
+	return m.Called(ctx, pageID, tutorID).Error(0)
+}
+func (m *mockWhiteboardService) SaveSnapshot(ctx context.Context, pageID string, snapshot json.RawMessage) error {
+	return m.Called(ctx, pageID, snapshot).Error(0)
+}
+func (m *mockWhiteboardService) CreateInvite(ctx context.Context, boardID, tutorID string) (models.BoardInvite, error) {
+	args := m.Called(ctx, boardID, tutorID)
+	return args.Get(0).(models.BoardInvite), args.Error(1)
+}
+func (m *mockWhiteboardService) DeleteInvite(ctx context.Context, boardID, tutorID string) error {
+	return m.Called(ctx, boardID, tutorID).Error(0)
+}
+func (m *mockWhiteboardService) SaveAsset(ctx context.Context, boardID, tutorID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error) {
+	args := m.Called(ctx, boardID, tutorID, filePath, mimeType, sizeBytes)
+	return args.Get(0).(models.BoardAsset), args.Error(1)
+}
+func (m *mockWhiteboardService) GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error) {
+	args := m.Called(ctx, assetID)
+	return args.Get(0).(models.BoardAsset), args.Error(1)
+}
+func (m *mockWhiteboardService) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
+	args := m.Called(ctx, pageID)
+	return args.Get(0).(json.RawMessage), args.Error(1)
+}
+func (m *mockWhiteboardService) PageBelongsToTutor(ctx context.Context, pageID, tutorID string) (bool, error) {
+	args := m.Called(ctx, pageID, tutorID)
+	return args.Bool(0), args.Error(1)
+}
+
 // --- Mock: TutorService ---
 
 type mockTutorService struct{ mock.Mock }
