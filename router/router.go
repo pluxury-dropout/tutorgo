@@ -33,11 +33,13 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	taskRepo := repository.NewTaskRepository(pool)
 	whiteboardRepo := repository.NewWhiteboardRepository(pool)
 	subscriptionRepo := repository.NewSubscriptionRepository(pool)
+	studentRefreshRepo := repository.NewStudentRefreshTokenRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
 	studentService := service.NewStudentService(studentRepo)
+	studentRefreshService := service.NewStudentRefreshTokenService(studentRefreshRepo)
 	courseService := service.NewCourseService(courseRepo, studentRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
 	lessonService := service.NewLessonService(lessonRepo, courseRepo, paymentRepo)
@@ -59,6 +61,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	taskHandler := handlers.NewTaskHandler(taskService, log)
 	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, studentService)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
+	studentAuthHandler := handlers.NewStudentAuthHandler(studentService, studentRefreshService, log, cfg.JWTSecret, cfg.Env == "production")
 
 	origins := []string{"http://localhost:3000"}
 	if cfg.AllowedOrigin != "" {
@@ -92,12 +95,18 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	r.POST("/auth/login", authLimiter, authHandler.Login)
 	r.POST("/auth/refresh", authLimiter, authHandler.Refresh)
 	r.POST("/auth/logout", authLimiter, authHandler.Logout)
-	r.GET("/public/lessons/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetGuestToken)
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
 	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
 	r.POST("/webhooks/livekit", callHandler.LiveKitWebhook)
 	r.POST("/subscription/webhook", subscriptionHandler.Webhook)
+
+	// Public student auth routes
+	studentAuthLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
+	r.POST("/student/auth/accept-invite", studentAuthLimiter, studentAuthHandler.AcceptInvite)
+	r.POST("/student/auth/login", studentAuthLimiter, studentAuthHandler.Login)
+	r.POST("/student/auth/refresh", studentAuthLimiter, studentAuthHandler.Refresh)
+	r.POST("/student/auth/logout", studentAuthHandler.Logout)
 
 	// Whiteboard public routes (no JWT required)
 	r.GET("/public/board/join/:token", whiteboardHandler.JoinByInvite)
@@ -130,6 +139,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.PUT("/students/:id", studentHandler.Update)
 		auth.DELETE("/students/:id", studentHandler.Delete)
 		auth.GET("/students/:id/courses", courseHandler.GetByStudent)
+		auth.POST("/students/:id/invite", studentHandler.Invite)
 
 		auth.GET("/courses", courseHandler.GetAll)
 		auth.POST("/courses", courseHandler.Create)
@@ -188,6 +198,14 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.POST("/boards/:boardId/invite", whiteboardHandler.CreateInvite)
 		auth.DELETE("/boards/:boardId/invite", whiteboardHandler.DeleteInvite)
 		auth.POST("/boards/:boardId/assets", whiteboardHandler.UploadAsset)
+	}
+
+	// Protected student routes (student JWT role, no subscription check — that's the tutor's concern)
+	stu := r.Group("/student")
+	stu.Use(middleware.AuthStudent(cfg.JWTSecret))
+	{
+		stu.POST("/lessons/:id/room-token", callHandler.GetStudentToken)
+		stu.GET("/lessons/:id/board-token", whiteboardHandler.StudentBoardToken)
 	}
 
 	return r, subscriptionService

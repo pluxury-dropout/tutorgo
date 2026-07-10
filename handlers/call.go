@@ -136,51 +136,6 @@ func (h *CallHandler) GetStudentToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token, "room_name": roomName, "server_url": h.livekitURL})
 }
 
-// GET /public/lessons/:id/guest-token — публичный, для учеников по ссылке
-func (h *CallHandler) GetGuestToken(c *gin.Context) {
-	if h.apiKey == "" {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
-		return
-	}
-
-	lessonID := c.Param("id")
-	if err := h.lessonService.ExistsPublic(c.Request.Context(), lessonID); err != nil {
-		h.log.Error("lesson existence check failed", slog.String("lessonID", lessonID), slog.String("error", err.Error()))
-		c.JSON(http.StatusNotFound, gin.H{"error": "lesson not found"})
-		return
-	}
-
-	roomName := "lesson-" + lessonID
-
-	canPublish := true
-	canSubscribe := true
-	identity := fmt.Sprintf("guest-%d", time.Now().UnixMilli())
-	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
-	grant := &lkauth.VideoGrant{
-		RoomJoin:     true,
-		Room:         roomName,
-		CanPublish:   &canPublish,
-		CanSubscribe: &canSubscribe,
-	}
-	at.SetVideoGrant(grant).
-		SetIdentity(identity).
-		SetName("Ученик").
-		SetValidFor(3 * time.Hour)
-
-	token, err := at.ToJWT()
-	if err != nil {
-		h.log.Error("Failed to generate guest token", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"token":      token,
-		"room_name":  roomName,
-		"server_url": h.livekitURL,
-	})
-}
-
 func (h *CallHandler) StartRoom(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {
