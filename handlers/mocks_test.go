@@ -296,6 +296,22 @@ func (m *mockRefreshTokenService) RevokeAll(ctx context.Context, tutorID string)
 	return m.Called(ctx, tutorID).Error(0)
 }
 
+// --- Mock: StudentRefreshTokenService ---
+
+type mockStudentRefreshTokenService struct{ mock.Mock }
+
+func (m *mockStudentRefreshTokenService) Create(ctx context.Context, studentID string) (string, error) {
+	args := m.Called(ctx, studentID)
+	return args.String(0), args.Error(1)
+}
+func (m *mockStudentRefreshTokenService) Validate(ctx context.Context, token string) (string, error) {
+	args := m.Called(ctx, token)
+	return args.String(0), args.Error(1)
+}
+func (m *mockStudentRefreshTokenService) Revoke(ctx context.Context, token string) error {
+	return m.Called(ctx, token).Error(0)
+}
+
 // --- Mock: LessonService ---
 
 type mockLessonService struct{ mock.Mock }
