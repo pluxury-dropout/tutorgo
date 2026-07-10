@@ -225,10 +225,10 @@ export function useExcalidrawSync(
       // старого соединения снесёт здоровое и зациклит реконнекты.
       if (closedRef.current || wsRef.current !== ws) return
       setStatus('disconnected')
-      // Intentional self-recursion for reconnect backoff; same pattern as
-      // the pre-existing useWhiteboardSync.ts, safe since `connect` is
-      // fully assigned by the time this closure runs (never invoked
-      // synchronously during render).
+      // Намеренная само-рекурсия для reconnect-backoff — тот же паттерн
+      // реконнекта, что был в старом sync-хуке доски; безопасно, т.к.
+      // `connect` полностью присвоен к моменту вызова этого замыкания
+      // (никогда не вызывается синхронно во время рендера).
       retryRef.current = setTimeout(() => {
         // eslint-disable-next-line react-hooks/immutability
         void connect()
@@ -240,9 +240,9 @@ export function useExcalidrawSync(
 
   useEffect(() => {
     closedRef.current = false
-    // Resets connection status synchronously on page switch, mirroring
-    // useWhiteboardSync.ts; deferring this would flash a stale 'connected'
-    // status from the previous page while the new socket is opening.
+    // Синхронно сбрасываем статус соединения при смене страницы — тот же
+    // паттерн, что был в старом sync-хуке доски; отложенный сброс мигнул бы
+    // устаревшим 'connected' с прошлой страницы, пока открывается новый сокет.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus('connecting')
     // Смена страницы = новая сцена: локальные карты обнуляем.
