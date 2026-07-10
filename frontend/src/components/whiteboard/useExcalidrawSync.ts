@@ -20,6 +20,8 @@ import {
   diffChangedElements,
   parseSnapshot,
   blobToDataURL,
+  utf8ByteSize,
+  SNAPSHOT_MAX_BYTES,
   type SnapshotFiles,
 } from './excalidrawSync'
 import type { BoardPage } from '@/types/api'
@@ -58,6 +60,16 @@ export function useExcalidrawSync(
   const pendingSeedRef = useRef<unknown>(null)
   // Курсоры пиров для нативного рендера Excalidraw.
   const collaboratorsRef = useRef<Map<SocketId, Collaborator>>(new Map())
+  // Кэш последней сцены для финального снапшота при teardown. НЕ читаем live
+  // apiRef в cleanup: при переключении страницы новый (пустой) Excalidraw уже
+  // перезаписал apiRef, а этот cleanup — пассивный и бежит позже, так что live
+  // api = пустая сцена. Тег pageId страхует и от обратного порядка (initial
+  // onChange нового Excalidraw в layout-фазе ДО cleanup): cleanup шлёт снапшот,
+  // только если кэш принадлежит уходящей странице.
+  const lastSceneRef = useRef<{
+    pageId: string
+    elements: readonly ExcalidrawElement[]
+  } | null>(null)
 
   // Стабильный примитив — connect не пересоздаётся на рефетчах React Query,
   // возвращающих новый объект той же страницы.
@@ -92,22 +104,36 @@ export function useExcalidrawSync(
     }
   }, [])
 
+  // Сериализует снапшот и шлёт с проверкой размера. Единый путь и для
+  // дебаунс-снапшота (live api), и для финального при teardown (кэш сцены).
+  const sendSnapshotElements = useCallback(
+    (elements: readonly ExcalidrawElement[]) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return
+      // Персистим ВКЛЮЧАЯ tombstones (isDeleted): иначе пир, пропустивший
+      // удаление офлайн, при реконнекте воскресит элемент через reconcile.
+      const json = JSON.stringify({
+        type: 'snapshot',
+        payload: { elements, files: filesRef.current },
+      })
+      const size = utf8ByteSize(json)
+      if (size > SNAPSHOT_MAX_BYTES) {
+        // ponytail: tombstones копятся за жизнь доски и растят снапшот
+        // монотонно; потолок — ReadLimit 512 КБ Go-хаба, апгрейд — компакция
+        // tombstones, когда упрёмся в лимит.
+        console.warn(
+          `Снапшот доски ${size} байт превышает лимит ${SNAPSHOT_MAX_BYTES} байт — отправка пропущена`
+        )
+        return
+      }
+      wsRef.current.send(json)
+    },
+    []
+  )
+
   const sendSnapshot = useCallback(() => {
     const api = apiRef.current
-    if (!api || wsRef.current?.readyState !== WebSocket.OPEN) return
-    // Персистим ВКЛЮЧАЯ tombstones (isDeleted): иначе пир, пропустивший
-    // удаление офлайн, при реконнекте воскресит элемент через reconcile.
-    // ponytail: tombstones копятся за жизнь доски; компакция — когда заметим.
-    wsRef.current.send(
-      JSON.stringify({
-        type: 'snapshot',
-        payload: {
-          elements: api.getSceneElementsIncludingDeleted(),
-          files: filesRef.current,
-        },
-      })
-    )
-  }, [])
+    if (api) sendSnapshotElements(api.getSceneElementsIncludingDeleted())
+  }, [sendSnapshotElements])
 
   // Шлёт пирам элементы, изменившиеся с последнего flush.
   const flushUpdate = useCallback(() => {
@@ -250,6 +276,7 @@ export function useExcalidrawSync(
     filesRef.current = {}
     collaboratorsRef.current = new Map()
     pendingSeedRef.current = null
+    lastSceneRef.current = null
     void connect()
     return () => {
       closedRef.current = true
@@ -257,13 +284,18 @@ export function useExcalidrawSync(
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
       if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
       retryRef.current = updateTimerRef.current = snapshotTimerRef.current = null
-      // Best-effort финальный снапшот перед закрытием.
-      sendSnapshot()
+      // Best-effort финальный снапшот из кэша сцены (не из live apiRef, см.
+      // lastSceneRef). Тег pageId защищает от гонки с initial onChange нового
+      // Excalidraw: шлём, только если кэш — от уходящей страницы. filesRef ещё
+      // держит файлы уходящей страницы (reset filesRef — в setup нового
+      // эффекта, ПОСЛЕ этого cleanup). null → локальных правок не было, пропуск.
+      const cached = lastSceneRef.current
+      if (cached && cached.pageId === pageId) sendSnapshotElements(cached.elements)
       const ws = wsRef.current
       wsRef.current = null
       ws?.close()
     }
-  }, [connect, sendSnapshot])
+  }, [pageId, connect, sendSnapshotElements])
 
   const onApiReady = useCallback(
     (api: ExcalidrawImperativeAPI) => {
@@ -279,6 +311,10 @@ export function useExcalidrawSync(
 
   // Локальная правка: троттлим update (100мс), дебаунсим снапшот (1с).
   const onChange = useCallback(() => {
+    // Кэшируем сцену уходящей страницы для teardown-снапшота (тег pageId —
+    // чтобы initial onChange нового Excalidraw не подменил кэш пустой сценой).
+    const els = apiRef.current?.getSceneElementsIncludingDeleted()
+    if (els && pageId) lastSceneRef.current = { pageId, elements: els }
     if (!updateTimerRef.current) {
       updateTimerRef.current = setTimeout(() => {
         updateTimerRef.current = null
@@ -287,7 +323,7 @@ export function useExcalidrawSync(
     }
     if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
     snapshotTimerRef.current = setTimeout(sendSnapshot, SNAPSHOT_DEBOUNCE_MS)
-  }, [flushUpdate, sendSnapshot])
+  }, [pageId, flushUpdate, sendSnapshot])
 
   const sendCursor = useCallback((x: number, y: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { diffChangedElements, parseSnapshot } from './excalidrawSync.ts'
+import {
+  diffChangedElements,
+  parseSnapshot,
+  utf8ByteSize,
+  SNAPSHOT_MAX_BYTES,
+} from './excalidrawSync.ts'
 
 test('diffChangedElements: новые и изменённые элементы попадают в changed', () => {
   const prev = new Map([['a', 1], ['b', 2]])
@@ -48,4 +53,18 @@ test('parseSnapshot: старый tldraw-снапшот → null (чистая �
   assert.equal(parseSnapshot(null), null)
   assert.equal(parseSnapshot('garbage'), null)
   assert.equal(parseSnapshot({ elements: 'not-array' }), null)
+})
+
+test('utf8ByteSize: ASCII — байт на символ, многобайтовые — больше', () => {
+  assert.equal(utf8ByteSize(''), 0)
+  assert.equal(utf8ByteSize('abc'), 3)
+  // кириллица — 2 байта/символ в UTF-8
+  assert.equal(utf8ByteSize('да'), 4)
+})
+
+test('size-cap: снапшот под лимитом проходит, сверх — режется', () => {
+  const under = 'x'.repeat(SNAPSHOT_MAX_BYTES - 1)
+  const over = 'x'.repeat(SNAPSHOT_MAX_BYTES + 1)
+  assert.ok(utf8ByteSize(under) <= SNAPSHOT_MAX_BYTES)
+  assert.ok(utf8ByteSize(over) > SNAPSHOT_MAX_BYTES)
 })

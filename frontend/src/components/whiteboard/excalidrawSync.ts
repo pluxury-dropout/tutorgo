@@ -11,6 +11,17 @@ export interface VersionedElement {
 // Base64 в снапшоты класть нельзя — у Go-хаба ReadLimit 512 КБ на сообщение.
 export type SnapshotFiles = Record<string, { url: string; mimeType: string }>
 
+// Потолок снапшота под ReadLimit 512 КБ Go-хаба, с запасом: сообщение больше
+// лимита сервер режет → сокет рвётся → реконнект → повторная отправка того же
+// снапшота = вечная петля. Лучше пропустить отправку, чем убить сокет.
+export const SNAPSHOT_MAX_BYTES = 500 * 1024
+
+// Размер строки в байтах UTF-8. TextEncoder есть и в браузере, и в node:test
+// (Blob не берём — в старых node его не было).
+export function utf8ByteSize(s: string): number {
+  return new TextEncoder().encode(s).length
+}
+
 // Возвращает элементы, чья версия изменилась или которых не было в prev,
 // и новую карту версий. Excalidraw бампает version на каждую правку, включая
 // удаление (isDeleted: true — tombstone едет как обычный update).

@@ -205,6 +205,7 @@ export function ExcalidrawCanvas({
   // картинок приемлемо, наша кнопка вставки идёт через S3.
   // ponytail: фоновая догрузка таких base64-файлов в S3 — когда заметим раздутые снапшоты.
   const onDropCapture = (e: React.DragEvent) => {
+    if (isGuest) return // гостю вставка недоступна (кнопки скрыты) — не ловим drop
     const file = Array.from(e.dataTransfer?.files ?? []).find(
       (f) => f.type === 'application/pdf'
     )
