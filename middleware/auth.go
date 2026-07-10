@@ -41,6 +41,11 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
+		if role, _ := claims["role"].(string); role == "student" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
 		tutorID, ok := claims["id"].(string)
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
@@ -49,6 +54,38 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 
 		c.Set("tutorID", tutorID)
 
+		c.Next()
+	}
+}
+
+// AuthStudent валидирует access-токен ученика (role=="student") и кладёт studentID в контекст.
+func AuthStudent(jwtSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		token, err := jwt.ParseWithClaims(parts[1], jwt.MapClaims{},
+			func(token *jwt.Token) (interface{}, error) { return []byte(jwtSecret), nil },
+			jwt.WithValidMethods([]string{"HS256"}),
+		)
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || claims["role"] != "student" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		studentID, ok := claims["id"].(string)
+		if !ok || studentID == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+		c.Set("studentID", studentID)
 		c.Next()
 	}
 }
