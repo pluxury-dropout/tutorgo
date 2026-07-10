@@ -26,6 +26,7 @@ func newStudentRouter(svc *mockStudentService, tutorID string) *gin.Engine {
 	r.GET("/students/:id", h.GetByID)
 	r.PUT("/students/:id", h.Update)
 	r.DELETE("/students/:id", h.Delete)
+	r.POST("/students/:id/invite", h.Invite)
 	return r
 }
 
@@ -224,6 +225,38 @@ func TestStudentDelete_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	svc.AssertExpectations(t)
+}
+
+// Invite
+
+func TestStudentInvite_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(testStudent, nil)
+	svc.On("SetInvite", mock.Anything, testStudentID, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/students/"+testStudentID+"/invite", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got map[string]any
+	decodeJSON(t, w, &got)
+	assert.NotEmpty(t, got["invite_token"])
+	assert.NotEmpty(t, got["expires_at"])
+	svc.AssertExpectations(t)
+}
+
+func TestStudentInvite_NotOwned(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, fmt.Errorf("student: %w", service.ErrNotFound))
+
+	w := makeRequest(t, r, http.MethodPost, "/students/"+testStudentID+"/invite", nil)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	svc.AssertExpectations(t)
+	svc.AssertNotCalled(t, "SetInvite", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 // Body Size Limit

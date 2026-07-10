@@ -3,11 +3,13 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"tutorgo/models"
 	"tutorgo/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type StudentHandler struct {
@@ -110,4 +112,26 @@ func (h *StudentHandler) Delete(c *gin.Context) {
 	}
 	h.log.Info("Student deleted", slog.String("id", id))
 	c.Status(http.StatusNoContent)
+}
+
+func (h *StudentHandler) Invite(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	studentID := c.Param("id")
+	// Ownership check: student must belong to this tutor.
+	if _, err := h.service.GetByID(c.Request.Context(), studentID, tutorID); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	token := uuid.NewString()
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	if err := h.service.SetInvite(c.Request.Context(), studentID, token, expiresAt); err != nil {
+		h.log.Error("set invite failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create invite"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"invite_token": token, "expires_at": expiresAt})
 }
