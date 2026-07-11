@@ -20,6 +20,7 @@ type StudentService interface {
 	GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error)
 	EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error)
 	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
+	GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error)
 }
 
 type studentService struct {
@@ -82,4 +83,8 @@ func (s *studentService) EnrolledInLesson(ctx context.Context, studentID, lesson
 
 func (s *studentService) CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error) {
 	return s.repo.CourseAndTutorForLesson(ctx, lessonID)
+}
+
+func (s *studentService) GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error) {
+	return s.repo.GetProfile(ctx, studentID)
 }

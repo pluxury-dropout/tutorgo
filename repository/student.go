@@ -20,6 +20,7 @@ type StudentRepository interface {
 	GetCredentialsByLogin(ctx context.Context, identifier string) (string, string, error)
 	EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error)
 	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
+	GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error)
 }
 
 type studentRepository struct {
@@ -157,4 +158,13 @@ func (r *studentRepository) CourseAndTutorForLesson(ctx context.Context, lessonI
 		`SELECT c.id, c.tutor_id FROM lessons l JOIN courses c ON c.id=l.course_id WHERE l.id=$1`, lessonID,
 	).Scan(&courseID, &tutorID)
 	return courseID, tutorID, err
+}
+
+func (r *studentRepository) GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error) {
+	var p models.StudentProfile
+	err := r.conn.QueryRow(ctx,
+		`SELECT first_name, last_name, phone, COALESCE(username, '')
+		 FROM students WHERE id = $1`, studentID,
+	).Scan(&p.FirstName, &p.LastName, &p.Phone, &p.Username)
+	return p, err
 }

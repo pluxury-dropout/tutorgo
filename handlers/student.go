@@ -135,3 +135,19 @@ func (h *StudentHandler) Invite(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"invite_token": token, "expires_at": expiresAt})
 }
+
+// GET /student/me — профиль текущего ученика.
+func (h *StudentHandler) Me(c *gin.Context) {
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	profile, err := h.service.GetProfile(c.Request.Context(), studentID)
+	if err != nil {
+		h.log.Error("student profile failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load profile"})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}

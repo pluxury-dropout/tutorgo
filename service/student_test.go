@@ -72,6 +72,11 @@ func (m *mockStudentRepo) CourseAndTutorForLesson(ctx context.Context, lessonID 
 	return args.String(0), args.String(1), args.Error(2)
 }
 
+func (m *mockStudentRepo) GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(models.StudentProfile), args.Error(1)
+}
+
 // Тесты
 func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)

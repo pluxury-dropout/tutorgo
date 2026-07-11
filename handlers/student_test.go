@@ -282,3 +282,23 @@ func TestStudentCreate_BodyTooLarge(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "error", "response should contain error field")
 	svc.AssertNotCalled(t, "Create")
 }
+
+// Me
+
+func TestStudentMe_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	h := handlers.NewStudentHandler(svc, slog.Default())
+	r := gin.New()
+	r.GET("/student/me", func(c *gin.Context) { c.Set("studentID", testStudentID); c.Next() }, h.Me)
+
+	profile := models.StudentProfile{FirstName: "Kamila", LastName: "N", Phone: "+7700", Username: "kamila123"}
+	svc.On("GetProfile", mock.Anything, testStudentID).Return(profile, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/student/me", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.StudentProfile
+	decodeJSON(t, w, &got)
+	assert.Equal(t, "kamila123", got.Username)
+	svc.AssertExpectations(t)
+}

@@ -37,3 +37,10 @@ type StudentLoginRequest struct {
 	Identifier string `json:"identifier" validate:"required"` // телефон или username
 	Password   string `json:"password"   validate:"required,min=6"`
 }
+
+type StudentProfile struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Phone     string `json:"phone"`
+	Username  string `json:"username"`
+}
