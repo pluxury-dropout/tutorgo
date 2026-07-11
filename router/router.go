@@ -207,6 +207,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		stu.POST("/lessons/:id/room-token", callHandler.GetStudentToken)
 		stu.GET("/lessons/:id/board-token", whiteboardHandler.StudentBoardToken)
 		stu.GET("/me", studentHandler.Me)
+		stu.GET("/lessons", studentHandler.ListLessons)
 	}
 
 	return r, subscriptionService

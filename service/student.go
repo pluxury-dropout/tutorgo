@@ -21,6 +21,7 @@ type StudentService interface {
 	EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error)
 	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
 	GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error)
+	ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error)
 }
 
 type studentService struct {
@@ -87,4 +88,8 @@ func (s *studentService) CourseAndTutorForLesson(ctx context.Context, lessonID s
 
 func (s *studentService) GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error) {
 	return s.repo.GetProfile(ctx, studentID)
+}
+
+func (s *studentService) ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error) {
+	return s.repo.ListLessons(ctx, studentID, past)
 }

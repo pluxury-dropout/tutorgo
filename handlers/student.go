@@ -151,3 +151,20 @@ func (h *StudentHandler) Me(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, profile)
 }
+
+// GET /student/lessons?filter=upcoming|past — уроки текущего ученика.
+func (h *StudentHandler) ListLessons(c *gin.Context) {
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	past := c.Query("filter") == "past" // всё, кроме "past", трактуем как upcoming
+	lessons, err := h.service.ListLessons(c.Request.Context(), studentID, past)
+	if err != nil {
+		h.log.Error("student lessons failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load lessons"})
+		return
+	}
+	c.JSON(http.StatusOK, lessons)
+}

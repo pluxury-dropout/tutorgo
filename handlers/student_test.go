@@ -302,3 +302,40 @@ func TestStudentMe_Success(t *testing.T) {
 	assert.Equal(t, "kamila123", got.Username)
 	svc.AssertExpectations(t)
 }
+
+// ListLessons
+
+func TestStudentListLessons_Upcoming(t *testing.T) {
+	svc := new(mockStudentService)
+	h := handlers.NewStudentHandler(svc, slog.Default())
+	r := gin.New()
+	r.GET("/student/lessons", func(c *gin.Context) { c.Set("studentID", testStudentID); c.Next() }, h.ListLessons)
+
+	svc.On("ListLessons", mock.Anything, testStudentID, false).
+		Return([]models.CalendarLesson{{ID: "l1", Subject: "Math"}}, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/student/lessons", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []models.CalendarLesson
+	decodeJSON(t, w, &got)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "Math", got[0].Subject)
+	svc.AssertExpectations(t)
+}
+
+func TestStudentListLessons_PastFilter(t *testing.T) {
+	svc := new(mockStudentService)
+	h := handlers.NewStudentHandler(svc, slog.Default())
+	r := gin.New()
+	r.GET("/student/lessons", func(c *gin.Context) { c.Set("studentID", testStudentID); c.Next() }, h.ListLessons)
+
+	// ?filter=past → past=true в сервис
+	svc.On("ListLessons", mock.Anything, testStudentID, true).
+		Return([]models.CalendarLesson{}, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/student/lessons?filter=past", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	svc.AssertExpectations(t) // проверяет, что вызван именно с true
+}

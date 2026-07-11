@@ -21,6 +21,7 @@ type StudentRepository interface {
 	EnrolledInLesson(ctx context.Context, studentID, lessonID string) (bool, error)
 	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
 	GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error)
+	ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error)
 }
 
 type studentRepository struct {
@@ -167,4 +168,40 @@ func (r *studentRepository) GetProfile(ctx context.Context, studentID string) (m
 		 FROM students WHERE id = $1`, studentID,
 	).Scan(&p.FirstName, &p.LastName, &p.Phone, &p.Username)
 	return p, err
+}
+
+func (r *studentRepository) ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error) {
+	// enrollment-джойн идентичен EnrolledInLesson: индивидуальный курс (c.student_id)
+	// ИЛИ групповой через course_enrollments. Фильтр активности курса намеренно
+	// опущен — ученик видит все свои уроки, включая архивные (история).
+	base := `SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status,
+	                l.notes, c.subject, s.first_name, (c.student_id IS NULL) AS is_group
+	         FROM lessons l
+	         JOIN courses c ON c.id = l.course_id
+	         LEFT JOIN students s ON s.id = c.student_id
+	         WHERE (c.student_id = $1
+	                OR EXISTS (SELECT 1 FROM course_enrollments ce
+	                           WHERE ce.course_id = c.id AND ce.student_id = $1))`
+	var q string
+	if past {
+		q = base + ` AND l.scheduled_at < now() ORDER BY l.scheduled_at DESC`
+	} else {
+		q = base + ` AND l.scheduled_at >= now() ORDER BY l.scheduled_at ASC`
+	}
+	rows, err := r.conn.Query(ctx, q, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	lessons := []models.CalendarLesson{}
+	for rows.Next() {
+		var l models.CalendarLesson
+		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes,
+			&l.Status, &l.Notes, &l.Subject, &l.StudentName, &l.IsGroup); err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, l)
+	}
+	return lessons, rows.Err()
 }

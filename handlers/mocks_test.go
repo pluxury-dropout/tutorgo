@@ -161,6 +161,10 @@ func (m *mockStudentService) GetProfile(ctx context.Context, studentID string) (
 	args := m.Called(ctx, studentID)
 	return args.Get(0).(models.StudentProfile), args.Error(1)
 }
+func (m *mockStudentService) ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error) {
+	args := m.Called(ctx, studentID, past)
+	return args.Get(0).([]models.CalendarLesson), args.Error(1)
+}
 
 // --- Mock: WhiteboardService ---
 
