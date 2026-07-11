@@ -22,6 +22,8 @@ type StudentRepository interface {
 	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
 	GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error)
 	ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error)
+	GetPasswordHash(ctx context.Context, studentID string) (string, error)
+	UpdatePassword(ctx context.Context, studentID, hash string) error
 }
 
 type studentRepository struct {
@@ -204,4 +206,18 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 		lessons = append(lessons, l)
 	}
 	return lessons, rows.Err()
+}
+
+func (r *studentRepository) GetPasswordHash(ctx context.Context, studentID string) (string, error) {
+	var hash string
+	err := r.conn.QueryRow(ctx,
+		`SELECT COALESCE(password_hash, '') FROM students WHERE id = $1`, studentID,
+	).Scan(&hash)
+	return hash, err
+}
+
+func (r *studentRepository) UpdatePassword(ctx context.Context, studentID, hash string) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE students SET password_hash = $2 WHERE id = $1`, studentID, hash)
+	return err
 }

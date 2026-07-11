@@ -13,6 +13,7 @@ type StudentRefreshTokenService interface {
 	Create(ctx context.Context, studentID string) (token string, err error)
 	Validate(ctx context.Context, token string) (studentID string, err error)
 	Revoke(ctx context.Context, token string) error
+	RevokeAll(ctx context.Context, studentID string) error
 }
 
 type studentRefreshTokenService struct {
@@ -49,4 +50,8 @@ func (s *studentRefreshTokenService) Validate(ctx context.Context, token string)
 
 func (s *studentRefreshTokenService) Revoke(ctx context.Context, token string) error {
 	return s.repo.DeleteByToken(ctx, token)
+}
+
+func (s *studentRefreshTokenService) RevokeAll(ctx context.Context, studentID string) error {
+	return s.repo.DeleteByStudentID(ctx, studentID)
 }

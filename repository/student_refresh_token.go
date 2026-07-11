@@ -11,6 +11,7 @@ type StudentRefreshTokenRepository interface {
 	Create(ctx context.Context, studentID, token string, expiresAt time.Time) error
 	GetByToken(ctx context.Context, token string) (studentID string, expiresAt time.Time, err error)
 	DeleteByToken(ctx context.Context, token string) error
+	DeleteByStudentID(ctx context.Context, studentID string) error
 }
 
 type studentRefreshTokenRepository struct{ conn *pgxpool.Pool }
@@ -37,5 +38,10 @@ func (r *studentRefreshTokenRepository) GetByToken(ctx context.Context, token st
 
 func (r *studentRefreshTokenRepository) DeleteByToken(ctx context.Context, token string) error {
 	_, err := r.conn.Exec(ctx, `DELETE FROM student_refresh_tokens WHERE token=$1`, token)
+	return err
+}
+
+func (r *studentRefreshTokenRepository) DeleteByStudentID(ctx context.Context, studentID string) error {
+	_, err := r.conn.Exec(ctx, `DELETE FROM student_refresh_tokens WHERE student_id=$1`, studentID)
 	return err
 }

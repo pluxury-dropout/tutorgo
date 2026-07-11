@@ -249,3 +249,52 @@ func TestStudentLogout_NoCookie(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	refreshSvc.AssertNotCalled(t, "Revoke")
 }
+
+// ChangePassword
+
+func newStudentAuthProtectedRouter(svc *mockStudentService, refreshSvc *mockStudentRefreshTokenService) *gin.Engine {
+	r := gin.New()
+	h := handlers.NewStudentAuthHandler(svc, refreshSvc, slog.Default(), "test-secret", false)
+	r.POST("/student/password", func(c *gin.Context) { c.Set("studentID", testStudentID); c.Next() }, h.ChangePassword)
+	return r
+}
+
+func TestStudentChangePassword_WrongOld(t *testing.T) {
+	svc := new(mockStudentService)
+	refreshSvc := new(mockStudentRefreshTokenService)
+	r := newStudentAuthProtectedRouter(svc, refreshSvc)
+
+	hash, _ := bcrypt.GenerateFromPassword([]byte("correct"), bcrypt.MinCost)
+	svc.On("GetPasswordHash", mock.Anything, testStudentID).Return(string(hash), nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/student/password", models.StudentChangePasswordRequest{
+		OldPassword: "wrongpw", NewPassword: "newpass123",
+	})
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	svc.AssertNotCalled(t, "UpdatePassword")
+	refreshSvc.AssertNotCalled(t, "RevokeAll")
+}
+
+func TestStudentChangePassword_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	refreshSvc := new(mockStudentRefreshTokenService)
+	r := newStudentAuthProtectedRouter(svc, refreshSvc)
+
+	hash, _ := bcrypt.GenerateFromPassword([]byte("oldpass"), bcrypt.MinCost)
+	svc.On("GetPasswordHash", mock.Anything, testStudentID).Return(string(hash), nil)
+	svc.On("UpdatePassword", mock.Anything, testStudentID, mock.AnythingOfType("string")).Return(nil)
+	refreshSvc.On("RevokeAll", mock.Anything, testStudentID).Return(nil)
+	refreshSvc.On("Create", mock.Anything, testStudentID).Return("fresh-refresh", nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/student/password", models.StudentChangePasswordRequest{
+		OldPassword: "oldpass", NewPassword: "newpass123",
+	})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.LoginResponse
+	decodeJSON(t, w, &got)
+	assert.NotEmpty(t, got.AccessToken)
+	svc.AssertExpectations(t)
+	refreshSvc.AssertExpectations(t)
+}

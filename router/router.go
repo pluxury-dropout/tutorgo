@@ -208,6 +208,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		stu.GET("/lessons/:id/board-token", whiteboardHandler.StudentBoardToken)
 		stu.GET("/me", studentHandler.Me)
 		stu.GET("/lessons", studentHandler.ListLessons)
+		stu.POST("/password", studentAuthHandler.ChangePassword)
 	}
 
 	return r, subscriptionService

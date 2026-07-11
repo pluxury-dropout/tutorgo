@@ -22,6 +22,8 @@ type StudentService interface {
 	CourseAndTutorForLesson(ctx context.Context, lessonID string) (string, string, error)
 	GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error)
 	ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error)
+	GetPasswordHash(ctx context.Context, studentID string) (string, error)
+	UpdatePassword(ctx context.Context, studentID, hash string) error
 }
 
 type studentService struct {
@@ -92,4 +94,12 @@ func (s *studentService) GetProfile(ctx context.Context, studentID string) (mode
 
 func (s *studentService) ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error) {
 	return s.repo.ListLessons(ctx, studentID, past)
+}
+
+func (s *studentService) GetPasswordHash(ctx context.Context, studentID string) (string, error) {
+	return s.repo.GetPasswordHash(ctx, studentID)
+}
+
+func (s *studentService) UpdatePassword(ctx context.Context, studentID, hash string) error {
+	return s.repo.UpdatePassword(ctx, studentID, hash)
 }

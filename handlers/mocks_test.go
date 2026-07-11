@@ -165,6 +165,13 @@ func (m *mockStudentService) ListLessons(ctx context.Context, studentID string, 
 	args := m.Called(ctx, studentID, past)
 	return args.Get(0).([]models.CalendarLesson), args.Error(1)
 }
+func (m *mockStudentService) GetPasswordHash(ctx context.Context, studentID string) (string, error) {
+	args := m.Called(ctx, studentID)
+	return args.String(0), args.Error(1)
+}
+func (m *mockStudentService) UpdatePassword(ctx context.Context, studentID, hash string) error {
+	return m.Called(ctx, studentID, hash).Error(0)
+}
 
 // --- Mock: WhiteboardService ---
 
@@ -375,6 +382,9 @@ func (m *mockStudentRefreshTokenService) Validate(ctx context.Context, token str
 }
 func (m *mockStudentRefreshTokenService) Revoke(ctx context.Context, token string) error {
 	return m.Called(ctx, token).Error(0)
+}
+func (m *mockStudentRefreshTokenService) RevokeAll(ctx context.Context, studentID string) error {
+	return m.Called(ctx, studentID).Error(0)
 }
 
 // --- Mock: LessonService ---

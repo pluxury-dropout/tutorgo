@@ -82,6 +82,16 @@ func (m *mockStudentRepo) ListLessons(ctx context.Context, studentID string, pas
 	return args.Get(0).([]models.CalendarLesson), args.Error(1)
 }
 
+func (m *mockStudentRepo) GetPasswordHash(ctx context.Context, studentID string) (string, error) {
+	args := m.Called(ctx, studentID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockStudentRepo) UpdatePassword(ctx context.Context, studentID, hash string) error {
+	args := m.Called(ctx, studentID, hash)
+	return args.Error(0)
+}
+
 // Тесты
 func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)

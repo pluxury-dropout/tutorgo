@@ -44,3 +44,8 @@ type StudentProfile struct {
 	Phone     string `json:"phone"`
 	Username  string `json:"username"`
 }
+
+type StudentChangePasswordRequest struct {
+	OldPassword string `json:"old_password" validate:"required,min=6"`
+	NewPassword string `json:"new_password" validate:"required,min=6"`
+}

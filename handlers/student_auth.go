@@ -104,6 +104,41 @@ func (h *StudentAuthHandler) Logout(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *StudentAuthHandler) ChangePassword(c *gin.Context) {
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req models.StudentChangePasswordRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	hash, err := h.service.GetPasswordHash(c.Request.Context(), studentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load account"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.OldPassword)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process password"})
+		return
+	}
+	if err := h.service.UpdatePassword(c.Request.Context(), studentID, string(newHash)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		return
+	}
+	// Смена пароля выкидывает все сессии; текущему устройству тут же выдаём свежую.
+	if err := h.refreshSvc.RevokeAll(c.Request.Context(), studentID); err != nil {
+		h.log.Error("revoke all sessions failed", slog.String("error", err.Error()))
+	}
+	h.issueSession(c, studentID)
+}
+
 func (h *StudentAuthHandler) issueSession(c *gin.Context, studentID string) {
 	access, err := h.newAccessToken(studentID)
 	if err != nil {
