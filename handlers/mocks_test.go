@@ -414,10 +414,6 @@ func (m *mockLessonService) UpdateSeries(ctx context.Context, seriesID string, t
 	return m.Called(ctx, seriesID, tutorID, req).Error(0)
 }
 
-func (m *mockLessonService) ExistsPublic(ctx context.Context, id string) error {
-	return m.Called(ctx, id).Error(0)
-}
-
 func (m *mockLessonService) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
 	return m.Called(ctx, lessonID, tutorID).Error(0)
 }

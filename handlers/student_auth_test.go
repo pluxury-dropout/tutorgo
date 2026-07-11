@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 	"tutorgo/handlers"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/crypto/bcrypt"
@@ -168,7 +170,64 @@ func TestStudentAcceptInvite_Success(t *testing.T) {
 	refreshSvc.AssertExpectations(t)
 }
 
+func TestStudentAcceptInvite_Duplicate(t *testing.T) {
+	svc := new(mockStudentService)
+	refreshSvc := new(mockStudentRefreshTokenService)
+	r := newStudentAuthRouter(svc, refreshSvc)
+
+	token := "44444444-4444-4444-4444-444444444444"
+	valid := time.Now().Add(1 * time.Hour)
+	svc.On("GetByInviteToken", mock.Anything, token).Return(testStudentID, valid, nil)
+	svc.On("ActivateAccount", mock.Anything, testStudentID, "taken", mock.AnythingOfType("string")).
+		Return(&pgconn.PgError{Code: "23505"})
+
+	w := makeRequest(t, r, http.MethodPost, "/student/auth/accept-invite", models.AcceptInviteRequest{
+		Token:    token,
+		Username: "taken",
+		Password: "password123",
+	})
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	svc.AssertExpectations(t)
+	refreshSvc.AssertNotCalled(t, "Create")
+}
+
 // Refresh / Logout
+
+func TestStudentRefresh_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	refreshSvc := new(mockStudentRefreshTokenService)
+	r := newStudentAuthRouter(svc, refreshSvc)
+
+	refreshSvc.On("Validate", mock.Anything, "valid-refresh").Return(testStudentID, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/student/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: "student_refresh_token", Value: "valid-refresh"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.LoginResponse
+	decodeJSON(t, w, &got)
+	assert.NotEmpty(t, got.AccessToken)
+	refreshSvc.AssertExpectations(t)
+}
+
+func TestStudentLogout_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	refreshSvc := new(mockStudentRefreshTokenService)
+	r := newStudentAuthRouter(svc, refreshSvc)
+
+	refreshSvc.On("Revoke", mock.Anything, "valid-refresh").Return(nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/student/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "student_refresh_token", Value: "valid-refresh"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	refreshSvc.AssertExpectations(t)
+}
 
 func TestStudentRefresh_NoCookie(t *testing.T) {
 	svc := new(mockStudentService)

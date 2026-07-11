@@ -75,10 +75,6 @@ func (m *mockLessonRepo) UpdateSeries(ctx context.Context, seriesID string, tuto
 	return m.Called(ctx, seriesID, tutorID, req).Error(0)
 }
 
-func (m *mockLessonRepo) ExistsPublic(ctx context.Context, id string) error {
-	return m.Called(ctx, id).Error(0)
-}
-
 func (m *mockLessonRepo) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
 	return m.Called(ctx, lessonID, tutorID).Error(0)
 }
@@ -403,33 +399,6 @@ func TestLessonDelete_RepoError(t *testing.T) {
 	lessonRepo.AssertExpectations(t)
 }
 
-// ExistsPublic
-
-func TestLessonExistsPublic_Success(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
-
-	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(nil)
-
-	err := svc.ExistsPublic(context.Background(), lessonID)
-
-	assert.NoError(t, err)
-	lessonRepo.AssertExpectations(t)
-}
-
-func TestLessonExistsPublic_Error(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
-
-	lessonRepo.On("ExistsPublic", mock.Anything, lessonID).Return(errors.New("not found"))
-
-	err := svc.ExistsPublic(context.Background(), lessonID)
-
-	assert.Error(t, err)
-	lessonRepo.AssertExpectations(t)
-}
 
 // StartRoom
 

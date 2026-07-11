@@ -24,7 +24,6 @@ type LessonService interface {
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
-	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoomByID(ctx context.Context, lessonID string) error
@@ -383,10 +382,6 @@ func (s *lessonService) GetCurrentCycles(ctx context.Context, tutorID string) ([
 		return result[i].LastAt.After(result[j].LastAt)
 	})
 	return result, nil
-}
-
-func (s *lessonService) ExistsPublic(ctx context.Context, id string) error {
-	return s.repo.ExistsPublic(ctx, id)
 }
 
 func (s *lessonService) StartRoom(ctx context.Context, lessonID string, tutorID string) error {

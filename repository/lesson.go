@@ -29,7 +29,6 @@ type LessonRepository interface {
 	GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
 	AutoComplete(ctx context.Context) (int64, error)
-	ExistsPublic(ctx context.Context, id string) error
 	StartRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoomByID(ctx context.Context, lessonID string) error
@@ -342,21 +341,6 @@ func (r *lessonRepository) AutoComplete(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-func (r *lessonRepository) ExistsPublic(ctx context.Context, id string) error {
-	var exists bool
-	err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM lessons WHERE id = $1
-		AND room_started_at IS NOT NULL)`, id,
-	).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("lesson not found")
-	}
-	return nil
 }
 
 func (r *lessonRepository) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
