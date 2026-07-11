@@ -116,6 +116,7 @@ func (h *StudentAuthHandler) ChangePassword(c *gin.Context) {
 	}
 	hash, err := h.service.GetPasswordHash(c.Request.Context(), studentID)
 	if err != nil {
+		h.log.Error("change password: load hash failed", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load account"})
 		return
 	}
@@ -125,10 +126,12 @@ func (h *StudentAuthHandler) ChangePassword(c *gin.Context) {
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
+		h.log.Error("change password: hash new failed", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process password"})
 		return
 	}
 	if err := h.service.UpdatePassword(c.Request.Context(), studentID, string(newHash)); err != nil {
+		h.log.Error("change password: update failed", slog.String("error", err.Error()))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
 		return
 	}
