@@ -172,6 +172,10 @@ func (m *mockStudentService) GetPasswordHash(ctx context.Context, studentID stri
 func (m *mockStudentService) UpdatePassword(ctx context.Context, studentID, hash string) error {
 	return m.Called(ctx, studentID, hash).Error(0)
 }
+func (m *mockStudentService) ListHomework(ctx context.Context, studentID string) ([]models.StudentHomework, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).([]models.StudentHomework), args.Error(1)
+}
 
 // --- Mock: WhiteboardService ---
 
@@ -302,6 +306,13 @@ func (m *mockCourseService) GetArchived(ctx context.Context, tutorID string, p m
 }
 func (m *mockCourseService) Restore(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
+}
+func (m *mockCourseService) GetHomework(ctx context.Context, id string, tutorID string) (string, error) {
+	args := m.Called(ctx, id, tutorID)
+	return args.String(0), args.Error(1)
+}
+func (m *mockCourseService) SetHomework(ctx context.Context, id string, tutorID string, homework string) error {
+	return m.Called(ctx, id, tutorID, homework).Error(0)
 }
 
 // --- Mock: PaymentService ---

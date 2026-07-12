@@ -14,6 +14,17 @@ type Course struct {
 	IsActive        bool       `json:"is_active"`
 }
 
+type UpdateHomeworkRequest struct {
+	Homework string `json:"homework" validate:"max=20000"`
+}
+
+// StudentHomework — ДЗ курса в кабинете ученика.
+type StudentHomework struct {
+	CourseID string `json:"course_id"`
+	Subject  string `json:"subject"`
+	Homework string `json:"homework"`
+}
+
 type CourseBalance struct {
 	LessonsPaid      int `json:"lessons_paid"`
 	LessonsCompleted int `json:"lessons_completed"`

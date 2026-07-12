@@ -152,6 +152,25 @@ func (h *StudentHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, profile)
 }
 
+// GET /student/homework — ДЗ по курсам ученика (только с непустым текстом).
+func (h *StudentHandler) Homework(c *gin.Context) {
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	hw, err := h.service.ListHomework(c.Request.Context(), studentID)
+	if err != nil {
+		h.log.Error("student homework failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load homework"})
+		return
+	}
+	if hw == nil {
+		hw = []models.StudentHomework{}
+	}
+	c.JSON(http.StatusOK, hw)
+}
+
 // GET /student/lessons?filter=upcoming|past — уроки текущего ученика.
 func (h *StudentHandler) ListLessons(c *gin.Context) {
 	studentID := c.GetString("studentID")

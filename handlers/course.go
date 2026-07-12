@@ -163,3 +163,36 @@ func (h *CourseHandler) Restore(c *gin.Context) {
 	h.log.Info("Course restored", slog.String("id", id))
 	c.Status(http.StatusNoContent)
 }
+
+// GET /courses/:id/homework — текущее ДЗ курса.
+func (h *CourseHandler) GetHomework(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	hw, err := h.service.GetHomework(c.Request.Context(), c.Param("id"), tutorID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"homework": hw})
+}
+
+// PUT /courses/:id/homework — перезаписать ДЗ курса.
+func (h *CourseHandler) UpdateHomework(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req models.UpdateHomeworkRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	if err := h.service.SetHomework(c.Request.Context(), c.Param("id"), tutorID, req.Homework); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}

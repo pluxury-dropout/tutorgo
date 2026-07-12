@@ -16,6 +16,8 @@ type CourseRepository interface {
 	Delete(ctx context.Context, id string, tutorID string) error
 	GetAllArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
 	Restore(ctx context.Context, id string, tutorID string) error
+	GetHomework(ctx context.Context, id string, tutorID string) (string, error)
+	SetHomework(ctx context.Context, id string, tutorID string, homework string) (int64, error)
 }
 
 type courseRepository struct {
@@ -119,6 +121,24 @@ func (r *courseRepository) Update(ctx context.Context, id string, tutorID string
 		req.Subject, req.PricePerCycle, req.LessonsPerCycle, req.StartedAt, req.EndedAt, id, tutorID,
 	).Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerCycle, &course.LessonsPerCycle, &course.StartedAt, &course.EndedAt, &course.IsActive)
 	return course, err
+}
+
+func (r *courseRepository) GetHomework(ctx context.Context, id string, tutorID string) (string, error) {
+	var hw string
+	err := r.conn.QueryRow(ctx,
+		`SELECT homework FROM courses WHERE id=$1 AND tutor_id=$2`, id, tutorID,
+	).Scan(&hw)
+	return hw, err
+}
+
+func (r *courseRepository) SetHomework(ctx context.Context, id string, tutorID string, homework string) (int64, error) {
+	tag, err := r.conn.Exec(ctx,
+		`UPDATE courses SET homework=$1 WHERE id=$2 AND tutor_id=$3`, homework, id, tutorID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (r *courseRepository) Delete(ctx context.Context, id string, tutorID string) error {

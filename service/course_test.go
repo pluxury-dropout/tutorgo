@@ -45,6 +45,14 @@ func (m *mockCourseRepo) GetAllArchived(ctx context.Context, tutorID string, p m
 func (m *mockCourseRepo) Restore(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }
+func (m *mockCourseRepo) GetHomework(ctx context.Context, id string, tutorID string) (string, error) {
+	args := m.Called(ctx, id, tutorID)
+	return args.String(0), args.Error(1)
+}
+func (m *mockCourseRepo) SetHomework(ctx context.Context, id string, tutorID string, homework string) (int64, error) {
+	args := m.Called(ctx, id, tutorID, homework)
+	return args.Get(0).(int64), args.Error(1)
+}
 
 var (
 	endedAt = func() *time.Time { t := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC); return &t }()
@@ -343,5 +351,32 @@ func TestCourseRestore_NotFound(t *testing.T) {
 
 	assert.ErrorIs(t, err, service.ErrNotFound)
 	courseRepo.AssertNotCalled(t, "Restore")
+	courseRepo.AssertExpectations(t)
+}
+
+// SetHomework
+
+func TestCourseSetHomework_Success(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	svc := newCourseSvc(courseRepo, new(mockStudentRepo))
+
+	courseRepo.On("SetHomework", mock.Anything, courseID, tutorID, "# ДЗ").Return(int64(1), nil)
+
+	err := svc.SetHomework(context.Background(), courseID, tutorID, "# ДЗ")
+
+	assert.NoError(t, err)
+	courseRepo.AssertExpectations(t)
+}
+
+func TestCourseSetHomework_NotOwned(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	svc := newCourseSvc(courseRepo, new(mockStudentRepo))
+
+	// чужой курс → UPDATE не затрагивает строк
+	courseRepo.On("SetHomework", mock.Anything, courseID, tutorID, "x").Return(int64(0), nil)
+
+	err := svc.SetHomework(context.Background(), courseID, tutorID, "x")
+
+	assert.ErrorIs(t, err, service.ErrNotFound)
 	courseRepo.AssertExpectations(t)
 }

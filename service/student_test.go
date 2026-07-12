@@ -92,6 +92,11 @@ func (m *mockStudentRepo) UpdatePassword(ctx context.Context, studentID, hash st
 	return args.Error(0)
 }
 
+func (m *mockStudentRepo) ListHomework(ctx context.Context, studentID string) ([]models.StudentHomework, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).([]models.StudentHomework), args.Error(1)
+}
+
 // Тесты
 func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)

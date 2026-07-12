@@ -16,6 +16,8 @@ type CourseService interface {
 	Delete(ctx context.Context, id string, tutorID string) error
 	GetArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
 	Restore(ctx context.Context, id string, tutorID string) error
+	GetHomework(ctx context.Context, id string, tutorID string) (string, error)
+	SetHomework(ctx context.Context, id string, tutorID string, homework string) error
 }
 
 type courseService struct {
@@ -82,4 +84,23 @@ func (s *courseService) Restore(ctx context.Context, id string, tutorID string) 
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
 	return s.repo.Restore(ctx, id, tutorID)
+}
+
+func (s *courseService) GetHomework(ctx context.Context, id string, tutorID string) (string, error) {
+	hw, err := s.repo.GetHomework(ctx, id, tutorID)
+	if err != nil {
+		return "", fmt.Errorf("course: %w", ErrNotFound)
+	}
+	return hw, nil
+}
+
+func (s *courseService) SetHomework(ctx context.Context, id string, tutorID string, homework string) error {
+	n, err := s.repo.SetHomework(ctx, id, tutorID, homework)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("course: %w", ErrNotFound)
+	}
+	return nil
 }
