@@ -39,6 +39,8 @@ function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFi
                 Урок {lesson.cycle_position} из {lesson.cycle_size}
               </Badge>
             )}
+            {lesson.paid === true && <Badge variant="secondary">Оплачен</Badge>}
+            {lesson.paid === false && <Badge variant="outline">Не оплачен</Badge>}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 2 }}>
             {dateFmt.format(new Date(lesson.scheduled_at))} · {lesson.duration_minutes} мин
@@ -65,6 +67,12 @@ function LessonsInner() {
     queryFn: () => studentApi.lessons(tab),
   })
 
+  const cur = lessons?.find((l) => l.cycle_position != null && l.cycle_size != null)
+  const cycleSummary =
+    cur && cur.cycle_position != null && cur.cycle_size != null
+      ? `Оплачено ${cur.cycle_position} из ${cur.cycle_size}, осталось ${cur.cycle_size - cur.cycle_position}`
+      : null
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -83,6 +91,10 @@ function LessonsInner() {
           Прошедшие
         </Button>
       </div>
+
+      {tab === 'upcoming' && cycleSummary && (
+        <div style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{cycleSummary}</div>
+      )}
 
       <SectionCard title={tab === 'upcoming' ? 'Ближайшие уроки' : 'История уроков'}>
         {isLoading && (
