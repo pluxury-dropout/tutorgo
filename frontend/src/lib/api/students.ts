@@ -26,4 +26,7 @@ export const studentsApi = {
   update: (id: string, data: StudentInput) =>
     api.put<Student>(`/students/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/students/${id}`).then(() => id),
+  invite: (id: string) =>
+    api.post<{ invite_token: string; expires_at: string }>(`/students/${id}/invite`)
+      .then((r) => r.data),
 }

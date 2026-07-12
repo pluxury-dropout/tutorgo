@@ -1,9 +1,21 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, Trash2, ChevronRight } from 'lucide-react'
+import { Pencil, Trash2, ChevronRight, UserPlus, Copy } from 'lucide-react'
+import { toast } from 'sonner'
+
 import { SectionCard } from '@/components/common/SectionCard'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { studentsApi } from '@/lib/api/students'
 import { Student } from '@/types/api'
 
 interface StudentsListProps {
@@ -14,6 +26,30 @@ interface StudentsListProps {
 
 export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) {
   const router = useRouter()
+  const [inviteFor, setInviteFor] = useState<Student | null>(null)
+  const [invite, setInvite] = useState<{ invite_token: string; expires_at: string } | null>(null)
+
+  async function handleInvite(s: Student) {
+    setInviteFor(s)
+    setInvite(null)
+    try {
+      setInvite(await studentsApi.invite(s.id))
+    } catch {
+      toast.error('Не удалось создать приглашение')
+      setInviteFor(null)
+    }
+  }
+
+  const inviteUrl = invite
+    ? `${window.location.origin}/student/invite/${invite.invite_token}`
+    : ''
+
+  function copyInvite() {
+    try {
+      navigator.clipboard.writeText(inviteUrl)
+      toast.success('Ссылка скопирована')
+    } catch {}
+  }
 
   return (
     <SectionCard>
@@ -57,6 +93,11 @@ export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) 
             </span>
             <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <Button size="icon" variant="ghost" className="h-8 w-8"
+                title="Пригласить в кабинет ученика"
+                onClick={() => handleInvite(student)}>
+                <UserPlus className="h-3.5 w-3.5" />
+              </Button>
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(student)}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
@@ -69,6 +110,35 @@ export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) 
           </div>
         </div>
       ))}
+
+      <Dialog open={inviteFor !== null} onOpenChange={(open) => { if (!open) setInviteFor(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Приглашение в кабинет</DialogTitle>
+            <DialogDescription>
+              {inviteFor
+                ? `Отправьте ссылку ученику: ${inviteFor.first_name}${inviteFor.last_name ? ` ${inviteFor.last_name}` : ''}. По ней он создаст аккаунт и получит доступ к своим урокам.`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {invite ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Input readOnly value={inviteUrl} onFocus={(e) => e.target.select()} />
+                <Button size="icon" variant="outline" className="shrink-0" onClick={copyInvite} title="Скопировать">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ссылка действует до {new Date(invite.expires_at).toLocaleDateString('ru-RU')}.
+                Повторное приглашение заменит эту ссылку.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Создание ссылки...</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </SectionCard>
   )
 }
