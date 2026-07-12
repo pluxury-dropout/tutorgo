@@ -46,9 +46,13 @@ export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) 
 
   function copyInvite() {
     try {
-      navigator.clipboard.writeText(inviteUrl)
-      toast.success('Ссылка скопирована')
-    } catch {}
+      navigator.clipboard
+        .writeText(inviteUrl)
+        .then(() => toast.success('Ссылка скопирована'))
+        .catch(() => toast.error('Не удалось скопировать'))
+    } catch {
+      toast.error('Не удалось скопировать')
+    }
   }
 
   return (

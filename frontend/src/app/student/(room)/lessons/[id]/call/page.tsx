@@ -20,6 +20,7 @@ export default function StudentCallPage() {
   const [stage, setStage] = useState<Stage>('waiting')
   const [room, setRoom] = useState<RoomTokenResponse | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const cancelledRef = useRef(false)
 
   function clearPolling() {
     if (intervalRef.current) {
@@ -31,6 +32,7 @@ export default function StudentCallPage() {
   async function tryJoin(): Promise<boolean> {
     try {
       const { status } = await callsApi.getRoomStatus(id)
+      if (cancelledRef.current) return true
       if (status === 'ended') {
         clearPolling()
         setStage('ended')
@@ -38,11 +40,13 @@ export default function StudentCallPage() {
       }
       if (status !== 'active') return false
       const data = await studentApi.roomToken(id)
+      if (cancelledRef.current) return true
       clearPolling()
       setRoom(data)
       setStage('in-room')
       return true
     } catch (err) {
+      if (cancelledRef.current) return true
       // 403 — выписали из курса; дальше поллить бессмысленно
       if ((err as ApiError).status === 403) {
         clearPolling()
@@ -54,10 +58,14 @@ export default function StudentCallPage() {
   }
 
   useEffect(() => {
+    cancelledRef.current = false
     tryJoin().then((done) => {
-      if (!done) intervalRef.current = setInterval(tryJoin, 5000)
+      if (!done && !cancelledRef.current) intervalRef.current = setInterval(tryJoin, 5000)
     })
-    return clearPolling
+    return () => {
+      cancelledRef.current = true
+      clearPolling()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -65,11 +73,13 @@ export default function StudentCallPage() {
     setRoom(null)
     try {
       const { status } = await callsApi.getRoomStatus(id)
+      if (cancelledRef.current) return
       if (status === 'ended') {
         setStage('ended')
         return
       }
     } catch {}
+    if (cancelledRef.current) return
     setStage('waiting')
     intervalRef.current = setInterval(tryJoin, 5000)
   }
