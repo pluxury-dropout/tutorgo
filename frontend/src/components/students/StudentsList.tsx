@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2, ChevronRight, UserPlus, Copy } from 'lucide-react'
 import { toast } from 'sonner'
@@ -29,7 +29,13 @@ export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) 
   const [inviteFor, setInviteFor] = useState<Student | null>(null)
   const [invite, setInvite] = useState<{ invite_token: string; expires_at: string } | null>(null)
 
+  // ref, а не state: setState асинхронный, двойной клик в одном тике обошёл бы
+  // проверку, а повторный POST ротирует токен и убивает первую ссылку
+  const invitePending = useRef(false)
+
   async function handleInvite(s: Student) {
+    if (invitePending.current) return
+    invitePending.current = true
     setInviteFor(s)
     setInvite(null)
     try {
@@ -37,6 +43,8 @@ export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) 
     } catch {
       toast.error('Не удалось создать приглашение')
       setInviteFor(null)
+    } finally {
+      invitePending.current = false
     }
   }
 
