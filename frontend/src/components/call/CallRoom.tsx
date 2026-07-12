@@ -15,6 +15,8 @@ import { useTheme } from 'next-themes'
 import { PipCameras } from './PipCameras'
 import { CallStage } from './CallStage'
 import { CallToolbar } from './CallToolbar'
+import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
+import { HomeworkViewDialog } from '@/components/homework/HomeworkViewDialog'
 import { CallChat } from './CallChat'
 import { useCallChat } from './useCallChat'
 import { themeTokens } from './callTheme'
@@ -53,6 +55,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const [boardLoading, setBoardLoading] = useState(false)
   const [activePageId, setActivePageId] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [homeworkOpen, setHomeworkOpen] = useState(false)
   const { messages, send, unread } = useCallChat({ chatOpen })
 
   // Enable camera+mic once per call. Must live here (not in CallStage): CallStage
@@ -223,8 +226,16 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
         chatUnread={unread}
         onToggleBoard={handleToggle}
         onToggleChat={() => setChatOpen((v) => !v)}
+        onHomework={() => setHomeworkOpen(true)}
         onLeave={() => room.disconnect()}
       />
+
+      {role === 'tutor' && courseId && (
+        <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={courseId} />
+      )}
+      {role === 'guest' && (
+        <HomeworkViewDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} />
+      )}
     </div>
   )
 }

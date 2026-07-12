@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Lesson, LessonStatus, AttendanceRecord, PagedResponse, LessonTask } from '@/types/api'
+import { Lesson, LessonStatus, AttendanceRecord, PagedResponse } from '@/types/api'
 
 export interface LessonInput {
   course_id:        string
@@ -63,12 +63,4 @@ export const lessonsApi = {
     api.get<AttendanceRecord[]>(`/lessons/${lessonId}/attendance`).then((r) => r.data ?? []),
   updateAttendance: (lessonId: string, attendances: { student_id: string; status: string }[]) =>
     api.put(`/lessons/${lessonId}/attendance`, { attendances }).then(() => undefined),
-  tasks: (lessonId: string) =>
-    api.get<LessonTask[]>(`/lessons/${lessonId}/tasks`).then((r) => r.data ?? []),
-  createTask: (lessonId: string, data: { title: string; description?: string }) =>
-    api.post<LessonTask>(`/lessons/${lessonId}/tasks`, data).then((r) => r.data),
-  updateTask: (taskId: string, data: { title: string; description?: string }) =>
-    api.put<LessonTask>(`/lesson-tasks/${taskId}`, data).then((r) => r.data),
-  deleteTask: (taskId: string) =>
-    api.delete(`/lesson-tasks/${taskId}`).then(() => undefined),
 }

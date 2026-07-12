@@ -62,13 +62,10 @@ export interface CalendarLesson {
   paid?: boolean
 }
 
-export interface LessonTask {
-  id: string
-  lesson_id: string
-  title: string
-  description: string
-  done: boolean
-  created_at: string
+export interface StudentHomework {
+  course_id: string
+  subject: string
+  homework: string
 }
 
 export interface Payment {

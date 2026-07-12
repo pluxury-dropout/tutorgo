@@ -2,14 +2,15 @@
 
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { studentApi, LessonsFilter } from '@/lib/api/student'
 import { SectionCard, SectionRow } from '@/components/common/SectionCard'
+import { Markdown } from '@/components/common/Markdown'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { CalendarLesson, LessonTask } from '@/types/api'
+import type { CalendarLesson } from '@/types/api'
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'short',
@@ -27,30 +28,6 @@ const STATUS_LABELS: Record<string, string> = {
 
 function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFirst: boolean; upcoming: boolean }) {
   const router = useRouter()
-  const queryClient = useQueryClient()
-
-  const tasksKey = ['student-tasks', lesson.id]
-  const { data: tasks } = useQuery({
-    queryKey: tasksKey,
-    queryFn: () => studentApi.tasks(lesson.id),
-  })
-
-  const setDone = useMutation({
-    mutationFn: ({ id, done }: { id: string; done: boolean }) => studentApi.setTaskDone(id, done),
-    onMutate: async ({ id, done }) => {
-      await queryClient.cancelQueries({ queryKey: tasksKey })
-      const prev = queryClient.getQueryData<LessonTask[]>(tasksKey)
-      queryClient.setQueryData<LessonTask[]>(tasksKey, (old) =>
-        old?.map((t) => (t.id === id ? { ...t, done } : t)),
-      )
-      return { prev }
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(tasksKey, ctx.prev)
-      toast.error('Не удалось обновить задачу')
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: tasksKey }),
-  })
 
   const openBoard = async () => {
     try {
@@ -80,20 +57,6 @@ function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFi
             {dateFmt.format(new Date(lesson.scheduled_at))} · {lesson.duration_minutes} мин
             {!upcoming && ` · ${STATUS_LABELS[lesson.status] ?? lesson.status}`}
           </div>
-          {tasks && tasks.length > 0 && (
-            <div className="flex flex-col gap-1" style={{ marginTop: 8 }}>
-              {tasks.map((t) => (
-                <label key={t.id} className="flex items-center gap-2" style={{ fontSize: 13 }}>
-                  <input
-                    type="checkbox"
-                    checked={t.done}
-                    onChange={(e) => setDone.mutate({ id: t.id, done: e.target.checked })}
-                  />
-                  <span style={{ textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
-                </label>
-              ))}
-            </div>
-          )}
         </div>
         {upcoming && lesson.status === 'scheduled' && (
           <div className="flex items-center gap-2">
@@ -107,6 +70,26 @@ function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFi
         )}
       </div>
     </SectionRow>
+  )
+}
+
+function HomeworkSection() {
+  const { data: homework } = useQuery({
+    queryKey: ['student-homework'],
+    queryFn: () => studentApi.homework(),
+  })
+
+  if (!homework || homework.length === 0) return null
+
+  return (
+    <SectionCard title="Домашнее задание">
+      {homework.map((h, i) => (
+        <SectionRow key={h.course_id} isFirst={i === 0}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{h.subject}</div>
+          <Markdown>{h.homework}</Markdown>
+        </SectionRow>
+      ))}
+    </SectionCard>
   )
 }
 
@@ -144,6 +127,8 @@ function LessonsInner() {
           Прошедшие
         </Button>
       </div>
+
+      {tab === 'upcoming' && <HomeworkSection />}
 
       {tab === 'upcoming' && cycleSummary && (
         <div style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{cycleSummary}</div>

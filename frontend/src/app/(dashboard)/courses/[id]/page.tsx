@@ -32,6 +32,7 @@ import { LessonForm, RecurrenceOptions } from '@/components/lessons/LessonForm'
 import { AttendanceDialog } from '@/components/lessons/AttendanceDialog'
 import { SeriesDialog } from '@/components/lessons/SeriesDialog'
 import { PaymentForm } from '@/components/payments/PaymentForm'
+import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
@@ -135,6 +136,7 @@ export default function CourseDetailPage() {
   const [seriesLesson, setSeriesLesson]         = useState<Lesson | undefined>()
   const [attendanceLesson, setAttendanceLesson] = useState<string | null>(null)
   const [paymentFormOpen, setPaymentFormOpen]   = useState(false)
+  const [homeworkOpen, setHomeworkOpen]         = useState(false)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
   const [selectedStudent, setSelected]          = useState('')
 
@@ -306,6 +308,9 @@ export default function CourseDetailPage() {
             >
               Доска
             </Link>
+            <Button size="sm" variant="outline" onClick={() => setHomeworkOpen(true)}>
+              Домашнее задание
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setCourseFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-1.5" /> Редактировать
             </Button>
@@ -546,6 +551,9 @@ export default function CourseDetailPage() {
         initial={editingLesson}
         courseEndAt={course.ended_at ?? undefined}
       />
+
+      <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={id} />
+
 
       <PaymentForm
         open={paymentFormOpen}

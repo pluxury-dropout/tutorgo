@@ -42,4 +42,8 @@ export const coursesApi = {
     api.delete(`/courses/${courseId}/enrollments/${studentId}`).then(() => studentId),
   listByStudent: (studentId: string) =>
     api.get<Course[]>(`/students/${studentId}/courses`).then((r) => r.data ?? []),
+  getHomework: (id: string) =>
+    api.get<{ homework: string }>(`/courses/${id}/homework`).then((r) => r.data.homework),
+  updateHomework: (id: string, homework: string) =>
+    api.put(`/courses/${id}/homework`, { homework }).then(() => undefined),
 }

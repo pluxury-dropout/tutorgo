@@ -20,6 +20,7 @@ const ICONS = {
   share: (<><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M12 16V8" /><path d="M9 11l3-3 3 3" /></>),
   board: (<><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" /><path d="M18.4 3.6a2.1 2.1 0 1 1 3 3L12 15.5l-4 1 1-4Z" /></>),
   chat: <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5h.5a8.4 8.4 0 0 1 8 8v.5Z" />,
+  homework: (<><path d="M4 4h9a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H4Z" /><path d="M20 4h-3a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H20Z" /></>),
   more: (<><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></>),
   leave: (<><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>),
 }
@@ -40,12 +41,13 @@ interface Props {
   chatUnread: number
   onToggleBoard: () => void
   onToggleChat: () => void
+  onHomework: () => void
   onLeave: () => void
 }
 
 export function CallToolbar({
   role, inviteUrl, boardActive, chatActive, chatUnread,
-  onToggleBoard, onToggleChat, onLeave,
+  onToggleBoard, onToggleChat, onHomework, onLeave,
 }: Props) {
   const { resolvedTheme } = useTheme()
   const c = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
@@ -174,6 +176,9 @@ export function CallToolbar({
             <Icon>{ICONS.board}</Icon>
           </button>
         )}
+        <button onClick={() => { setMoreOpen(false); onHomework() }} title="Домашнее задание" style={btnBase({})}>
+          <Icon>{ICONS.homework}</Icon>
+        </button>
         <button onClick={() => { setMoreOpen(false); onToggleChat() }} title="Чат" style={btnBase({ active: chatActive })}>
           <Icon>{ICONS.chat}</Icon>
           {chatUnread > 0 && !chatActive && (
