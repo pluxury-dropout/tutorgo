@@ -176,14 +176,29 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	// enrollment-джойн идентичен EnrolledInLesson: индивидуальный курс (c.student_id)
 	// ИЛИ групповой через course_enrollments. Фильтр активности курса намеренно
 	// опущен — ученик видит все свои уроки, включая архивные (история).
-	base := `SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status,
-	                l.notes, c.subject, s.first_name, (c.student_id IS NULL) AS is_group
+	// rank считается по ВСЕМ неотменённым урокам курса (без date-фильтра),
+	// иначе позиция в цикле зависела бы от выбранной вкладки.
+	base := `WITH stu_courses AS MATERIALIZED (
+	           SELECT c.id FROM courses c
+	           WHERE c.student_id = $1
+	              OR EXISTS (SELECT 1 FROM course_enrollments ce
+	                         WHERE ce.course_id = c.id AND ce.student_id = $1)
+	         ),
+	         ranked AS (
+	           SELECT l.id,
+	                  ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
+	           FROM lessons l
+	           WHERE l.course_id IN (SELECT id FROM stu_courses)
+	             AND l.status != 'cancelled'
+	         )
+	         SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status,
+	                l.notes, c.subject, s.first_name, (c.student_id IS NULL) AS is_group,
+	                r.rank
 	         FROM lessons l
 	         JOIN courses c ON c.id = l.course_id
 	         LEFT JOIN students s ON s.id = c.student_id
-	         WHERE (c.student_id = $1
-	                OR EXISTS (SELECT 1 FROM course_enrollments ce
-	                           WHERE ce.course_id = c.id AND ce.student_id = $1))`
+	         LEFT JOIN ranked r ON r.id = l.id
+	         WHERE l.course_id IN (SELECT id FROM stu_courses)`
 	var q string
 	if past {
 		q = base + ` AND l.scheduled_at < now() ORDER BY l.scheduled_at DESC`
@@ -200,7 +215,7 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	for rows.Next() {
 		var l models.CalendarLesson
 		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes,
-			&l.Status, &l.Notes, &l.Subject, &l.StudentName, &l.IsGroup); err != nil {
+			&l.Status, &l.Notes, &l.Subject, &l.StudentName, &l.IsGroup, &l.Rank); err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, l)

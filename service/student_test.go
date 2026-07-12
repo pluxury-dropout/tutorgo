@@ -95,7 +95,7 @@ func (m *mockStudentRepo) UpdatePassword(ctx context.Context, studentID, hash st
 // Тесты
 func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Student{
@@ -115,7 +115,7 @@ func TestGetAllStudents_Success(t *testing.T) {
 
 func TestGetAllStudents_Error(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	repo.On("GetAll", mock.Anything, "tutor-1", p).Return([]models.Student{}, 0, errors.New("db error"))
@@ -130,7 +130,7 @@ func TestGetAllStudents_Error(t *testing.T) {
 
 func TestCreateStudent_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	req := models.CreateStudentRequest{
 		FirstName: "Aiya",
@@ -149,7 +149,7 @@ func TestCreateStudent_Success(t *testing.T) {
 
 func TestCreateStudent_Error(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	req := models.CreateStudentRequest{
 		FirstName: "Aiya",
@@ -165,7 +165,7 @@ func TestCreateStudent_Error(t *testing.T) {
 
 func TestDeleteStudent_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(nil)
@@ -180,7 +180,7 @@ func TestDeleteStudent_Success(t *testing.T) {
 
 func TestStudentGetByID_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -197,7 +197,7 @@ var updateStudentReq = models.UpdateStudentRequest{FirstName: "Aiya", LastName: 
 
 func TestStudentUpdate_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	updated := models.Student{ID: "student-1", FirstName: "Aiya", LastName: "Bekova", TutorID: "tutor-1"}
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
@@ -212,7 +212,7 @@ func TestStudentUpdate_Success(t *testing.T) {
 
 func TestStudentUpdate_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -226,7 +226,7 @@ func TestStudentUpdate_NotFound(t *testing.T) {
 
 func TestStudentUpdate_RepoError(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Update", mock.Anything, "student-1", "tutor-1", updateStudentReq).Return(models.Student{}, errors.New("db error"))
@@ -243,7 +243,7 @@ func TestStudentUpdate_RepoError(t *testing.T) {
 
 func TestStudentDelete_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -256,7 +256,7 @@ func TestStudentDelete_NotFound(t *testing.T) {
 
 func TestStudentDelete_RepoError(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(errors.New("db error"))
@@ -266,4 +266,31 @@ func TestStudentDelete_RepoError(t *testing.T) {
 	assert.Error(t, err)
 	assert.False(t, errors.Is(err, service.ErrNotFound))
 	repo.AssertExpectations(t)
+}
+
+func TestStudentListLessons_CyclePositions(t *testing.T) {
+	repo := new(mockStudentRepo)
+	payRepo := new(mockPaymentRepo)
+	svc := service.NewStudentService(repo, payRepo)
+
+	rank3, rank9 := 3, 9
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Rank: &rank3},
+		{ID: "l2", CourseID: "c1", Rank: &rank9},
+		{ID: "l3", CourseID: "c2"}, // rank нет (все уроки отменены) — цикл не считаем
+	}
+	repo.On("ListLessons", mock.Anything, "stu-1", false).Return(lessons, nil)
+	payRepo.On("GetByCoursesBatch", mock.Anything, []string{"c1"}).Return(map[string][]models.Payment{
+		"c1": {{LessonsCount: 8}, {LessonsCount: 8}},
+	}, nil)
+
+	got, err := svc.ListLessons(context.Background(), "stu-1", false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, *got[0].CyclePosition) // 3-й урок первого пакета из 8
+	assert.Equal(t, 8, *got[0].CycleSize)
+	assert.Equal(t, 1, *got[1].CyclePosition) // 9-й урок = 1-й второго пакета
+	assert.Nil(t, got[2].CyclePosition)
+	repo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
 }

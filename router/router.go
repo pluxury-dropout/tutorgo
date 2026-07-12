@@ -38,7 +38,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	// Services
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
-	studentService := service.NewStudentService(studentRepo)
+	studentService := service.NewStudentService(studentRepo, paymentRepo)
 	studentRefreshService := service.NewStudentRefreshTokenService(studentRefreshRepo)
 	courseService := service.NewCourseService(courseRepo, studentRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)

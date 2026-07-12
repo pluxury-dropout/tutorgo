@@ -27,11 +27,12 @@ type StudentService interface {
 }
 
 type studentService struct {
-	repo repository.StudentRepository
+	repo        repository.StudentRepository
+	paymentRepo repository.PaymentRepository
 }
 
-func NewStudentService(repo repository.StudentRepository) StudentService {
-	return &studentService{repo: repo}
+func NewStudentService(repo repository.StudentRepository, paymentRepo repository.PaymentRepository) StudentService {
+	return &studentService{repo: repo, paymentRepo: paymentRepo}
 }
 
 func (s *studentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
@@ -93,7 +94,42 @@ func (s *studentService) GetProfile(ctx context.Context, studentID string) (mode
 }
 
 func (s *studentService) ListLessons(ctx context.Context, studentID string, past bool) ([]models.CalendarLesson, error) {
-	return s.repo.ListLessons(ctx, studentID, past)
+	lessons, err := s.repo.ListLessons(ctx, studentID, past)
+	if err != nil {
+		return nil, err
+	}
+	// Циклы считаются от платежей — как в tutor-календаре (GetCalendar).
+	seen := map[string]bool{}
+	courseIDs := []string{}
+	for _, l := range lessons {
+		if l.Rank != nil && !seen[l.CourseID] {
+			seen[l.CourseID] = true
+			courseIDs = append(courseIDs, l.CourseID)
+		}
+	}
+	if len(courseIDs) == 0 {
+		return lessons, nil
+	}
+	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, courseIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i, l := range lessons {
+		if l.Rank == nil {
+			continue
+		}
+		coursePayments := paymentsMap[l.CourseID]
+		if len(coursePayments) == 0 {
+			continue
+		}
+		pos, size := cyclePositionFromRank(*l.Rank, coursePayments)
+		if pos > 0 {
+			p, sz := pos, size
+			lessons[i].CyclePosition = &p
+			lessons[i].CycleSize = &sz
+		}
+	}
+	return lessons, nil
 }
 
 func (s *studentService) GetPasswordHash(ctx context.Context, studentID string) (string, error) {
