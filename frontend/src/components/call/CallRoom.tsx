@@ -30,6 +30,7 @@ const ExcalidrawCanvas = dynamic(
   { ssr: false }
 )
 import { whiteboardApi } from '@/lib/api/whiteboard'
+import { useBoardDisplayName } from '@/lib/hooks/useBoardDisplayName'
 import type { BoardWithPages } from '@/types/api'
 
 type Mode = 'call' | 'board'
@@ -51,6 +52,8 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const room = useRoomContext()
   const { resolvedTheme } = useTheme()
   const theme = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
+
+  const displayName = useBoardDisplayName(role)
   const [mode, setMode] = useState<Mode>('call')
   const [boardLoading, setBoardLoading] = useState(false)
   const [activePageId, setActivePageId] = useState<string | null>(null)
@@ -203,6 +206,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
             token={activeBoardToken}
             courseId={role === 'tutor' ? courseId ?? undefined : undefined}
             isGuest={role === 'guest'}
+            displayName={displayName}
           />
         )}
 

@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { useQuery } from '@tanstack/react-query'
 import { useJoinByInvite } from '@/lib/hooks/useWhiteboard'
-import { studentApi } from '@/lib/api/student'
+import { useBoardDisplayName } from '@/lib/hooks/useBoardDisplayName'
 
 // Excalidraw трогает window при инициализации — только клиент, без SSR.
 const ExcalidrawCanvas = dynamic(
@@ -20,16 +19,7 @@ export default function GuestBoardPage() {
   const { token } = useParams<{ token: string }>()
   const { data: board, isLoading, error } = useJoinByInvite(token)
   const [activePageId, setActivePageId] = useState<string | null>(null)
-  // Ссылку может открыть залогиненный ученик или анонимный гость. Профиль есть
-  // только у первого; у второго me() даёт 401 (retry: false) → имя останется
-  // undefined и хук покажет «Гость».
-  const { data: me } = useQuery({
-    queryKey: ['student', 'me'],
-    queryFn: () => studentApi.me(),
-    retry: false,
-  })
-  const displayName =
-    [me?.first_name, me?.last_name].filter(Boolean).join(' ') || undefined
+  const displayName = useBoardDisplayName('guest')
 
   if (isLoading)
     return (

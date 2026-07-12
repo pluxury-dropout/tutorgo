@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useBoardByCourse } from '@/lib/hooks/useWhiteboard'
-import { useAuthStore } from '@/stores/auth'
+import { useBoardDisplayName } from '@/lib/hooks/useBoardDisplayName'
 
 // Excalidraw трогает window при инициализации — только клиент, без SSR.
 const ExcalidrawCanvas = dynamic(
@@ -19,9 +19,7 @@ export default function BoardPage() {
   const { courseId } = useParams<{ courseId: string }>()
   const { data: board, isLoading, error } = useBoardByCourse(courseId)
   const [activePageId, setActivePageId] = useState<string | null>(null)
-  const user = useAuthStore((s) => s.user)
-  const displayName =
-    [user?.first_name, user?.last_name].filter(Boolean).join(' ') || undefined
+  const displayName = useBoardDisplayName('tutor')
 
   if (isLoading)
     return (
