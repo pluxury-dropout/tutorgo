@@ -60,7 +60,7 @@ export default function CallPage() {
     )
   }
 
-  const inviteUrl = `${window.location.origin}/join/${id}`
+  const inviteUrl = `${window.location.origin}/student/lessons/${id}/call`
 
   return (
     <div style={{ height: '100dvh', position: 'relative' }}>
