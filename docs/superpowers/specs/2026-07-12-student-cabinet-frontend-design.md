@@ -102,11 +102,10 @@ tutor-стека (`client.ts` не трогаем):
    «Урок ещё не начался, ожидаем…»; `ended` — «Урок завершён».
 2. `active` → `POST /student/lessons/:id/room-token` → рендер `CallRoom`
    (`serverUrl`, `token`, роль guest-типа, `enableMedia`).
-3. Доска: перед рендером `CallRoom` получить
-   `GET /student/lessons/:id/board-token` → `{invite_token, page_id}` →
-   передать в существующий guest-путь `CallRoom` (`joinByInvite`).
-   При открытии доски токен запрашивается свежий (invite ротируется на backend
-   при каждой выдаче — протухший из-за чужого запроса invite перезапрашиваем).
+3. Доска: отдельный код не нужен — guest-путь `CallRoom` получает board-токен
+   по LiveKit DataChannel (сообщение `board-open` от репетитора) и сам зовёт
+   `joinByInvite`. Эндпоинт `GET /student/lessons/:id/board-token` остаётся
+   запасным для будущего самостоятельного входа в доску вне звонка.
 4. Disconnect → повторная проверка room-status: `ended` → экран завершения,
    иначе возврат к ожиданию.
 
