@@ -123,6 +123,8 @@ func (s *studentService) ListLessons(ctx context.Context, studentID string, past
 			continue
 		}
 		pos, size := cyclePositionFromRank(*l.Rank, coursePayments)
+		paid := pos > 0
+		lessons[i].Paid = &paid
 		if pos > 0 {
 			p, sz := pos, size
 			lessons[i].CyclePosition = &p
