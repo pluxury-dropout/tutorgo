@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Trash2 } from 'lucide-react'
 
 import { lessonSchema, LessonFormValues } from '@/schemas/lesson'
 import { Lesson, ApiError } from '@/types/api'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
+import { lessonsApi } from '@/lib/api/lessons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,6 +73,38 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
   const [recN,        setRecN]        = useState(2)
   const [recCount,    setRecCount]    = useState<number | ''>('')
 
+  const [newTask, setNewTask] = useState('')
+
+  const lessonId = initial?.id ?? ''
+  const queryClient = useQueryClient()
+
+  const tasksQuery = useQuery({
+    queryKey: ['lesson-tasks', lessonId],
+    queryFn:  () => lessonsApi.tasks(lessonId),
+    enabled:  !!lessonId,
+  })
+
+  const createTaskMut = useMutation({
+    mutationFn: (title: string) => lessonsApi.createTask(lessonId, { title }),
+    onSuccess: () => {
+      setNewTask('')
+      queryClient.invalidateQueries({ queryKey: ['lesson-tasks', lessonId] })
+    },
+    onError: (err) => toast.error((err as unknown as ApiError).message ?? 'Ошибка добавления задачи'),
+  })
+
+  const deleteTaskMut = useMutation({
+    mutationFn: (taskId: string) => lessonsApi.deleteTask(taskId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lesson-tasks', lessonId] }),
+    onError: (err) => toast.error((err as unknown as ApiError).message ?? 'Ошибка удаления задачи'),
+  })
+
+  function addTask() {
+    const title = newTask.trim()
+    if (!title) return
+    createTaskMut.mutate(title)
+  }
+
   useEffect(() => {
     if (initial) {
       const dt   = new Date(initial.scheduled_at)
@@ -99,6 +134,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
     setRecDays([])
     setRecN(2)
     setRecCount('')
+    setNewTask('')
   }, [initial, open, reset])
 
   useEffect(() => {
@@ -202,6 +238,59 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
             </Label>
             <Input id="notes" placeholder="Тема урока..." {...register('notes')} />
           </div>
+
+          {/* Tasks — only when the lesson already exists */}
+          {initial && (
+            <div className="space-y-2">
+              <Label>Задачи</Label>
+              {tasksQuery.data && tasksQuery.data.length > 0 && (
+                <ul className="space-y-1.5">
+                  {tasksQuery.data.map((task) => (
+                    <li
+                      key={task.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2 text-sm"
+                    >
+                      <span className="truncate">{task.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => deleteTaskMut.mutate(task.id)}
+                        disabled={deleteTaskMut.isPending}
+                        className="text-muted-foreground hover:text-destructive shrink-0"
+                        aria-label="Удалить задачу"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {tasksQuery.data && tasksQuery.data.length === 0 && (
+                <p className="text-xs text-muted-foreground">Пока нет задач</p>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  className="flex-1"
+                  placeholder="Добавить задачу..."
+                  value={newTask}
+                  onChange={(e) => setNewTask(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addTask()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addTask}
+                  disabled={createTaskMut.isPending || !newTask.trim()}
+                >
+                  Добавить
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Recurrence — only when creating */}
           {!initial && (
