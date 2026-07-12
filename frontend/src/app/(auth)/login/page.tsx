@@ -97,6 +97,13 @@ export default function LoginPage() {
           {loading ? 'Вход...' : 'Войти'}
         </Button>
       </form>
+
+      <div className="mt-6 border-t pt-4 text-center text-sm text-muted-foreground">
+        Вы ученик?{' '}
+        <Link href="/student/login" className="text-primary hover:underline">
+          Войти здесь
+        </Link>
+      </div>
     </div>
   )
 }
