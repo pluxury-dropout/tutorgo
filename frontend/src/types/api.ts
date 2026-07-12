@@ -59,6 +59,16 @@ export interface CalendarLesson {
   is_group: boolean
   cycle_position?: number
   cycle_size?: number
+  paid?: boolean
+}
+
+export interface LessonTask {
+  id: string
+  lesson_id: string
+  title: string
+  description: string
+  done: boolean
+  created_at: string
 }
 
 export interface Payment {

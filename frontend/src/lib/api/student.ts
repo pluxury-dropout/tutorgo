@@ -1,5 +1,5 @@
 import { studentHttp } from './studentClient'
-import type { CalendarLesson } from '@/types/api'
+import type { CalendarLesson, LessonTask } from '@/types/api'
 import type { RoomTokenResponse } from './calls'
 
 export interface StudentProfile {
@@ -41,5 +41,16 @@ export const studentApi = {
   roomToken: (lessonId: string) =>
     studentHttp
       .post<RoomTokenResponse>(`/student/lessons/${lessonId}/room-token`)
+      .then((r) => r.data),
+
+  tasks: (lessonId: string) =>
+    studentHttp.get<LessonTask[]>(`/student/lessons/${lessonId}/tasks`).then((r) => r.data),
+
+  setTaskDone: (taskId: string, done: boolean) =>
+    studentHttp.patch<void>(`/student/lesson-tasks/${taskId}`, { done }),
+
+  boardToken: (lessonId: string) =>
+    studentHttp
+      .get<{ invite_token: string; page_id: string }>(`/student/lessons/${lessonId}/board-token`)
       .then((r) => r.data),
 }
