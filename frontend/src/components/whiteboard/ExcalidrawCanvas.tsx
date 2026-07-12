@@ -34,6 +34,7 @@ interface Props {
   onSelectPage: (id: string) => void
   courseId?: string
   isGuest?: boolean
+  displayName?: string
 }
 
 export function ExcalidrawCanvas({
@@ -45,9 +46,10 @@ export function ExcalidrawCanvas({
   onSelectPage,
   courseId,
   isGuest = false,
+  displayName,
 }: Props) {
   const { status, onApiReady, onChange, sendCursor, registerFile } =
-    useExcalidrawSync(page, token)
+    useExcalidrawSync(page, token, displayName)
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
 
   const pdfRef = useRef<PDFDocumentProxy | null>(null)

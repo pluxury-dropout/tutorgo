@@ -25,6 +25,7 @@ type WbMsg struct {
 	X       float64         `json:"x,omitempty"`
 	Y       float64         `json:"y,omitempty"`
 	PeerID  string          `json:"peerId,omitempty"`
+	Name    string          `json:"name,omitempty"` // отображаемое имя, клиент шлёт с cursor
 }
 
 // wbClient — one WebSocket connection

@@ -41,7 +41,8 @@ export interface ExcalidrawSyncResult {
 
 export function useExcalidrawSync(
   page: BoardPage | null,
-  token?: string
+  token?: string,
+  displayName?: string
 ): ExcalidrawSyncResult {
   const [status, setStatus] = useState<ConnStatus>('connecting')
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
@@ -208,6 +209,7 @@ export function useExcalidrawSync(
         type: string
         payload?: unknown
         peerId?: string
+        name?: string
         x?: number
         y?: number
       }
@@ -238,7 +240,7 @@ export function useExcalidrawSync(
       if (msg.type === 'cursor' && msg.peerId) {
         collaboratorsRef.current.set(msg.peerId as SocketId, {
           pointer: { x: msg.x ?? 0, y: msg.y ?? 0, tool: 'pointer' },
-          username: 'Гость',
+          username: msg.name || 'Гость',
         })
         apiRef.current?.updateScene({
           collaborators: new Map(collaboratorsRef.current),
@@ -325,11 +327,16 @@ export function useExcalidrawSync(
     snapshotTimerRef.current = setTimeout(sendSnapshot, SNAPSHOT_DEBOUNCE_MS)
   }, [pageId, flushUpdate, sendSnapshot])
 
-  const sendCursor = useCallback((x: number, y: number) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'cursor', x, y }))
-    }
-  }, [])
+  const sendCursor = useCallback(
+    (x: number, y: number) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({ type: 'cursor', x, y, name: displayName })
+        )
+      }
+    },
+    [displayName]
+  )
 
   const registerFile = useCallback(
     (fileId: string, url: string, mimeType: string) => {
