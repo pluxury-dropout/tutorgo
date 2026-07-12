@@ -58,6 +58,7 @@ type CalendarLesson struct {
 	Rank            *int      `json:"-"` // global rank within course, used to compute cycle position
 	CyclePosition   *int      `json:"cycle_position,omitempty"`
 	CycleSize       *int      `json:"cycle_size,omitempty"`
+	Paid            *bool     `json:"paid,omitempty"`
 }
 
 type CurrentCycleInfo struct {

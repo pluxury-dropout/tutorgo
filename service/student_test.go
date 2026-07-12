@@ -268,6 +268,35 @@ func TestStudentDelete_RepoError(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestListLessons_PaidFlag(t *testing.T) {
+	repo := new(mockStudentRepo)
+	payRepo := new(mockPaymentRepo)
+	svc := service.NewStudentService(repo, payRepo)
+
+	rank1, rank2, rank3 := 1, 2, 3
+	lessons := []models.CalendarLesson{
+		{ID: "l1", CourseID: "c1", Rank: &rank1},
+		{ID: "l2", CourseID: "c1", Rank: &rank2},
+		{ID: "l3", CourseID: "c1", Rank: &rank3},
+	}
+	repo.On("ListLessons", mock.Anything, "stu-1", false).Return(lessons, nil)
+	payRepo.On("GetByCoursesBatch", mock.Anything, []string{"c1"}).Return(map[string][]models.Payment{
+		"c1": {{LessonsCount: 2}},
+	}, nil)
+
+	got, err := svc.ListLessons(context.Background(), "stu-1", false)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, got[0].Paid)
+	assert.True(t, *got[0].Paid) // rank 1 within the paid cycle of 2
+	assert.NotNil(t, got[1].Paid)
+	assert.True(t, *got[1].Paid) // rank 2 within the paid cycle of 2
+	assert.NotNil(t, got[2].Paid)
+	assert.False(t, *got[2].Paid) // rank 3 beyond the paid cycle
+	repo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
+}
+
 func TestStudentListLessons_CyclePositions(t *testing.T) {
 	repo := new(mockStudentRepo)
 	payRepo := new(mockPaymentRepo)
