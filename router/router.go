@@ -31,6 +31,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentRepo := repository.NewEnrollmentRepository(pool)
 	attendanceRepo := repository.NewAttendanceRepository(pool)
 	taskRepo := repository.NewTaskRepository(pool)
+	lessonTaskRepo := repository.NewLessonTaskRepository(pool)
 	whiteboardRepo := repository.NewWhiteboardRepository(pool)
 	subscriptionRepo := repository.NewSubscriptionRepository(pool)
 	studentRefreshRepo := repository.NewStudentRefreshTokenRepository(pool)
@@ -46,6 +47,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
+	lessonTaskService := service.NewLessonTaskService(lessonTaskRepo, studentRepo)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
 
@@ -59,6 +61,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
+	lessonTaskHandler := handlers.NewLessonTaskHandler(lessonTaskService, log)
 	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, studentService)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 	studentAuthHandler := handlers.NewStudentAuthHandler(studentService, studentRefreshService, log, cfg.JWTSecret, cfg.Env == "production")
@@ -184,6 +187,13 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.PUT("/tasks/:id", taskHandler.Update)
 		auth.DELETE("/tasks/:id", taskHandler.Delete)
 
+		// Lesson tasks (ДЗ к урокам) — отдельная фича от канбан-tasks выше.
+		// Update/Delete под /lesson-tasks/:id, чтобы не конфликтовать с /tasks/:id.
+		auth.GET("/lessons/:id/tasks", lessonTaskHandler.ListForTutor)
+		auth.POST("/lessons/:id/tasks", lessonTaskHandler.Create)
+		auth.PUT("/lesson-tasks/:id", lessonTaskHandler.Update)
+		auth.DELETE("/lesson-tasks/:id", lessonTaskHandler.Delete)
+
 		auth.POST("/lessons/:id/room-token", callHandler.GetToken)
 		auth.POST("/lessons/:id/start-room", callHandler.StartRoom)
 		auth.POST("/lessons/:id/end-room", callHandler.EndRoom)
@@ -208,6 +218,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		stu.GET("/lessons/:id/board-token", whiteboardHandler.StudentBoardToken)
 		stu.GET("/me", studentHandler.Me)
 		stu.GET("/lessons", studentHandler.ListLessons)
+		stu.GET("/lessons/:id/tasks", lessonTaskHandler.ListForStudent)
+		stu.PATCH("/lesson-tasks/:id", lessonTaskHandler.StudentSetDone)
 		stu.POST("/password", studentAuthHandler.ChangePassword)
 	}
 
