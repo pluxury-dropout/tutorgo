@@ -6,8 +6,10 @@ import {
   convertToExcalidrawElements,
   viewportCoordsToSceneCoords,
   CaptureUpdateAction,
+  FONT_FAMILY,
 } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
+import './excalidraw-fonts.css'
 import { toast } from 'sonner'
 import type {
   ExcalidrawImperativeAPI,
@@ -24,6 +26,13 @@ import { PdfRangeDialog } from './PdfRangeDialog'
 import { loadPdf, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 import type { BoardPage } from '@/types/api'
+
+// Шрифты берём из public/fonts (см. scripts/excalidraw-fonts.mjs). Без этого
+// Excalidraw грузит woff2 с unpkg.com. Читается лениво, в момент загрузки
+// шрифта, поэтому достаточно выставить до первого рендера доски.
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH = '/'
+}
 
 // Держать в синхроне с лимитом бэкенда (router.go: multipart 50 МБ).
 const MAX_ASSET_BYTES = 50 * 1024 * 1024
@@ -241,6 +250,9 @@ export function ExcalidrawCanvas({
         <Excalidraw
           key={page?.id ?? 'empty'}
           langCode="ru-RU"
+          // Дефолт — Nunito вместо Excalifont. Только appState: элементы
+          // приезжают по WS, initialData их не трогает.
+          initialData={{ appState: { currentItemFontFamily: FONT_FAMILY.Nunito } }}
           excalidrawAPI={(api) => {
             apiRef.current = api
             onApiReady(api)

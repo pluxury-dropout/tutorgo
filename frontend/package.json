@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "cp node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node node_modules/lightningcss/lightningcss.linux-x64-gnu.node 2>/dev/null || true"
+    "fonts": "node scripts/excalidraw-fonts.mjs",
+    "postinstall": "cp node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node node_modules/lightningcss/lightningcss.linux-x64-gnu.node 2>/dev/null || true; node scripts/excalidraw-fonts.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",

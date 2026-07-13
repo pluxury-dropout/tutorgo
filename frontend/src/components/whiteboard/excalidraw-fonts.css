@@ -1,0 +1,21 @@
+/* Пикер шрифтов Excalidraw не настраивается через UIOptions — прячем лишние
+   кнопки по data-testid. Слоты остаются рабочими: старые доски с этими
+   шрифтами продолжают рисоваться, просто выбрать их заново нельзя.
+
+   !important обязателен: у Excalidraw есть `.excalidraw .buttonList button
+   { display: flex }` со специфичностью (0,2,1), а у селектора по атрибуту
+   ниже — (0,2,0), и без !important он проигрывает каскад. Сам Excalidraw
+   прячет кнопки так же (`.ToolIcon_type_button--hide { display: none
+   !important }`).
+
+   Чтобы вернуть слот в пикер, положи свою гарнитуру в fonts/<Слот>.woff2
+   (npm run fonts) и удали соответствующую строку отсюда. */
+
+/* Excalifont — «От руки» */
+.excalidraw [data-testid='font-family-hand-drawn'],
+/* Comic Shanns — «Код» */
+.excalidraw [data-testid='font-family-code'],
+/* «Показать шрифты» (Shift+F) — попап со всем реестром, включая скрытые выше */
+.excalidraw [data-testid='font-family-show-fonts'] {
+  display: none !important;
+}
