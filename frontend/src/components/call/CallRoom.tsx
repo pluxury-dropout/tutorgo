@@ -5,9 +5,10 @@ import dynamic from 'next/dynamic'
 import {
   LiveKitRoom,
   RoomAudioRenderer,
+  useConnectionState,
   useRoomContext,
 } from '@livekit/components-react'
-import { RoomEvent } from 'livekit-client'
+import { ConnectionState, RoomEvent } from 'livekit-client'
 import '@livekit/components-styles'
 import { toast } from 'sonner'
 
@@ -175,6 +176,19 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
       setBoardLoading(false)
     }
   }, [courseId, mode, tutorBoard, room])
+
+  // Tutor: доска — основной режим урока, открываем её сразу после подключения.
+  // Ждём Connected: publishData на неподключённой комнате бросает ошибку.
+  // Урок без курса — доски нет, молча остаёмся в сетке камер.
+  const connectionState = useConnectionState()
+  const autoOpenedRef = useRef(false)
+  useEffect(() => {
+    if (role !== 'tutor' || !courseId) return
+    if (connectionState !== ConnectionState.Connected) return
+    if (autoOpenedRef.current) return
+    autoOpenedRef.current = true
+    handleToggle()
+  }, [role, courseId, connectionState, handleToggle])
 
   // Resolve which board + page to render
   const activeBoard = role === 'tutor' ? tutorBoard : guestBoard
