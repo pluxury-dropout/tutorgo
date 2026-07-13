@@ -5,6 +5,7 @@ import {
   Excalidraw,
   convertToExcalidrawElements,
   viewportCoordsToSceneCoords,
+  newElementWith,
   CaptureUpdateAction,
   FONT_FAMILY,
 } from '@excalidraw/excalidraw'
@@ -51,6 +52,9 @@ const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 // Стартовый размер ролика на доске — 16:9, дальше препод тянет за угол.
 const YT_WIDTH = 560
 const YT_HEIGHT = 315
+const YT_RATIO = YT_HEIGHT / YT_WIDTH
+// Меньше — считаем округлением, а не растяжкой: чинить каждый onChange незачем.
+const ASPECT_EPS = 0.5
 
 interface Props {
   page: BoardPage | null
@@ -311,6 +315,36 @@ export function ExcalidrawCanvas({
     })
   }
 
+  // Ролик тянут за угол — держим 16:9: растянутое видео теряет чёрные поля не
+  // лучше, чем зритель — картинку. Excalidraw хранит пропорции только для image,
+  // и включить это для embeddable из пропов нельзя — правим высоту сами, на каждом
+  // кадре ресайза (Excalidraw пересчитывает размер от исходного, так что расхождение
+  // не копится).
+  const keepAspect = useCallback((elements: readonly ExcalidrawElement[]) => {
+    const api = apiRef.current
+    if (!api) return
+    const stretched = new Set(
+      elements
+        .filter(
+          (el) =>
+            el.type === 'embeddable' &&
+            !el.isDeleted &&
+            Math.abs(el.height - el.width * YT_RATIO) > ASPECT_EPS
+        )
+        .map((el) => el.id)
+    )
+    if (stretched.size === 0) return
+    api.updateScene({
+      elements: elements.map((el) =>
+        stretched.has(el.id)
+          ? newElementWith(el, { height: el.width * YT_RATIO })
+          : el
+      ),
+      // Ресайз в историю пишет сам Excalidraw; наша поправка — часть того же жеста.
+      captureUpdate: CaptureUpdateAction.NEVER,
+    })
+  }, [])
+
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
   // обёртки срабатывает раньше). Не-PDF пропускаем — нативная вставка
   // картинок Excalidraw кладёт base64 в files; для брошенных мышкой мелких
@@ -366,7 +400,10 @@ export function ExcalidrawCanvas({
             onApiReady(api)
             onApi?.(api)
           }}
-          onChange={onChange}
+          onChange={(elements) => {
+            keepAspect(elements)
+            onChange()
+          }}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
           onScrollChange={() => broadcastViewport()}
           // Встраиваем только YouTube: остальные ссылки — обычные, не iframe.
