@@ -393,6 +393,19 @@
   border-width: 0 !important;
 }
 
+/* Канбан: 4 колонки на десктопе, вертикальный стек на мобиле */
+.kanban-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+.kanban-col { min-width: 0; padding: 14px 16px; border-right: 1px solid var(--row-border); }
+.kanban-col:last-child { border-right: none; }
+.kanban-drop { min-height: 90px; }
+
+@media (max-width: 768px) {
+  .kanban-grid { grid-template-columns: 1fr; }
+  .kanban-col { border-right: none; border-bottom: 1px solid var(--row-border); padding: 12px 14px; }
+  .kanban-col:last-child { border-bottom: none; }
+  .kanban-drop { min-height: 24px; }
+}
+
 /* Форматированный контент задачи (карточка канбана + инлайн-редактор) */
 .task-content { line-height: 1.4; }
 .task-content p { margin: 0; }

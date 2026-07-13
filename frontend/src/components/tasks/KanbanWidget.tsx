@@ -82,7 +82,6 @@ function TaskCard({
 function Column({
   col,
   tasks,
-  isLast,
   editingId,
   draftOpen,
   onCardClick,
@@ -95,7 +94,6 @@ function Column({
 }: {
   col: typeof COLUMNS[number]
   tasks: Task[]
-  isLast: boolean
   editingId: string | null
   draftOpen: boolean
   onCardClick: (task: Task) => void
@@ -108,7 +106,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id })
   return (
-    <div style={{ minWidth: 0, padding: '14px 16px', borderRight: isLast ? 'none' : '1px solid var(--row-border)' }}>
+    <div className="kanban-col">
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>{col.label}</span>
@@ -121,9 +119,9 @@ function Column({
       </div>
       <div
         ref={setNodeRef}
+        className="kanban-drop"
         onClick={(e) => { if (e.target === e.currentTarget && !draftOpen) onOpenDraft() }}
         style={{
-          minHeight: 90,
           borderRadius: 6,
           background: isOver ? 'var(--muted)' : 'transparent',
           transition: 'background 0.15s',
@@ -200,13 +198,12 @@ export default function KanbanWidget() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {COLUMNS.map((col, i) => (
+      <div className="kanban-grid">
+        {COLUMNS.map((col) => (
           <Column
             key={col.id}
             col={col}
             tasks={tasks.filter(t => t.status === col.id)}
-            isLast={i === COLUMNS.length - 1}
             editingId={editingId}
             draftOpen={draftStatus === col.id}
             onCardClick={(task) => { setDraftStatus(null); setEditingId(task.id) }}

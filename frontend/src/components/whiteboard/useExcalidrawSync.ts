@@ -1,7 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { reconcileElements, CaptureUpdateAction } from '@excalidraw/excalidraw'
+import {
+  reconcileElements,
+  CaptureUpdateAction,
+  zoomToFitBounds,
+  getVisibleSceneBounds,
+} from '@excalidraw/excalidraw'
+import type { SceneBounds } from '@excalidraw/excalidraw/element/bounds'
 import type {
   ExcalidrawImperativeAPI,
   BinaryFileData,
@@ -31,11 +37,17 @@ type ConnStatus = 'connecting' | 'connected' | 'disconnected'
 const UPDATE_THROTTLE_MS = 100
 const SNAPSHOT_DEBOUNCE_MS = 1000
 
+// Локальный ключ текущего пользователя в Map коллабораторов. Сервер свой peerId
+// клиенту не сообщает, а для аватара «вы» реальный id не нужен: клик по своему
+// аватару Excalidraw гасит по isCurrentUser, uuid'ы пиров с 'self' не столкнутся.
+const SELF_ID = 'self' as SocketId
+
 export interface ExcalidrawSyncResult {
   status: ConnStatus
   onApiReady: (api: ExcalidrawImperativeAPI) => void
   onChange: () => void
   sendCursor: (x: number, y: number) => void
+  broadcastViewport: () => void
   registerFile: (fileId: string, url: string, mimeType: string) => void
 }
 
@@ -50,6 +62,7 @@ export function useExcalidrawSync(
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const viewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Гард против зомби-реконнектов после cleanup эффекта (поздний onclose
   // на размонтированном компоненте / переключённой странице).
   const closedRef = useRef(false)
@@ -75,6 +88,17 @@ export function useExcalidrawSync(
   // Стабильный примитив — connect не пересоздаётся на рефетчах React Query,
   // возвращающих новый объект той же страницы.
   const pageId = page?.id ?? null
+
+  // Пушит в Excalidraw коллабораторов = удалённые пиры + себя. Себя всегда
+  // подмешиваем (isCurrentUser, без pointer — иначе на своём холсте появится
+  // призрачный курсор-двойник), чтобы список и счётчик включали текущего юзера.
+  const pushCollaborators = useCallback(() => {
+    const api = apiRef.current
+    if (!api) return
+    const merged = new Map(collaboratorsRef.current)
+    merged.set(SELF_ID, { username: displayName || 'Вы', isCurrentUser: true })
+    api.updateScene({ collaborators: merged })
+  }, [displayName])
 
   // Догружаем недостающие файлы: S3 URL → blob → dataURL → addFiles.
   // Ошибка одного файла не валит остальные — элемент покажет плейсхолдер.
@@ -242,9 +266,32 @@ export function useExcalidrawSync(
           pointer: { x: msg.x ?? 0, y: msg.y ?? 0, tool: 'pointer' },
           username: msg.name || 'Гость',
         })
-        apiRef.current?.updateScene({
-          collaborators: new Map(collaboratorsRef.current),
+        pushCollaborators()
+        return
+      }
+
+      if (msg.type === 'leave' && msg.peerId) {
+        collaboratorsRef.current.delete(msg.peerId as SocketId)
+        pushCollaborators()
+        return
+      }
+
+      // Follow-mode: ведомый двигает камеру за тем пиром, чей peerId совпал с
+      // локальным userToFollow.socketId (его ставит клик по аватару в Excalidraw).
+      // Пиры вещают границы всегда — фильтруем на приёме, без серверного трекинга.
+      if (msg.type === 'viewport' && msg.peerId) {
+        const api = apiRef.current
+        if (!api) return
+        const appState = api.getAppState()
+        if (appState.userToFollow?.socketId !== msg.peerId) return
+        const bounds = (msg.payload as { bounds?: SceneBounds } | undefined)
+          ?.bounds
+        if (!bounds) return
+        api.updateScene({
+          appState: zoomToFitBounds({ bounds, appState, fitToViewport: true })
+            .appState,
         })
+        return
       }
     }
 
@@ -264,7 +311,7 @@ export function useExcalidrawSync(
     }
 
     ws.onerror = () => ws.close()
-  }, [pageId, token, applySnapshot, applyRemote, hydrateFiles])
+  }, [pageId, token, applySnapshot, applyRemote, hydrateFiles, pushCollaborators])
 
   useEffect(() => {
     closedRef.current = false
@@ -285,7 +332,9 @@ export function useExcalidrawSync(
       if (retryRef.current) clearTimeout(retryRef.current)
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
       if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+      if (viewportTimerRef.current) clearTimeout(viewportTimerRef.current)
       retryRef.current = updateTimerRef.current = snapshotTimerRef.current = null
+      viewportTimerRef.current = null
       // Best-effort финальный снапшот из кэша сцены (не из live apiRef, см.
       // lastSceneRef). Тег pageId защищает от гонки с initial onChange нового
       // Excalidraw: шлём, только если кэш — от уходящей страницы. filesRef ещё
@@ -302,13 +351,14 @@ export function useExcalidrawSync(
   const onApiReady = useCallback(
     (api: ExcalidrawImperativeAPI) => {
       apiRef.current = api
+      pushCollaborators() // показать себя сразу, до подключения других
       if (pendingSeedRef.current !== null) {
         const seed = pendingSeedRef.current
         pendingSeedRef.current = null
         applySnapshot(seed)
       }
     },
-    [applySnapshot]
+    [applySnapshot, pushCollaborators]
   )
 
   // Локальная правка: троттлим update (100мс), дебаунсим снапшот (1с).
@@ -338,6 +388,27 @@ export function useExcalidrawSync(
     [displayName]
   )
 
+  // Вещаем свои видимые границы сцены ведомым (follow-mode). Trailing-throttle:
+  // при панорамировании летит поток onScrollChange — шлём не чаще UPDATE_THROTTLE_MS,
+  // но последнюю позицию гарантированно дослыаем таймером (иначе камера ведомого
+  // застынет чуть раньше конца жеста).
+  const broadcastViewport = useCallback(() => {
+    if (viewportTimerRef.current) return
+    const send = () => {
+      const api = apiRef.current
+      if (!api || wsRef.current?.readyState !== WebSocket.OPEN) return
+      const bounds = getVisibleSceneBounds(api.getAppState())
+      wsRef.current.send(
+        JSON.stringify({ type: 'viewport', payload: { bounds } })
+      )
+    }
+    send()
+    viewportTimerRef.current = setTimeout(() => {
+      viewportTimerRef.current = null
+      send() // trailing: финальная позиция после последнего скролла
+    }, UPDATE_THROTTLE_MS)
+  }, [])
+
   const registerFile = useCallback(
     (fileId: string, url: string, mimeType: string) => {
       filesRef.current[fileId] = { url, mimeType }
@@ -350,5 +421,12 @@ export function useExcalidrawSync(
     []
   )
 
-  return { status, onApiReady, onChange, sendCursor, registerFile }
+  return {
+    status,
+    onApiReady,
+    onChange,
+    sendCursor,
+    broadcastViewport,
+    registerFile,
+  }
 }

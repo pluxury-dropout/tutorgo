@@ -48,7 +48,7 @@ export function ExcalidrawCanvas({
   isGuest = false,
   displayName,
 }: Props) {
-  const { status, onApiReady, onChange, sendCursor, registerFile } =
+  const { status, onApiReady, onChange, sendCursor, broadcastViewport, registerFile } =
     useExcalidrawSync(page, token, displayName)
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
 
@@ -253,6 +253,7 @@ export function ExcalidrawCanvas({
           }}
           onChange={onChange}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
+          onScrollChange={() => broadcastViewport()}
           renderTopRightUI={() => (
             <div
               data-board-ui

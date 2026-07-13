@@ -97,6 +97,16 @@ func (h *wbHub) run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				// Уведомляем оставшихся, чтобы они убрали этого пира из списка
+				// коллабораторов (иначе счётчик участников завышен). Best-effort:
+				// на переполненный буфер пропускаем — аватар догниёт до reload.
+				leave, _ := json.Marshal(WbMsg{Type: "leave", PeerID: client.peerID})
+				for c := range h.clients {
+					select {
+					case c.send <- leave:
+					default:
+					}
+				}
 			}
 			if len(h.clients) == 0 {
 				// Last client left: tear down the hub. Take the manager lock and
@@ -129,8 +139,10 @@ func (h *wbHub) run() {
 				h.saveDebounce(func() { h.saveSnapshot(snap) })
 				continue
 
-			case "cursor":
-				// Attach sender's peerId, then relay.
+			case "cursor", "viewport":
+				// Attach sender's peerId, then relay. Follow-mode matches the
+				// viewport sender against the follower's userToFollow.socketId,
+				// which equals this same peerId (learned via cursor messages).
 				parsed.PeerID = msg.sender.peerID
 				msg.data, _ = json.Marshal(parsed)
 
