@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tutorgo/config"
+	"tutorgo/email"
 	"tutorgo/handlers"
 	"tutorgo/middleware"
 	"tutorgo/repository"
@@ -34,9 +35,12 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	whiteboardRepo := repository.NewWhiteboardRepository(pool)
 	subscriptionRepo := repository.NewSubscriptionRepository(pool)
 	studentRefreshRepo := repository.NewStudentRefreshTokenRepository(pool)
+	pendingRepo := repository.NewPendingRegistrationRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
+	emailSender := email.NewSender(cfg.ResendAPIKey, cfg.EmailFrom, log)
+	registrationService := service.NewRegistrationService(pendingRepo, tutorService, emailSender)
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
 	studentService := service.NewStudentService(studentRepo, paymentRepo)
 	studentRefreshService := service.NewStudentRefreshTokenService(studentRefreshRepo)
@@ -51,7 +55,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
-	authHandler := handlers.NewAuthHandler(tutorService, refreshTokenService, log, cfg.JWTSecret, cfg.Env == "production")
+	authHandler := handlers.NewAuthHandler(tutorService, registrationService, refreshTokenService, log, cfg.JWTSecret, cfg.Env == "production")
 	studentHandler := handlers.NewStudentHandler(studentService, log)
 	courseHandler := handlers.NewCourseHandler(courseService, log)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
@@ -91,7 +95,11 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 	// Public routes
 	authLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
-	r.POST("/auth/register", authLimiter, authHandler.Register)
+	// Регистрация/resend шлют письма — жёстче лимит по IP (≈5/час), беречь sender-репутацию.
+	regLimiter := middleware.RateLimit(rate.Every(12*time.Minute), 5)
+	r.POST("/auth/register", regLimiter, authHandler.Register)
+	r.POST("/auth/register/verify", authLimiter, authHandler.RegisterVerify)
+	r.POST("/auth/register/resend", regLimiter, authHandler.RegisterResend)
 	r.POST("/auth/login", authLimiter, authHandler.Login)
 	r.POST("/auth/refresh", authLimiter, authHandler.Refresh)
 	r.POST("/auth/logout", authLimiter, authHandler.Logout)

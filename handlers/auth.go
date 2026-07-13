@@ -17,6 +17,7 @@ import (
 
 type AuthHandler struct {
 	service         service.TutorService
+	registrationSvc service.RegistrationService
 	refreshTokenSvc service.RefreshTokenService
 	log             *slog.Logger
 	jwtSecret       string
@@ -25,6 +26,7 @@ type AuthHandler struct {
 
 func NewAuthHandler(
 	svc service.TutorService,
+	registrationSvc service.RegistrationService,
 	refreshTokenSvc service.RefreshTokenService,
 	log *slog.Logger,
 	jwtSecret string,
@@ -32,6 +34,7 @@ func NewAuthHandler(
 ) *AuthHandler {
 	return &AuthHandler{
 		service:         svc,
+		registrationSvc: registrationSvc,
 		refreshTokenSvc: refreshTokenSvc,
 		log:             log,
 		jwtSecret:       jwtSecret,
@@ -39,39 +42,92 @@ func NewAuthHandler(
 	}
 }
 
+// Register — шаг 1: принимает данные, шлёт OTP-код на email, аккаунт ещё НЕ создаётся.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if !bindAndValidate(c, &req) {
 		return
 	}
 
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		h.log.Error("Failed to hash password", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
+	err := h.registrationSvc.Start(c.Request.Context(), req)
+	switch {
+	case err == nil:
+		c.Status(http.StatusAccepted)
+	case errors.Is(err, service.ErrEmailTaken):
+		c.JSON(http.StatusConflict, gin.H{"error": "Email or phone is already taken"})
+	default:
+		h.log.Error("Failed to start registration", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send verification code"})
+	}
+}
+
+// RegisterVerify — шаг 2: проверяет код, создаёт аккаунт + trial, сразу логинит.
+func (h *AuthHandler) RegisterVerify(c *gin.Context) {
+	var req models.VerifyRegistrationRequest
+	if !bindAndValidate(c, &req) {
 		return
 	}
 
-	createReq := models.CreateTutorRequest{
-		Email:     req.Email,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Phone:     req.Phone,
-	}
-	tutor, err := h.service.Register(c.Request.Context(), createReq, string(passwordHash))
-	if err != nil {
+	tutor, err := h.registrationSvc.Verify(c.Request.Context(), req.Email, req.Code)
+	switch {
+	case err == nil:
+		// noop — продолжаем ниже
+	case errors.Is(err, service.ErrCodeExpired):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Code expired, register again"})
+		return
+	case errors.Is(err, service.ErrTooManyAttempts):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Too many attempts, register again"})
+		return
+	case errors.Is(err, service.ErrInvalidCode):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid code"})
+		return
+	default:
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			c.JSON(http.StatusConflict, gin.H{"error": "Email or phone is already taken"})
 			return
 		}
-		h.log.Error("Failed to register tutor", slog.String("error", err.Error()))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register tutor"})
+		h.log.Error("Failed to verify registration", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete registration"})
 		return
 	}
 
+	accessToken, err := h.newAccessToken(tutor.ID)
+	if err != nil {
+		h.log.Error("Failed to sign token", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+	refreshToken, err := h.refreshTokenSvc.Create(c.Request.Context(), tutor.ID)
+	if err != nil {
+		h.log.Error("Failed to create refresh token", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
+	h.setRefreshCookie(c, refreshToken)
 	h.log.Info("Tutor registered", slog.String("id", tutor.ID), slog.String("email", tutor.Email))
-	c.JSON(http.StatusCreated, tutor)
+	c.JSON(http.StatusCreated, models.LoginResponse{AccessToken: accessToken})
+}
+
+// RegisterResend — новый OTP-код, если прошёл кулдаун.
+func (h *AuthHandler) RegisterResend(c *gin.Context) {
+	var req models.ResendRegistrationRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+
+	err := h.registrationSvc.Resend(c.Request.Context(), req.Email)
+	switch {
+	case err == nil:
+		c.Status(http.StatusAccepted)
+	case errors.Is(err, service.ErrResendCooldown):
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Wait before requesting a new code"})
+	case errors.Is(err, service.ErrNoPendingForEmail):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Code expired, register again"})
+	default:
+		h.log.Error("Failed to resend code", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send verification code"})
+	}
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {

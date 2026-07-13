@@ -1,5 +1,4 @@
 import { api } from './client'
-import { Tutor } from '@/types/api'
 
 export interface LoginInput {
   email?: string
@@ -19,8 +18,18 @@ export const authApi = {
   login: (data: LoginInput) =>
     api.post<{ access_token: string }>('/auth/login', data).then((r) => r.data),
 
+  // Шаг 1: шлёт OTP-код на email, аккаунт ещё не создан (202).
   register: (data: RegisterInput) =>
-    api.post<Tutor>('/auth/register', data).then((r) => r.data),
+    api.post('/auth/register', data).then(() => {}),
+
+  // Шаг 2: подтверждает код, создаёт аккаунт, сразу логинит (201 + access_token).
+  registerVerify: (email: string, code: string) =>
+    api
+      .post<{ access_token: string }>('/auth/register/verify', { email, code })
+      .then((r) => r.data),
+
+  registerResend: (email: string) =>
+    api.post('/auth/register/resend', { email }).then(() => {}),
 
   logout: () =>
     api.post('/auth/logout', {}, { withCredentials: true }).catch(() => {}),

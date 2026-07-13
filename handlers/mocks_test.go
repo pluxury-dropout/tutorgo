@@ -227,6 +227,21 @@ func (m *mockWhiteboardService) PageBelongsToTutor(ctx context.Context, pageID, 
 	return args.Bool(0), args.Error(1)
 }
 
+// --- Mock: RegistrationService ---
+
+type mockRegistrationService struct{ mock.Mock }
+
+func (m *mockRegistrationService) Start(ctx context.Context, req models.RegisterRequest) error {
+	return m.Called(ctx, req).Error(0)
+}
+func (m *mockRegistrationService) Verify(ctx context.Context, email, code string) (models.Tutor, error) {
+	args := m.Called(ctx, email, code)
+	return args.Get(0).(models.Tutor), args.Error(1)
+}
+func (m *mockRegistrationService) Resend(ctx context.Context, email string) error {
+	return m.Called(ctx, email).Error(0)
+}
+
 // --- Mock: TutorService ---
 
 type mockTutorService struct{ mock.Mock }

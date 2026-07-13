@@ -52,6 +52,7 @@ func main() {
 
 	// Auto-complete: mark expired lessons as completed every minute
 	lessonRepo := repository.NewLessonRepository(pool)
+	pendingRepo := repository.NewPendingRegistrationRepository(pool)
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	var bgWg sync.WaitGroup
 	bgWg.Go(func() {
@@ -59,6 +60,9 @@ func main() {
 	})
 	bgWg.Go(func() {
 		runIntervalLoop(bgCtx, 24*time.Hour, "subscription renew", subscriptionService.RenewDue, log)
+	})
+	bgWg.Go(func() {
+		runIntervalLoop(bgCtx, 10*time.Minute, "cleanup pending registrations", pendingRepo.DeleteExpired, log)
 	})
 
 	r.GET("/health", func(c *gin.Context) {

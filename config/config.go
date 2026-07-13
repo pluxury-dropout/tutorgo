@@ -21,6 +21,8 @@ type Config struct {
 	S3AccessKey      string
 	S3SecretKey      string
 	S3Bucket         string
+	ResendAPIKey     string
+	EmailFrom        string
 }
 
 func Load(log *slog.Logger) Config {
@@ -45,6 +47,12 @@ func Load(log *slog.Logger) Config {
 		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
 		S3SecretKey:      os.Getenv("S3_SECRET_ACCESS_KEY"),
 		S3Bucket:         os.Getenv("S3_BUCKET"),
+		ResendAPIKey:     os.Getenv("RESEND_API_KEY"),
+		EmailFrom:        os.Getenv("EMAIL_FROM"),
+	}
+
+	if cfg.EmailFrom == "" {
+		cfg.EmailFrom = "TutorHub <onboarding@resend.dev>" // ponytail: дефолт для dev/resend-песочницы
 	}
 
 	if cfg.DBUrl == "" {
