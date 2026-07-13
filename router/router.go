@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"tutorgo/config"
@@ -83,7 +84,13 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger(log))
 	r.Use(func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1 MB
+		// JSON-тела — 1 МБ; загрузки файлов (multipart) — 50 МБ, точный размер
+		// проверяет сам хендлер по header.Size.
+		limit := int64(1 << 20)
+		if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
+			limit = 50 << 20
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
 	r.Use(cors.New(cors.Config{

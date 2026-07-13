@@ -214,19 +214,19 @@ func (h *WhiteboardHandler) UploadAsset(c *gin.Context) {
 		return
 	}
 
-	// Apply 20MB limit for asset uploads
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 20<<20)
-
+	// Лимит тела (50 МБ для multipart) уже стоит в глобальном middleware —
+	// повторный MaxBytesReader тут только маскировал бы его ошибку.
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
+		h.log.Error("upload asset: form file", "err", err, "content_type", c.ContentType())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file required"})
 		return
 	}
 	defer file.Close()
 
-	const maxSize = 20 << 20 // 20MB
+	const maxSize = 50 << 20 // 50MB
 	if header.Size > maxSize {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 20MB)"})
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 50MB)"})
 		return
 	}
 

@@ -25,6 +25,11 @@ import { loadPdf, renderPages } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 import type { BoardPage } from '@/types/api'
 
+// Держать в синхроне с лимитом бэкенда (router.go: multipart 50 МБ).
+const MAX_ASSET_BYTES = 50 * 1024 * 1024
+
+const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
+
 interface Props {
   page: BoardPage | null
   token?: string
@@ -70,6 +75,12 @@ export function ExcalidrawCanvas({
       const api = apiRef.current
       if (!api) return
       const file = new File([blob], fileName, { type: mimeType })
+      // Отсекаем до аплоада: иначе пользователь ждёт заливку 100 МБ ради 413.
+      if (file.size > MAX_ASSET_BYTES) {
+        throw new Error(
+          `файл ${formatMb(file.size)} МБ, максимум ${formatMb(MAX_ASSET_BYTES)} МБ`
+        )
+      }
       const { url } = await whiteboardApi.uploadAsset(boardId, file)
       const fullUrl = `${BASE_URL}${url}`
       const fileId = crypto.randomUUID() as FileId
@@ -139,8 +150,12 @@ export function ExcalidrawCanvas({
       } finally {
         URL.revokeObjectURL(objUrl)
       }
-    } catch {
-      toast.error('Не удалось вставить картинку')
+    } catch (e) {
+      // ApiError с бэкенда и локальный Error оба несут .message
+      const msg = (e as { message?: string })?.message
+      toast.error(
+        msg ? `Не удалось вставить картинку: ${msg}` : 'Не удалось вставить картинку'
+      )
     }
   }
 
