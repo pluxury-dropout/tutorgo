@@ -369,16 +369,21 @@ export function useExcalidrawSync(
         pendingSeedRef.current = null
         applySnapshot(seed)
       }
+      // Показать себя в списке участников сразу, не дожидаясь пиров. Через
+      // setTimeout, а не напрямую: Excalidraw отдаёт api из своего конструктора,
+      // где updateScene({collaborators}) — это setState на несмонтированном
+      // компоненте. Ноль-таймаут откладывает пуш до конца коммита.
+      setTimeout(() => pushCollaborators(), 0)
     },
-    [applySnapshot]
+    [applySnapshot, pushCollaborators]
   )
 
-  // Показать себя в списке участников, не дожидаясь других. Именно из эффекта,
-  // а НЕ из onApiReady: Excalidraw отдаёт api прямо в своём конструкторе, до
-  // маунта, а updateScene({collaborators}) — это setState, который React на
-  // несмонтированном компоненте молча выбрасывает. К моменту эффекта дерево уже
-  // закоммичено. pageId в зависимостях: смена страницы = key= → новый
-  // конструктор Excalidraw и пустой appState.
+  // Перепушиваем себя, когда доехала личность: имя и uid приходят асинхронно
+  // (auth-store гидратируется, /student/me — запрос), нередко уже ПОСЛЕ того,
+  // как onApiReady показал «Вы» без uid. Без этого пуша дедупликация своих
+  // соединений не сработала бы. Пуш идемпотентен; до появления api — no-op.
+  // pageId в зависимостях: смена страницы = key= → новый Excalidraw, пустой
+  // appState.
   useEffect(() => {
     pushCollaborators()
   }, [pageId, pushCollaborators])
