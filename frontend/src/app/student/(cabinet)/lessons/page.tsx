@@ -165,6 +165,7 @@ function LessonsInner() {
       <SectionCard
         title={tab === 'upcoming' ? 'Ближайшие уроки' : 'История уроков'}
         action={<PeriodPicker from={period.from} to={period.to} onChange={(f, t) => setPeriod({ from: f, to: t })} />}
+        style={{ overflow: 'visible' }}
       >
         {isLoading && (
           <SectionRow isFirst>
