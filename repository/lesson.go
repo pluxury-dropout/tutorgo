@@ -346,7 +346,7 @@ func (r *lessonRepository) AutoComplete(ctx context.Context) (int64, error) {
 func (r *lessonRepository) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
 	result, err := r.pool.Exec(ctx,
 		`UPDATE lessons
-		SET room_started_at = NOW()
+		SET room_started_at = NOW(), room_ended_at = NULL
 		FROM courses
 		WHERE lessons.id = $1
 		  AND lessons.course_id = courses.id
