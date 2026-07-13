@@ -351,15 +351,24 @@ export function useExcalidrawSync(
   const onApiReady = useCallback(
     (api: ExcalidrawImperativeAPI) => {
       apiRef.current = api
-      pushCollaborators() // показать себя сразу, до подключения других
       if (pendingSeedRef.current !== null) {
         const seed = pendingSeedRef.current
         pendingSeedRef.current = null
         applySnapshot(seed)
       }
     },
-    [applySnapshot, pushCollaborators]
+    [applySnapshot]
   )
+
+  // Показать себя в списке участников, не дожидаясь других. Именно из эффекта,
+  // а НЕ из onApiReady: Excalidraw отдаёт api прямо в своём конструкторе, до
+  // маунта, а updateScene({collaborators}) — это setState, который React на
+  // несмонтированном компоненте молча выбрасывает. К моменту эффекта дерево уже
+  // закоммичено. pageId в зависимостях: смена страницы = key= → новый
+  // конструктор Excalidraw и пустой appState.
+  useEffect(() => {
+    pushCollaborators()
+  }, [pageId, pushCollaborators])
 
   // Локальная правка: троттлим update (100мс), дебаунсим снапшот (1с).
   const onChange = useCallback(() => {
