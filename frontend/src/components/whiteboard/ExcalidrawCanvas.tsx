@@ -21,7 +21,7 @@ import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
 import { PdfRangeDialog } from './PdfRangeDialog'
-import { loadPdf, renderPages } from '@/lib/pdf'
+import { loadPdf, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 import type { BoardPage } from '@/types/api'
 
@@ -56,10 +56,6 @@ export function ExcalidrawCanvas({
   const [pdfDialog, setPdfDialog] = useState<{
     numPages: number
     point: { x: number; y: number }
-  } | null>(null)
-  const [pdfProgress, setPdfProgress] = useState<{
-    done: number
-    total: number
   } | null>(null)
 
   // Общий путь вставки картинки: S3 → локальный dataURL → files-карта →
@@ -159,43 +155,46 @@ export function ExcalidrawCanvas({
     }
   }
 
-  const handlePdfConfirm = async (from: number, to: number) => {
+  // Диалог закрывается сразу, обработка идёт в фоне с прогрессом в toast.
+  const handlePdfConfirm = (from: number, to: number) => {
     const pdf = pdfRef.current
     const origin = pdfDialog?.point
     if (!pdf || !origin) return
-    setPdfProgress({ done: 0, total: to - from + 1 })
-    try {
-      const rendered = await renderPages(pdf, from, to, (done, total) =>
-        setPdfProgress({ done, total })
-      )
-      let x = origin.x
-      for (let i = 0; i < rendered.length; i++) {
-        const p = rendered[i]
-        try {
+    // Забираем владение документом: диалог закрыт, следующий drop перезапишет ref.
+    pdfRef.current = null
+    setPdfDialog(null)
+
+    const toastId = `pdf-${Date.now()}`
+    const total = to - from + 1
+    // Страницы рендерятся и заливаются по одной, поэтому счётчик общий:
+    // «готово N из total» = страница вставлена на доску.
+    toast.loading(`PDF: 0 / ${total}…`, { id: toastId })
+
+    void (async () => {
+      try {
+        let x = origin.x
+        for (let i = from; i <= to; i++) {
+          const p = await renderPage(pdf, i)
           await insertImageBlob(
             p.blob,
             'image/png',
             { x, y: origin.y },
             { w: p.width, h: p.height },
-            `page-${from + i}.png`
+            `page-${i}.png`
           )
-        } catch (e) {
-          const msg = (e as { message?: string })?.message
-          toast.error(
-            `Не удалось загрузить страницу ${from + i}${msg ? `: ${msg}` : ''}`
-          )
-          break
+          x += p.width // встык по горизонтали
+          toast.loading(`PDF: ${i - from + 1} / ${total}…`, { id: toastId })
         }
-        x += p.width // встык по горизонтали
+        toast.success(`PDF вставлен: ${total} стр.`, { id: toastId })
+      } catch (e) {
+        const msg = (e as { message?: string })?.message
+        toast.error(`Не удалось обработать PDF${msg ? `: ${msg}` : ''}`, {
+          id: toastId,
+        })
+      } finally {
+        void pdf.cleanup()
       }
-    } catch {
-      toast.error('Не удалось обработать PDF')
-    } finally {
-      void pdf.cleanup()
-      pdfRef.current = null
-      setPdfProgress(null)
-      setPdfDialog(null)
-    }
+    })()
   }
 
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
@@ -319,7 +318,6 @@ export function ExcalidrawCanvas({
           <PdfRangeDialog
             open
             numPages={pdfDialog.numPages}
-            progress={pdfProgress}
             onConfirm={handlePdfConfirm}
             onCancel={() => {
               void pdfRef.current?.cleanup()

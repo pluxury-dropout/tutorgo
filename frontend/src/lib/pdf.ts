@@ -13,27 +13,19 @@ export async function loadPdf(file: File): Promise<PDFDocumentProxy> {
   return pdfjs.getDocument({ data: arrayBuffer }).promise
 }
 
-// Рендерит страницы [from, to] (включительно, 1-индексированные) в PNG.
-export async function renderPages(
+// Рендерит одну страницу (1-индексированную) в PNG.
+export async function renderPage(
   pdf: PDFDocumentProxy,
-  from: number,
-  to: number,
-  onProgress?: (done: number, total: number) => void
-): Promise<RenderedPage[]> {
-  const total = to - from + 1
-  const pages: RenderedPage[] = []
-  for (let i = from; i <= to; i++) {
-    const page = await pdf.getPage(i)
-    const viewport = page.getViewport({ scale: 1.5 })
-    const canvas = document.createElement('canvas')
-    canvas.width = viewport.width
-    canvas.height = viewport.height
-    await page.render({ canvas, viewport }).promise
-    const blob = await new Promise<Blob>((res) =>
-      canvas.toBlob((b) => res(b!), 'image/png')
-    )
-    pages.push({ blob, width: viewport.width, height: viewport.height })
-    onProgress?.(pages.length, total)
-  }
-  return pages
+  pageNum: number
+): Promise<RenderedPage> {
+  const page = await pdf.getPage(pageNum)
+  const viewport = page.getViewport({ scale: 1.5 })
+  const canvas = document.createElement('canvas')
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+  await page.render({ canvas, viewport }).promise
+  const blob = await new Promise<Blob>((res) =>
+    canvas.toBlob((b) => res(b!), 'image/png')
+  )
+  return { blob, width: viewport.width, height: viewport.height }
 }
