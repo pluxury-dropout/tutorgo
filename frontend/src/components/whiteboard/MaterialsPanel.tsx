@@ -56,23 +56,40 @@ export function MaterialsPanel({ onClose, onPick }: Props) {
     }
   }
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (files: File[]) => {
     // Отсекаем до аплоада: иначе пользователь ждёт заливку 100 МБ ради 413.
-    if (file.size > MAX_ASSET_BYTES) {
-      toast.error(
-        `Файл ${formatMb(file.size)} МБ, максимум ${formatMb(MAX_ASSET_BYTES)} МБ`
-      )
-      return
-    }
+    const tooBig = files.filter((f) => f.size > MAX_ASSET_BYTES)
+    tooBig.forEach((f) =>
+      toast.error(`${f.name}: ${formatMb(f.size)} МБ, максимум ${formatMb(MAX_ASSET_BYTES)} МБ`)
+    )
+    const queue = files.filter((f) => f.size <= MAX_ASSET_BYTES)
+    if (queue.length === 0) return
+
     setBusy(true)
-    try {
-      await materialsApi.upload(file, parentId)
-      await reload()
-    } catch {
-      toast.error('Не удалось загрузить файл')
-    } finally {
-      setBusy(false)
+    // ponytail: заливаем по одному. Promise.all быстрее, но держит все файлы в
+    // памяти разом и упирается в лимит соединений; параллелить — когда станет узким.
+    const toastId = queue.length > 1 ? toast.loading(`Загрузка 0 из ${queue.length}…`) : undefined
+    let done = 0
+    const failed: string[] = []
+    for (const file of queue) {
+      try {
+        await materialsApi.upload(file, parentId)
+        done++
+      } catch {
+        failed.push(file.name)
+      }
+      if (toastId) toast.loading(`Загрузка ${done} из ${queue.length}…`, { id: toastId })
     }
+    if (toastId) toast.dismiss(toastId)
+    if (failed.length > 0) {
+      toast.error(
+        failed.length === queue.length
+          ? 'Не удалось загрузить файлы'
+          : `Не загрузились: ${failed.join(', ')}`
+      )
+    }
+    await reload()
+    setBusy(false)
   }
 
   const handleDelete = async (m: Material) => {
@@ -157,12 +174,13 @@ export function MaterialsPanel({ onClose, onPick }: Props) {
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0]
+            const files = Array.from(e.target.files ?? [])
             // Сбрасываем value: иначе повторный выбор того же файла не даст change.
             e.target.value = ''
-            if (file) void handleUpload(file)
+            if (files.length > 0) void handleUpload(files)
           }}
         />
       </div>

@@ -35,6 +35,11 @@ func New(ctx context.Context, cfg config.Config) (*Client, error) {
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(cfg.S3Endpoint)
 		o.UsePathStyle = true
+		// Без этого SDK по умолчанию считает CRC32 и шлёт тело в кодировке aws-chunked
+		// одним чанком целиком. Supabase режет чанк на 8 МБ → 413 EntityTooLarge на
+		// файлах крупнее. WhenRequired отключает чексумму там, где её не требует API,
+		// и тело уходит обычным сырым PUT.
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 	})
 	return &Client{
 		s3:      client,
