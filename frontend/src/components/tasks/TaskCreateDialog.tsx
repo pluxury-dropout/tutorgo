@@ -37,11 +37,9 @@ export function TaskCreateDialog({ start, end, onClose }: Props) {
     const duration = Math.max(15, Math.round((end.getTime() - start.getTime()) / 60_000))
     createTask.mutate(
       { title: title.trim(), scheduled_at: start.toISOString(), duration_minutes: duration },
-      {
-        onSuccess: () => { toast.success('Задача создана'); onClose() },
-        onError:   () => toast.error('Не удалось создать задачу'),
-      },
+      { onError: () => toast.error('Не удалось создать задачу') },
     )
+    onClose()
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -66,7 +64,7 @@ export function TaskCreateDialog({ start, end, onClose }: Props) {
         />
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
-          <Button size="sm" onClick={handleSave} disabled={!title.trim() || createTask.isPending}>
+          <Button size="sm" onClick={handleSave} disabled={!title.trim()}>
             Создать
           </Button>
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -8,9 +8,22 @@ import { toast } from 'sonner'
 import { studentApi, LessonsFilter } from '@/lib/api/student'
 import { SectionCard, SectionRow } from '@/components/common/SectionCard'
 import { Markdown } from '@/components/common/Markdown'
+import { PeriodPicker } from '@/components/lessons/PeriodPicker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { CalendarLesson } from '@/types/api'
+
+// Неделя (Пн–Пн+7), содержащая переданную дату
+function weekRangeOf(d: Date): { from: Date; to: Date } {
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const from = new Date(d)
+  from.setDate(d.getDate() + diff)
+  from.setHours(0, 0, 0, 0)
+  const to = new Date(from)
+  to.setDate(from.getDate() + 7)
+  return { from, to }
+}
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'short',
@@ -103,6 +116,21 @@ function LessonsInner() {
     queryFn: () => studentApi.lessons(tab),
   })
 
+  // Недельный срез. Дефолт — неделя ближайшего/последнего урока (список уже отсортирован),
+  // чтобы не открывать пустой экран. Сбрасывается один раз на вкладку.
+  const [period, setPeriod] = useState(() => weekRangeOf(new Date()))
+  const initedTab = useRef<string | null>(null)
+  useEffect(() => {
+    if (!lessons || initedTab.current === tab) return
+    initedTab.current = tab
+    setPeriod(weekRangeOf(lessons[0] ? new Date(lessons[0].scheduled_at) : new Date()))
+  }, [lessons, tab])
+
+  const visible = (lessons ?? []).filter((l) => {
+    const t = new Date(l.scheduled_at)
+    return t >= period.from && t < period.to
+  })
+
   const cur = lessons?.find((l) => l.cycle_position != null && l.cycle_size != null)
   const cycleSummary =
     cur && cur.cycle_position != null && cur.cycle_size != null
@@ -134,7 +162,10 @@ function LessonsInner() {
         <div style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{cycleSummary}</div>
       )}
 
-      <SectionCard title={tab === 'upcoming' ? 'Ближайшие уроки' : 'История уроков'}>
+      <SectionCard
+        title={tab === 'upcoming' ? 'Ближайшие уроки' : 'История уроков'}
+        action={<PeriodPicker from={period.from} to={period.to} onChange={(f, t) => setPeriod({ from: f, to: t })} />}
+      >
         {isLoading && (
           <SectionRow isFirst>
             <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Загрузка...</span>
@@ -152,14 +183,18 @@ function LessonsInner() {
             </div>
           </SectionRow>
         )}
-        {lessons && lessons.length === 0 && (
+        {lessons && !isLoading && error == null && visible.length === 0 && (
           <SectionRow isFirst>
             <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
-              {tab === 'upcoming' ? 'Ближайших уроков нет' : 'Прошедших уроков нет'}
+              {lessons.length === 0
+                ? tab === 'upcoming'
+                  ? 'Ближайших уроков нет'
+                  : 'Прошедших уроков нет'
+                : 'На выбранной неделе уроков нет'}
             </span>
           </SectionRow>
         )}
-        {lessons?.map((l, i) => (
+        {visible.map((l, i) => (
           <LessonRow key={l.id} lesson={l} isFirst={i === 0} upcoming={tab === 'upcoming'} />
         ))}
       </SectionCard>

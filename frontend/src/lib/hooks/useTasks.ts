@@ -24,7 +24,25 @@ export function useCreateTask() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: TaskInput) => tasksApi.create(data),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    // Optimistic: сразу добавляем задачу во все кэши tasks (доска + диапазоны календаря),
+    // временный id заменится настоящим при инвалидации в onSettled.
+    onMutate: async (data) => {
+      await qc.cancelQueries({ queryKey: ['tasks'] })
+      const prev = qc.getQueriesData<Task[]>({ queryKey: ['tasks'] })
+      const optimistic: Task = {
+        id:               `tmp-${Date.now()}`,
+        tutor_id:         '',
+        title:            data.title,
+        scheduled_at:     data.scheduled_at ?? null,
+        duration_minutes: data.duration_minutes ?? null,
+        status:           (data.status as Task['status']) ?? 'not_urgent',
+        created_at:       new Date().toISOString(),
+      }
+      qc.setQueriesData<Task[]>({ queryKey: ['tasks'] }, old => (old ? [...old, optimistic] : old))
+      return { prev }
+    },
+    onError:   (_e, _v, ctx) => ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
 }
 
