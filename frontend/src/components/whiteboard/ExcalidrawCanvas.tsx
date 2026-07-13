@@ -17,6 +17,7 @@ import type {
 import type { FileId } from '@excalidraw/excalidraw/element/types'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useExcalidrawSync } from './useExcalidrawSync'
+import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
 import { PdfRangeDialog } from './PdfRangeDialog'
@@ -30,7 +31,7 @@ interface Props {
   boardId: string
   courseId?: string
   isGuest?: boolean
-  displayName?: string
+  identity?: BoardIdentity
 }
 
 export function ExcalidrawCanvas({
@@ -39,10 +40,10 @@ export function ExcalidrawCanvas({
   boardId,
   courseId,
   isGuest = false,
-  displayName,
+  identity,
 }: Props) {
   const { status, onApiReady, onChange, sendCursor, broadcastViewport, registerFile } =
-    useExcalidrawSync(page, token, displayName)
+    useExcalidrawSync(page, token, identity)
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
 
   const pdfRef = useRef<PDFDocumentProxy | null>(null)

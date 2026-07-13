@@ -3,6 +3,7 @@ import type { CalendarLesson, StudentCourse, StudentHomework } from '@/types/api
 import type { RoomTokenResponse } from './calls'
 
 export interface StudentProfile {
+  id: string
   first_name: string
   last_name: string
   phone: string

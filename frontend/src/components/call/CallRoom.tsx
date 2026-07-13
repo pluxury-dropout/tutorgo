@@ -53,7 +53,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const { resolvedTheme } = useTheme()
   const theme = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
 
-  const displayName = useBoardDisplayName(role)
+  const identity = useBoardDisplayName(role)
   const [mode, setMode] = useState<Mode>('call')
   const [boardLoading, setBoardLoading] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
@@ -199,7 +199,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
             token={activeBoardToken}
             courseId={role === 'tutor' ? courseId ?? undefined : undefined}
             isGuest={role === 'guest'}
-            displayName={displayName}
+            identity={identity}
           />
         )}
 

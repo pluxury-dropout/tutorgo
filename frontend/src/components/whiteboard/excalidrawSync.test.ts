@@ -4,6 +4,7 @@ import {
   diffChangedElements,
   parseSnapshot,
   utf8ByteSize,
+  mergeCollaborators,
   SNAPSHOT_MAX_BYTES,
 } from './excalidrawSync.ts'
 
@@ -67,4 +68,27 @@ test('size-cap: снапшот под лимитом проходит, свер�
   const over = 'x'.repeat(SNAPSHOT_MAX_BYTES + 1)
   assert.ok(utf8ByteSize(under) <= SNAPSHOT_MAX_BYTES)
   assert.ok(utf8ByteSize(over) > SNAPSHOT_MAX_BYTES)
+})
+
+test('mergeCollaborators: своё второе соединение не становится вторым участником', () => {
+  const peers = new Map([
+    ['sock-1', { username: 'Я', id: 'tutor-1' }], // это я из вкладки звонка
+    ['sock-2', { username: 'Ученик', id: 'student-9' }],
+  ])
+  const merged = mergeCollaborators(
+    peers,
+    'self',
+    { username: 'Я', id: 'tutor-1' },
+    'tutor-1'
+  )
+  assert.deepEqual([...merged.keys()], ['sock-2', 'self'])
+})
+
+test('mergeCollaborators: без uid (аноним по ссылке) пиры не схлопываются', () => {
+  const peers = new Map<string, { username: string; id?: string }>([
+    ['sock-1', { username: 'Гость' }],
+    ['sock-2', { username: 'Гость' }],
+  ])
+  const merged = mergeCollaborators(peers, 'self', { username: 'Вы' }, undefined)
+  assert.equal(merged.size, 3)
 })

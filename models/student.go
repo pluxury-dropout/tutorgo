@@ -39,6 +39,7 @@ type StudentLoginRequest struct {
 }
 
 type StudentProfile struct {
+	ID        string `json:"id"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Phone     string `json:"phone"`

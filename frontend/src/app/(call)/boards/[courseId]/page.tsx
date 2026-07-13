@@ -17,7 +17,7 @@ const ExcalidrawCanvas = dynamic(
 export default function BoardPage() {
   const { courseId } = useParams<{ courseId: string }>()
   const { data: board, isLoading, error } = useBoardByCourse(courseId)
-  const displayName = useBoardDisplayName('tutor')
+  const identity = useBoardDisplayName('tutor')
 
   if (isLoading)
     return (
@@ -41,7 +41,7 @@ export default function BoardPage() {
         boardId={board.id}
         courseId={courseId}
         isGuest={false}
-        displayName={displayName}
+        identity={identity}
       />
     </div>
   )

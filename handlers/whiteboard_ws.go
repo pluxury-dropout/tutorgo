@@ -26,6 +26,14 @@ type WbMsg struct {
 	Y       float64         `json:"y,omitempty"`
 	PeerID  string          `json:"peerId,omitempty"`
 	Name    string          `json:"name,omitempty"` // отображаемое имя, клиент шлёт с cursor
+	// UID — стабильный id человека (tutorID/studentID), клиент шлёт с cursor.
+	// Нужен, чтобы два соединения одного человека (вкладка звонка + вкладка
+	// доски) схлопывались в одного участника.
+	// ponytail: значение клиентское и не проверяется — как и Name. Подмена даёт
+	// только слипание аватарок, доступ к доске она не расширяет (он уже выдан
+	// invite-токеном). Если понадобится доверенный id — брать его из JWT в
+	// ServeWS, но у гостя JWT нет по дизайну.
+	UID string `json:"uid,omitempty"`
 }
 
 // wbClient — one WebSocket connection

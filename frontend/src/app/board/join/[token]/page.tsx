@@ -17,7 +17,7 @@ const ExcalidrawCanvas = dynamic(
 export default function GuestBoardPage() {
   const { token } = useParams<{ token: string }>()
   const { data: board, isLoading, error } = useJoinByInvite(token)
-  const displayName = useBoardDisplayName('guest')
+  const identity = useBoardDisplayName('guest')
 
   if (isLoading)
     return (
@@ -46,7 +46,7 @@ export default function GuestBoardPage() {
         boardId={board.id}
         token={token}
         isGuest={true}
-        displayName={displayName}
+        identity={identity}
       />
     </div>
   )

@@ -26,11 +26,13 @@ import {
   diffChangedElements,
   parseSnapshot,
   blobToDataURL,
+  mergeCollaborators,
   utf8ByteSize,
   SNAPSHOT_MAX_BYTES,
   type SnapshotFiles,
 } from './excalidrawSync'
 import type { BoardPage } from '@/types/api'
+import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 
 type ConnStatus = 'connecting' | 'connected' | 'disconnected'
 
@@ -54,8 +56,10 @@ export interface ExcalidrawSyncResult {
 export function useExcalidrawSync(
   page: BoardPage | null,
   token?: string,
-  displayName?: string
+  identity?: BoardIdentity
 ): ExcalidrawSyncResult {
+  const displayName = identity?.name
+  const myUid = identity?.uid
   const [status, setStatus] = useState<ConnStatus>('connecting')
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -95,10 +99,17 @@ export function useExcalidrawSync(
   const pushCollaborators = useCallback(() => {
     const api = apiRef.current
     if (!api) return
-    const merged = new Map(collaboratorsRef.current)
-    merged.set(SELF_ID, { username: displayName || 'Вы', isCurrentUser: true })
-    api.updateScene({ collaborators: merged })
-  }, [displayName])
+    // Один человек с двух устройств схлопнется силами самого Excalidraw:
+    // UserList дедуплицирует по collaborator.id, падая на socketId только когда
+    // id пуст (у анонима по ссылке).
+    const merged = mergeCollaborators<Collaborator>(
+      collaboratorsRef.current,
+      SELF_ID,
+      { username: displayName || 'Вы', isCurrentUser: true, id: myUid },
+      myUid
+    )
+    api.updateScene({ collaborators: merged as Map<SocketId, Collaborator> })
+  }, [displayName, myUid])
 
   // Догружаем недостающие файлы: S3 URL → blob → dataURL → addFiles.
   // Ошибка одного файла не валит остальные — элемент покажет плейсхолдер.
@@ -234,6 +245,7 @@ export function useExcalidrawSync(
         payload?: unknown
         peerId?: string
         name?: string
+        uid?: string
         x?: number
         y?: number
       }
@@ -265,6 +277,7 @@ export function useExcalidrawSync(
         collaboratorsRef.current.set(msg.peerId as SocketId, {
           pointer: { x: msg.x ?? 0, y: msg.y ?? 0, tool: 'pointer' },
           username: msg.name || 'Гость',
+          id: msg.uid,
         })
         pushCollaborators()
         return
@@ -390,11 +403,11 @@ export function useExcalidrawSync(
     (x: number, y: number) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(
-          JSON.stringify({ type: 'cursor', x, y, name: displayName })
+          JSON.stringify({ type: 'cursor', x, y, name: displayName, uid: myUid })
         )
       }
     },
-    [displayName]
+    [displayName, myUid]
   )
 
   // Вещаем свои видимые границы сцены ведомым (follow-mode). Trailing-throttle:

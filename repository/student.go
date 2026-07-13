@@ -168,9 +168,9 @@ func (r *studentRepository) CourseAndTutorForLesson(ctx context.Context, lessonI
 func (r *studentRepository) GetProfile(ctx context.Context, studentID string) (models.StudentProfile, error) {
 	var p models.StudentProfile
 	err := r.conn.QueryRow(ctx,
-		`SELECT first_name, last_name, phone, COALESCE(username, '')
+		`SELECT id, first_name, last_name, phone, COALESCE(username, '')
 		 FROM students WHERE id = $1`, studentID,
-	).Scan(&p.FirstName, &p.LastName, &p.Phone, &p.Username)
+	).Scan(&p.ID, &p.FirstName, &p.LastName, &p.Phone, &p.Username)
 	return p, err
 }
 

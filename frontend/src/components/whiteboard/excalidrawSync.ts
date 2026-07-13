@@ -53,6 +53,25 @@ export function parseSnapshot(
   }
 }
 
+// Список участников доски = удалённые пиры + всегда я сам. Пир, у которого id
+// совпал с моим uid, — это моё же второе соединение (вкладка звонка + вкладка
+// доски): выкидываем, иначе получаем второго «себя» и призрачный курсор.
+// Аноним по ссылке приходит без uid — такие пиры не схлопываются никогда.
+export function mergeCollaborators<C extends { id?: string }>(
+  peers: ReadonlyMap<string, C>,
+  selfKey: string,
+  self: C,
+  myUid?: string
+): Map<string, C> {
+  const merged = new Map<string, C>()
+  peers.forEach((peer, peerId) => {
+    if (myUid && peer.id === myUid) return
+    merged.set(peerId, peer)
+  })
+  merged.set(selfKey, self)
+  return merged
+}
+
 // FileReader — браузерный API, в node:test не гоняется (и не нужно).
 export function blobToDataURL(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
