@@ -16,7 +16,10 @@ import type {
   BinaryFileData,
   DataURL,
 } from '@excalidraw/excalidraw/types'
-import type { FileId } from '@excalidraw/excalidraw/element/types'
+import type {
+  FileId,
+  ExcalidrawElement,
+} from '@excalidraw/excalidraw/element/types'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
@@ -26,7 +29,9 @@ import { PdfRangeDialog } from './PdfRangeDialog'
 import { MaterialsPanel } from './MaterialsPanel'
 import { MediaPlayer } from './MediaPlayer'
 import { useMediaPlayer } from './useMediaPlayer'
-import { parseYouTubeId, YOUTUBE_MIME, type MediaPayload } from './mediaSync'
+import { useYouTubeSync } from './useYouTubeSync'
+import { YouTubeEmbed } from './YouTubeEmbed'
+import { parseYouTubeId, type MediaPayload } from './mediaSync'
 import { loadPdf, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 import type { BoardPage, Material } from '@/types/api'
@@ -42,6 +47,10 @@ if (typeof window !== 'undefined') {
 const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
+
+// Стартовый размер ролика на доске — 16:9, дальше препод тянет за угол.
+const YT_WIDTH = 560
+const YT_HEIGHT = 315
 
 interface Props {
   page: BoardPage | null
@@ -69,9 +78,25 @@ export function ExcalidrawCanvas({
   // Плееру нужен sendMedia, а синхронизации — receive плеера: хуки нужны друг
   // другу. Цикл разрываем ref'ом — плеер шлёт через актуальный sendMedia.
   const sendMediaRef = useRef<(p: MediaPayload) => void>(() => {})
-  const player = useMediaPlayer(
-    useCallback((p: MediaPayload) => sendMediaRef.current(p), [])
+  const send = useCallback((p: MediaPayload) => sendMediaRef.current(p), [])
+  const player = useMediaPlayer(send)
+  const yt = useYouTubeSync(send)
+
+  // Кадр с id — про ролик на доске, без id — про плеер материалов. Запрос
+  // состояния (req) касается обоих: у одного может играть аудио, у другого видео.
+  const onMedia = useCallback(
+    (p: MediaPayload) => {
+      if (p.action === 'req') {
+        player.receive(p)
+        yt.receive(p)
+        return
+      }
+      if (p.id) yt.receive(p)
+      else player.receive(p)
+    },
+    [player, yt]
   )
+
   const {
     status,
     onApiReady,
@@ -80,7 +105,7 @@ export function ExcalidrawCanvas({
     broadcastViewport,
     registerFile,
     sendMedia,
-  } = useExcalidrawSync(page, token, identity, player.receive)
+  } = useExcalidrawSync(page, token, identity, onMedia)
   useEffect(() => {
     sendMediaRef.current = sendMedia
   }, [sendMedia])
@@ -252,6 +277,8 @@ export function ExcalidrawCanvas({
 
   // Видео не храним: препод находит ролик по ходу урока и вставляет ссылкой.
   // Байты идут от Google к ученику мимо нас — ни хранилища, ни трафика.
+  // Ролик кладётся на доску embeddable-элементом: возить его по WS и хранить в
+  // снапшоте не нужно — это обычный элемент сцены, синк у него общий с фигурами.
   const handleOpenYouTube = () => {
     // ponytail: нативный prompt. Заменить на диалог, когда дойдут руки до дизайна.
     const link = window.prompt('Ссылка на YouTube')
@@ -261,7 +288,27 @@ export function ExcalidrawCanvas({
       toast.error('Не похоже на ссылку YouTube')
       return
     }
-    player.open({ url: id, mimeType: YOUTUBE_MIME, name: 'YouTube' })
+    const api = apiRef.current
+    if (!api) return
+    const c = viewportCenter()
+    // Скелет embeddable convertToExcalidrawElements не принимает (ждёт готовый
+    // элемент со всеми полями), а фабрики наружу не выведено. Но embeddable —
+    // это _ExcalidrawElementBase + type, ровно как rectangle: собираем из него.
+    const [base] = convertToExcalidrawElements([
+      {
+        type: 'rectangle',
+        link: `https://www.youtube.com/watch?v=${id}`,
+        x: c.x - YT_WIDTH / 2,
+        y: c.y - YT_HEIGHT / 2,
+        width: YT_WIDTH,
+        height: YT_HEIGHT,
+      },
+    ])
+    const el = { ...base, type: 'embeddable' } as ExcalidrawElement
+    api.updateScene({
+      elements: [...api.getSceneElementsIncludingDeleted(), el],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    })
   }
 
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
@@ -322,6 +369,16 @@ export function ExcalidrawCanvas({
           onChange={onChange}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
           onScrollChange={() => broadcastViewport()}
+          // Встраиваем только YouTube: остальные ссылки — обычные, не iframe.
+          // Заодно это фильтр для ссылок, вставленных Ctrl+V.
+          validateEmbeddable={(link) => parseYouTubeId(link) !== null}
+          // Свой плеер вместо дефолтного iframe: нужен YT API для синхронизации
+          // play/pause/seek между преподом и учеником.
+          renderEmbeddable={(el) => {
+            const videoId = el.link && parseYouTubeId(el.link)
+            if (!videoId) return null
+            return <YouTubeEmbed id={el.id} videoId={videoId} sync={yt} />
+          }}
           renderTopRightUI={() => (
             <div
               data-board-ui

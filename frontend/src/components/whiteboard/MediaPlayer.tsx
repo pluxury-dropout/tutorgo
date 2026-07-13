@@ -1,9 +1,5 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import { YOUTUBE_MIME } from './mediaSync'
-import { createYouTubePlayer } from './youtubePlayer'
 import type { MediaPlayerApi } from './useMediaPlayer'
 
 interface Props {
@@ -25,7 +21,6 @@ export function MediaPlayer({ player, canClose }: Props) {
   } = player
   if (!media) return null
 
-  const isYouTube = media.mimeType === YOUTUBE_MIME
   const isVideo = media.mimeType.startsWith('video/')
 
   // ref-колбэком, а не объектом: RefObject<SyncTarget> не присваивается ref у
@@ -54,10 +49,7 @@ export function MediaPlayer({ player, canClose }: Props) {
         )}
       </div>
 
-      {/* key: смена ролика должна пересоздать плеер, а не переиспользовать старый. */}
-      {isYouTube ? (
-        <YouTubeFrame key={media.url} videoId={media.url} player={player} />
-      ) : isVideo ? (
+      {isVideo ? (
         <video {...common} className="w-full rounded-lg" />
       ) : (
         <audio {...common} className="w-full" />
@@ -71,57 +63,6 @@ export function MediaPlayer({ player, canClose }: Props) {
           Включить звук
         </button>
       )}
-    </div>
-  )
-}
-
-function YouTubeFrame({ videoId, player }: { videoId: string; player: MediaPlayerApi }) {
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const [failed, setFailed] = useState(false)
-  // Колбэки берём из ref: пересоздавать iframe из-за нового замыкания недопустимо —
-  // ролик начался бы заново.
-  const apiRef = useRef(player)
-  useEffect(() => {
-    apiRef.current = player
-  }, [player])
-
-  useEffect(() => {
-    const box = boxRef.current
-    if (!box) return
-    let destroy: (() => void) | null = null
-    let dead = false
-
-    void createYouTubePlayer(box, videoId, {
-      onPlay: () => apiRef.current.onLocalPlay(),
-      onPause: () => apiRef.current.onLocalPause(),
-      onSeek: () => apiRef.current.onLocalSeeked(),
-      onError: () => setFailed(true),
-    })
-      .then(({ target, destroy: d }) => {
-        // Пока грузился iframe API, плеер могли закрыть — тогда сносим сразу.
-        if (dead) {
-          d()
-          return
-        }
-        destroy = d
-        apiRef.current.attach(target)
-      })
-      .catch(() => setFailed(true))
-
-    return () => {
-      dead = true
-      apiRef.current.attach(null)
-      destroy?.()
-    }
-  }, [videoId])
-
-  useEffect(() => {
-    if (failed) toast.error('Это видео нельзя встроить — попробуйте другое')
-  }, [failed])
-
-  return (
-    <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
-      <div ref={boxRef} className="h-full w-full" />
     </div>
   )
 }

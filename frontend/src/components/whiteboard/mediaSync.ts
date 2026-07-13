@@ -2,6 +2,9 @@ export type MediaAction = 'open' | 'play' | 'pause' | 'seek' | 'close' | 'req'
 
 export interface MediaPayload {
   action: MediaAction
+  /** id embeddable-элемента: кадр про YouTube-ролик на доске. Без id кадр
+   *  относится к плееру материалов (он на доске один). */
+  id?: string
   url?: string
   mimeType?: string
   name?: string
@@ -33,10 +36,6 @@ export function nextMediaState(
 export function isPlayable(mimeType: string): boolean {
   return mimeType.startsWith('audio/') || mimeType.startsWith('video/')
 }
-
-/** Псевдо-MIME: у YouTube-ролика нет файла, в url лежит videoId. Протокол `media`
- *  от этого не меняется — он оперирует действием и позицией, а не байтами. */
-export const YOUTUBE_MIME = 'video/youtube'
 
 /** videoId из любой формы ссылки, либо null. Принимаем и голый id — препод
  *  копирует ссылку на ходу, разбираться с форматом ему некогда. */
