@@ -21,6 +21,18 @@
   display: none !important;
 }
 
+/* Embeddable (YouTube): Excalidraw включает pointer-events на iframe только
+   после клика по элементу («Click to interact»), чтобы клики по телу элемента
+   доходили до канваса. Нам нужен плеер в один клик, поэтому включаем события
+   сразу и прячем подсказку. Цена: выделить/перетащить ролик кликом по видео
+   нельзя — только за рамку и ручки ресайза (там iframe не перекрывает канвас). */
+.excalidraw__embeddable-container__inner {
+  pointer-events: auto !important;
+}
+.excalidraw__embeddable-hint {
+  display: none !important;
+}
+
 /* Excalifont — «От руки» */
 .excalidraw [data-testid='font-family-hand-drawn'],
 /* Comic Shanns — «Код» */
