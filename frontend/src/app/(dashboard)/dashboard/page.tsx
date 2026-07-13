@@ -8,6 +8,8 @@ import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/h
 import type { CalendarLesson } from '@/types/api'
 import { SectionCard, SectionLink, SectionRow } from '@/components/common/SectionCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { effectiveStatus } from '@/lib/lessonStatus'
+import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import KanbanWidget from '@/components/tasks/KanbanWidget'
 
 function buildDateRanges() {
@@ -47,7 +49,8 @@ const EMPTY: React.CSSProperties = {
 }
 
 function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boolean }) {
-  const cancelled = lesson.status === 'cancelled'
+  const status = effectiveStatus(lesson)
+  const cancelled = status === 'cancelled'
   return (
     <SectionRow isFirst={isFirst} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <span style={{ fontFamily: MONO, fontSize: 12, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums', width: 38, flexShrink: 0 }}>
@@ -66,12 +69,13 @@ function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boole
           {lesson.is_group ? 'Групповой урок' : (lesson.student_name ?? '—')}
         </div>
       </div>
-      <StatusBadge status={lesson.status} size="sm" />
+      <StatusBadge status={status} size="sm" />
     </SectionRow>
   )
 }
 
 export default function DashboardPage() {
+  useMinuteTick()
   const { todayFrom, todayTo, weekStart, weekEnd, monthStart, monthEnd, dateLabel } = useMemo(buildDateRanges, [])
   const { data: studentCount   = 0  } = useStudentCount()
   const { data: courseCount    = 0  } = useCourseCount()

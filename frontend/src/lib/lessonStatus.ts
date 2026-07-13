@@ -1,4 +1,12 @@
-import { LessonStatus } from '@/types/api'
+import type { LessonStatus } from '@/types/api'
+
+// Урок «проведён» — детерминированная функция от времени: бэкенд-горутина
+// проставляет completed раз в минуту, но клиент может показать это мгновенно.
+export function effectiveStatus(l: { status: LessonStatus; scheduled_at: string; duration_minutes: number }): LessonStatus {
+  if (l.status !== 'scheduled') return l.status
+  const endsAt = new Date(l.scheduled_at).getTime() + l.duration_minutes * 60_000
+  return Date.now() > endsAt ? 'completed' : 'scheduled'
+}
 
 export const STATUS_LABELS: Record<LessonStatus, string> = {
   scheduled: 'Запланирован',

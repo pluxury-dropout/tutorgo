@@ -5,6 +5,8 @@ import {
   Plus, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
+import { effectiveStatus } from '@/lib/lessonStatus'
+import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import type { CalendarLesson, LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
@@ -65,6 +67,7 @@ function toMinutes(iso: string, durationMinutes?: number): number {
 // ─── MobileWeekCalendar ───────────────────────────────────────────────────────
 
 export function MobileWeekCalendar() {
+  useMinuteTick()
   const today = useMemo(() => new Date(), [])
 
   const [weekStart, setWeekStart] = useState(() => getWeekStart(today))
@@ -258,7 +261,7 @@ export function MobileWeekCalendar() {
       title:           l.is_group
         ? l.subject
         : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`,
-      status:          l.status,
+      status:          effectiveStatus(l),
       notes:           l.notes,
       isGroup:         l.is_group,
       scheduledAt:     l.scheduled_at,
@@ -406,7 +409,7 @@ export function MobileWeekCalendar() {
                     const height   = Math.max(20, (endMin - startMin) / 60 * HOUR_PX - 2)
                     const colW     = 100 / ev._cols
                     const left     = colW * ev._col
-                    const style    = STATUS_STYLE[ev.status]
+                    const style    = STATUS_STYLE[effectiveStatus(ev)]
                     const isPast    = new Date(ev.scheduled_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
                     const isDragged = drag?.lesson.id === ev.id
 

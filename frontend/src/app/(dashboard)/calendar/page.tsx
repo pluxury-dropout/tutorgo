@@ -13,7 +13,8 @@ import { Circle, CheckCircle2 } from 'lucide-react'
 import { stripHtml } from '@/lib/stripHtml'
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { useTasks, useRescheduleTask } from '@/lib/hooks/useTasks'
-import { FC_COLORS } from '@/lib/lessonStatus'
+import { FC_COLORS, effectiveStatus } from '@/lib/lessonStatus'
+import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
 import { TaskCreateDialog } from '@/components/tasks/TaskCreateDialog'
@@ -38,6 +39,7 @@ function roundToNearest15(n: number): number {
 const EDGE_ZONE = 50
 
 export default function CalendarPage() {
+  useMinuteTick()
   const { mutate: reschedule } = useRescheduleLesson()
   const rescheduleTask         = useRescheduleTask()
 
@@ -80,18 +82,20 @@ export default function CalendarPage() {
   const { data: lessons = [] } = useCalendar(range.from, range.to)
   const { data: tasks   = [] } = useTasks(range.from, range.to)
 
-  const lessonEvents = lessons.map((l) => ({
+  const lessonEvents = lessons.map((l) => {
+    const status = effectiveStatus(l)
+    return {
     id:              l.id,
     title:           l.is_group ? l.subject : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`,
     start:           l.scheduled_at,
     end:             new Date(new Date(l.scheduled_at).getTime() + l.duration_minutes * 60_000).toISOString(),
-    backgroundColor: FC_COLORS[l.status].bg,
-    borderColor:     FC_COLORS[l.status].border,
-    textColor:       FC_COLORS[l.status].text,
+    backgroundColor: FC_COLORS[status].bg,
+    borderColor:     FC_COLORS[status].border,
+    textColor:       FC_COLORS[status].text,
     extendedProps: {
       type:            'lesson',
       courseId:        l.course_id,
-      status:          l.status,
+      status:          status,
       notes:           l.notes,
       isGroup:         l.is_group,
       scheduledAt:     l.scheduled_at,
@@ -99,7 +103,7 @@ export default function CalendarPage() {
       cyclePosition:   l.cycle_position ?? null,
       cycleSize:       l.cycle_size ?? null,
     },
-  }))
+  }})
 
   const taskEvents = tasks.filter((t) => t.scheduled_at).map((t) => {
     const colors = t.status === 'done' ? TASK_COLORS.done : TASK_COLORS.active
