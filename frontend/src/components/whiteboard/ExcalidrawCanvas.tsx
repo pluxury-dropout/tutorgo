@@ -26,7 +26,7 @@ import { PdfRangeDialog } from './PdfRangeDialog'
 import { MaterialsPanel } from './MaterialsPanel'
 import { MediaPlayer } from './MediaPlayer'
 import { useMediaPlayer } from './useMediaPlayer'
-import { isPlayable, type MediaPayload } from './mediaSync'
+import { parseYouTubeId, YOUTUBE_MIME, type MediaPayload } from './mediaSync'
 import { loadPdf, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 import type { BoardPage, Material } from '@/types/api'
@@ -242,37 +242,26 @@ export function ExcalidrawCanvas({
 
   // Выбор файла в библиотеке. Медиа уходит в плеер (звук у обоих), картинка и
   // PDF — на доску теми же путями, что при вставке с диска, остальное качаем.
-  const handlePickMaterial = async (m: Material, url: string) => {
-    if (isPlayable(m.mime_type)) {
-      player.open({ url, mimeType: m.mime_type, name: m.name })
-      setMaterialsOpen(false)
-      return
-    }
-
-    if (!m.mime_type.startsWith('image/') && m.mime_type !== 'application/pdf') {
-      window.open(url, '_blank', 'noopener')
-      return
-    }
-
+  // Библиотека хранит только аудио: синхронное прослушивание — единственное, чего
+  // препод не сделает у себя на ноуте. PDF и картинки летят на доску прямым drop'ом
+  // с диска, хранить их на сервере незачем.
+  const handlePickMaterial = (m: Material, url: string) => {
+    player.open({ url, mimeType: m.mime_type, name: m.name })
     setMaterialsOpen(false)
-    try {
-      const blob = await fetch(url).then((r) => r.blob())
-      const file = new File([blob], m.name, { type: m.mime_type })
+  }
 
-      if (m.mime_type === 'application/pdf') {
-        const pdf = await loadPdf(file)
-        void pdfRef.current?.cleanup()
-        pdfRef.current = pdf
-        setPdfDialog({ numPages: pdf.numPages, point: viewportCenter() })
-        return
-      }
-      // ponytail: картинка из библиотеки перезаливается в S3 как board-asset —
-      // второй экземпляр дешевле, чем ветка «доска умеет ссылаться на объекты
-      // вне board-assets». Схлопнуть, если начнёт мешать.
-      await insertImageFile(file)
-    } catch {
-      toast.error('Не удалось открыть материал')
+  // Видео не храним: препод находит ролик по ходу урока и вставляет ссылкой.
+  // Байты идут от Google к ученику мимо нас — ни хранилища, ни трафика.
+  const handleOpenYouTube = () => {
+    // ponytail: нативный prompt. Заменить на диалог, когда дойдут руки до дизайна.
+    const link = window.prompt('Ссылка на YouTube')
+    if (!link) return
+    const id = parseYouTubeId(link)
+    if (!id) {
+      toast.error('Не похоже на ссылку YouTube')
+      return
     }
+    player.open({ url: id, mimeType: YOUTUBE_MIME, name: 'YouTube' })
   }
 
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
@@ -370,7 +359,37 @@ export function ExcalidrawCanvas({
                   </svg>
                 </button>
               )}
-              {/* Библиотека материалов препода (аудио/видео/PDF/картинки). */}
+              {/* YouTube по ссылке: ничего не храним, ролик находят по ходу урока. */}
+              {!isGuest && (
+                <button
+                  title="Видео с YouTube"
+                  onClick={handleOpenYouTube}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    border: 'none',
+                    background: 'transparent',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    padding: '6px 8px',
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="2" y="5" width="20" height="14" rx="4" />
+                    <path d="M10 9.5l5 2.5-5 2.5z" />
+                  </svg>
+                </button>
+              )}
+              {/* Библиотека материалов препода: только аудио для аудирования. */}
               {!isGuest && (
                 <button
                   title="Материалы"

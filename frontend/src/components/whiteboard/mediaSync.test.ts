@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nextMediaState, isPlayable } from './mediaSync.ts'
+import { nextMediaState, isPlayable, parseYouTubeId } from './mediaSync.ts'
 
 test('open вводит новое состояние', () => {
   const s = nextMediaState(null, {
@@ -43,4 +43,21 @@ test('isPlayable: только аудио и видео', () => {
   assert.equal(isPlayable('video/mp4'), true)
   assert.equal(isPlayable('application/pdf'), false)
   assert.equal(isPlayable(''), false)
+})
+
+test('parseYouTubeId: рабочие формы ссылки', () => {
+  const id = 'dQw4w9WgXcQ'
+  assert.equal(parseYouTubeId(`https://www.youtube.com/watch?v=${id}`), id)
+  assert.equal(parseYouTubeId(`https://youtube.com/watch?v=${id}&t=42s`), id)
+  assert.equal(parseYouTubeId(`https://youtu.be/${id}?si=abc`), id)
+  assert.equal(parseYouTubeId(`https://www.youtube.com/embed/${id}`), id)
+  assert.equal(parseYouTubeId(`https://www.youtube.com/shorts/${id}`), id)
+  assert.equal(parseYouTubeId(`  ${id}  `), id)
+})
+
+test('parseYouTubeId: мусор отвергнут', () => {
+  assert.equal(parseYouTubeId('https://vimeo.com/12345'), null)
+  assert.equal(parseYouTubeId('https://www.youtube.com/watch?v=short'), null)
+  assert.equal(parseYouTubeId('просто текст'), null)
+  assert.equal(parseYouTubeId(''), null)
 })

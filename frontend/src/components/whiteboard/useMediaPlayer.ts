@@ -7,9 +7,19 @@ import { nextMediaState, type MediaPayload, type MediaState } from './mediaSync'
  *  чтобы не заикался звук. Сеть даёт 100–300 мс, для аудирования незаметно. */
 const SEEK_TOLERANCE_SEC = 0.5
 
+/** Всё, что хук требует от плеера. `<audio>`/`<video>` подходят структурно, а
+ *  YouTube-ролик подсовывается адаптером (youtubePlayer.ts) — хук про него не знает. */
+export interface SyncTarget {
+  currentTime: number
+  readonly paused: boolean
+  play(): Promise<void>
+  pause(): void
+}
+
 export interface MediaPlayerApi {
   media: MediaState | null
-  mediaRef: React.RefObject<HTMLMediaElement | null>
+  /** Плеер готов (элемент смонтирован / YT-адаптер создан). null — при размонтировании. */
+  attach: (t: SyncTarget | null) => void
   needsGesture: boolean
   open: (p: { url: string; mimeType: string; name: string }) => void
   close: () => void
@@ -25,7 +35,11 @@ export function useMediaPlayer(
 ): MediaPlayerApi {
   const [media, setMedia] = useState<MediaState | null>(null)
   const [needsGesture, setNeedsGesture] = useState(false)
-  const mediaRef = useRef<HTMLMediaElement | null>(null)
+  const mediaRef = useRef<SyncTarget | null>(null)
+  // Кадр, пришедший до готовности плеера: между `open` и монтированием <audio>
+  // (а у YouTube — созданием iframe) проходит рендер, и без буфера позиция
+  // подключившегося посреди трека ученика терялась бы.
+  const pendingRef = useRef<{ position: number; play: boolean } | null>(null)
   // Пока применяем удалённый кадр, локальные onPlay/onPause/onSeeked молчат —
   // иначе приём порождает отправку и получается эхо-петля между вкладками.
   const applyingRef = useRef(false)
@@ -70,7 +84,16 @@ export function useMediaPlayer(
       setMedia((prev) => nextMediaState(prev, p))
 
       const el = mediaRef.current
-      if (!el) return
+      if (!el) {
+        // Плеера ещё нет — копим кадр до attach. Закрытие копить незачем.
+        if (p.action !== 'close') {
+          pendingRef.current = {
+            position: p.position ?? pendingRef.current?.position ?? 0,
+            play: p.action === 'play',
+          }
+        }
+        return
+      }
 
       withSuppressed(() => {
         if (p.position !== undefined) {
@@ -90,6 +113,23 @@ export function useMediaPlayer(
       })
     },
     [sendMedia, withSuppressed]
+  )
+
+  /** Плеер готов: догоняем кадр, пришедший, пока его не было. */
+  const attach = useCallback(
+    (t: SyncTarget | null) => {
+      mediaRef.current = t
+      const pend = pendingRef.current
+      if (!t || !pend) return
+      pendingRef.current = null
+      withSuppressed(() => {
+        t.currentTime = pend.position
+        if (pend.play) {
+          void t.play().catch(() => setNeedsGesture(true))
+        }
+      })
+    },
+    [withSuppressed]
   )
 
   const open = useCallback(
@@ -130,7 +170,7 @@ export function useMediaPlayer(
 
   return {
     media,
-    mediaRef,
+    attach,
     needsGesture,
     open,
     close,

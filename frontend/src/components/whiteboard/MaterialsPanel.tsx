@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { materialsApi } from '@/lib/api/materials'
+import { isPlayable } from './mediaSync'
 import type { Material } from '@/types/api'
 
 // Держать в синхроне с лимитом бэкенда (router.go: multipart 50 МБ).
@@ -57,12 +58,18 @@ export function MaterialsPanel({ onClose, onPick }: Props) {
   }
 
   const handleUpload = async (files: File[]) => {
+    // accept у input — только подсказка диалогу, обойти его можно перетаскиванием;
+    // фильтруем по-настоящему здесь.
+    files
+      .filter((f) => !isPlayable(f.type))
+      .forEach((f) => toast.error(`${f.name}: только аудио и видео`))
     // Отсекаем до аплоада: иначе пользователь ждёт заливку 100 МБ ради 413.
-    const tooBig = files.filter((f) => f.size > MAX_ASSET_BYTES)
-    tooBig.forEach((f) =>
-      toast.error(`${f.name}: ${formatMb(f.size)} МБ, максимум ${formatMb(MAX_ASSET_BYTES)} МБ`)
-    )
-    const queue = files.filter((f) => f.size <= MAX_ASSET_BYTES)
+    files
+      .filter((f) => isPlayable(f.type) && f.size > MAX_ASSET_BYTES)
+      .forEach((f) =>
+        toast.error(`${f.name}: ${formatMb(f.size)} МБ, максимум ${formatMb(MAX_ASSET_BYTES)} МБ`)
+      )
+    const queue = files.filter((f) => isPlayable(f.type) && f.size <= MAX_ASSET_BYTES)
     if (queue.length === 0) return
 
     setBusy(true)
@@ -175,6 +182,7 @@ export function MaterialsPanel({ onClose, onPick }: Props) {
           ref={fileInputRef}
           type="file"
           multiple
+          accept="audio/*,video/*"
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files ?? [])

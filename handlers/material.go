@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"tutorgo/models"
@@ -94,9 +95,16 @@ func (h *MaterialHandler) Upload(c *gin.Context) {
 		return
 	}
 
+	// Библиотека — только для медиа: синхронный плеер её единственный потребитель.
+	// PDF и картинки препод кидает на доску прямо с диска, хранить их незачем.
+	mimeType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(mimeType, "audio/") && !strings.HasPrefix(mimeType, "video/") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "only audio and video files are allowed"})
+		return
+	}
+
 	ext := filepath.Ext(header.Filename)
 	key := fmt.Sprintf("materials/%s%s", uuid.New().String(), ext)
-	mimeType := header.Header.Get("Content-Type")
 
 	if err := h.store.Put(c.Request.Context(), key, file, header.Size, mimeType); err != nil {
 		h.log.Error("upload material to storage", "err", err)
