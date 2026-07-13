@@ -173,3 +173,16 @@ export interface BoardAssetResponse {
 export interface BoardWithPages extends Board {
   pages: BoardPage[]
 }
+
+export type MaterialKind = 'folder' | 'file'
+
+/** Элемент библиотеки препода: папка (kind: 'folder') или файл. У папок
+ *  mime_type пустой, size_bytes = 0. Путь в S3 наружу не отдаётся. */
+export interface Material {
+  id: string
+  kind: MaterialKind
+  name: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}

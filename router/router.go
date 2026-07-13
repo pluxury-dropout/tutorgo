@@ -37,6 +37,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	subscriptionRepo := repository.NewSubscriptionRepository(pool)
 	studentRefreshRepo := repository.NewStudentRefreshTokenRepository(pool)
 	pendingRepo := repository.NewPendingRegistrationRepository(pool)
+	materialRepo := repository.NewMaterialRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
@@ -53,6 +54,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	taskService := service.NewTaskService(taskRepo)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
+	materialService := service.NewMaterialService(materialRepo)
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
@@ -79,6 +81,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	}
 	wbHubManager := handlers.NewWbHubManager(whiteboardService, subscriptionService, log, cfg.JWTSecret, origins)
 	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager, store, studentService)
+	materialHandler := handlers.NewMaterialHandler(materialService, store, log)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -215,6 +218,13 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.POST("/boards/:boardId/invite", whiteboardHandler.CreateInvite)
 		auth.DELETE("/boards/:boardId/invite", whiteboardHandler.DeleteInvite)
 		auth.POST("/boards/:boardId/assets", whiteboardHandler.UploadAsset)
+
+		// Materials library
+		auth.GET("/materials", materialHandler.List)
+		auth.POST("/materials/folder", materialHandler.CreateFolder)
+		auth.POST("/materials", materialHandler.Upload)
+		auth.DELETE("/materials/:id", materialHandler.Delete)
+		auth.GET("/materials/:id/url", materialHandler.GetURL)
 	}
 
 	// Protected student routes (student JWT role, no subscription check — that's the tutor's concern)

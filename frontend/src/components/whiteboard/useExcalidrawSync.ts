@@ -31,6 +31,7 @@ import {
   SNAPSHOT_MAX_BYTES,
   type SnapshotFiles,
 } from './excalidrawSync'
+import type { MediaPayload } from './mediaSync'
 import type { BoardPage } from '@/types/api'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 
@@ -51,15 +52,23 @@ export interface ExcalidrawSyncResult {
   sendCursor: (x: number, y: number) => void
   broadcastViewport: () => void
   registerFile: (fileId: string, url: string, mimeType: string) => void
+  sendMedia: (p: MediaPayload) => void
 }
 
 export function useExcalidrawSync(
   page: BoardPage | null,
   token?: string,
-  identity?: BoardIdentity
+  identity?: BoardIdentity,
+  onMedia?: (p: MediaPayload) => void
 ): ExcalidrawSyncResult {
   const displayName = identity?.name
   const myUid = identity?.uid
+  // Колбэк живёт в ref: иначе новый инлайн-обработчик на каждом рендере попал бы
+  // в deps connect и передёргивал бы WS-соединение.
+  const onMediaRef = useRef(onMedia)
+  useEffect(() => {
+    onMediaRef.current = onMedia
+  }, [onMedia])
   const [status, setStatus] = useState<ConnStatus>('connecting')
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -273,6 +282,13 @@ export function useExcalidrawSync(
         return
       }
 
+      // Синхронный плеер: кадр применяет useMediaPlayer у получателя. Сервер
+      // ретранслирует тип 'media' вербатим (ветка default: в хабе доски).
+      if (msg.type === 'media') {
+        onMediaRef.current?.(msg.payload as MediaPayload)
+        return
+      }
+
       if (msg.type === 'cursor' && msg.peerId) {
         collaboratorsRef.current.set(msg.peerId as SocketId, {
           pointer: { x: msg.x ?? 0, y: msg.y ?? 0, tool: 'pointer' },
@@ -448,6 +464,12 @@ export function useExcalidrawSync(
     []
   )
 
+  const sendMedia = useCallback((p: MediaPayload) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'media', payload: p }))
+    }
+  }, [])
+
   return {
     status,
     onApiReady,
@@ -455,5 +477,6 @@ export function useExcalidrawSync(
     sendCursor,
     broadcastViewport,
     registerFile,
+    sendMedia,
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import {
   Excalidraw,
   convertToExcalidrawElements,
@@ -23,9 +23,13 @@ import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
 import { PdfRangeDialog } from './PdfRangeDialog'
+import { MaterialsPanel } from './MaterialsPanel'
+import { MediaPlayer } from './MediaPlayer'
+import { useMediaPlayer } from './useMediaPlayer'
+import { isPlayable, type MediaPayload } from './mediaSync'
 import { loadPdf, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
-import type { BoardPage } from '@/types/api'
+import type { BoardPage, Material } from '@/types/api'
 
 // Шрифты берём из public/fonts (см. scripts/excalidraw-fonts.mjs). Без этого
 // Excalidraw грузит woff2 с unpkg.com. Читается лениво, в момент загрузки
@@ -62,12 +66,36 @@ export function ExcalidrawCanvas({
   onApi,
   hideUserList = false,
 }: Props) {
-  const { status, onApiReady, onChange, sendCursor, broadcastViewport, registerFile } =
-    useExcalidrawSync(page, token, identity)
+  // Плееру нужен sendMedia, а синхронизации — receive плеера: хуки нужны друг
+  // другу. Цикл разрываем ref'ом — плеер шлёт через актуальный sendMedia.
+  const sendMediaRef = useRef<(p: MediaPayload) => void>(() => {})
+  const player = useMediaPlayer(
+    useCallback((p: MediaPayload) => sendMediaRef.current(p), [])
+  )
+  const {
+    status,
+    onApiReady,
+    onChange,
+    sendCursor,
+    broadcastViewport,
+    registerFile,
+    sendMedia,
+  } = useExcalidrawSync(page, token, identity, player.receive)
+  useEffect(() => {
+    sendMediaRef.current = sendMedia
+  }, [sendMedia])
+
+  // Кто подключился позже (перезагрузил вкладку посреди трека) — спрашивает
+  // состояние; у кого плеер открыт, тот ответит. Если ни у кого — ответа нет.
+  useEffect(() => {
+    if (status === 'connected') sendMedia({ action: 'req' })
+  }, [status, sendMedia])
+
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
 
   const pdfRef = useRef<PDFDocumentProxy | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const [materialsOpen, setMaterialsOpen] = useState(false)
   const [pdfDialog, setPdfDialog] = useState<{
     numPages: number
     point: { x: number; y: number }
@@ -212,6 +240,41 @@ export function ExcalidrawCanvas({
     })()
   }
 
+  // Выбор файла в библиотеке. Медиа уходит в плеер (звук у обоих), картинка и
+  // PDF — на доску теми же путями, что при вставке с диска, остальное качаем.
+  const handlePickMaterial = async (m: Material, url: string) => {
+    if (isPlayable(m.mime_type)) {
+      player.open({ url, mimeType: m.mime_type, name: m.name })
+      setMaterialsOpen(false)
+      return
+    }
+
+    if (!m.mime_type.startsWith('image/') && m.mime_type !== 'application/pdf') {
+      window.open(url, '_blank', 'noopener')
+      return
+    }
+
+    setMaterialsOpen(false)
+    try {
+      const blob = await fetch(url).then((r) => r.blob())
+      const file = new File([blob], m.name, { type: m.mime_type })
+
+      if (m.mime_type === 'application/pdf') {
+        const pdf = await loadPdf(file)
+        void pdfRef.current?.cleanup()
+        pdfRef.current = pdf
+        setPdfDialog({ numPages: pdf.numPages, point: viewportCenter() })
+        return
+      }
+      // ponytail: картинка из библиотеки перезаливается в S3 как board-asset —
+      // второй экземпляр дешевле, чем ветка «доска умеет ссылаться на объекты
+      // вне board-assets». Схлопнуть, если начнёт мешать.
+      await insertImageFile(file)
+    } catch {
+      toast.error('Не удалось открыть материал')
+    }
+  }
+
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
   // обёртки срабатывает раньше). Не-PDF пропускаем — нативная вставка
   // картинок Excalidraw кладёт base64 в files; для брошенных мышкой мелких
@@ -307,6 +370,35 @@ export function ExcalidrawCanvas({
                   </svg>
                 </button>
               )}
+              {/* Библиотека материалов препода (аудио/видео/PDF/картинки). */}
+              {!isGuest && (
+                <button
+                  title="Материалы"
+                  onClick={() => setMaterialsOpen((v) => !v)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    border: 'none',
+                    background: materialsOpen ? 'var(--color-primary-light)' : 'transparent',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    padding: '6px 8px',
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
           UIOptions={{
@@ -336,6 +428,14 @@ export function ExcalidrawCanvas({
             }}
           />
         )}
+        {!isGuest && materialsOpen && (
+          <MaterialsPanel
+            onClose={() => setMaterialsOpen(false)}
+            onPick={(m, url) => void handlePickMaterial(m, url)}
+          />
+        )}
+        {/* Плеер виден обоим: управлять им может и ученик, закрыть — только препод. */}
+        <MediaPlayer player={player} canClose={!isGuest} />
         {pdfDialog && (
           <PdfRangeDialog
             open
