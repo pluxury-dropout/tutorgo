@@ -13,17 +13,6 @@ export function useBoardByCourse(courseId: string) {
   })
 }
 
-export function useCreatePage(boardId: string, courseId?: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (title: string) => whiteboardApi.createPage(boardId, title),
-    onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: courseId ? boardKeys.byCourse(courseId) : ['board'],
-      }),
-  })
-}
-
 export function useUpdatePage(boardId: string, courseId?: string) {
   const qc = useQueryClient()
   return useMutation({
@@ -34,17 +23,6 @@ export function useUpdatePage(boardId: string, courseId?: string) {
       pageId: string
       data: { title?: string; position?: number }
     }) => whiteboardApi.updatePage(pageId, boardId, data),
-    onSuccess: () =>
-      qc.invalidateQueries({
-        queryKey: courseId ? boardKeys.byCourse(courseId) : ['board'],
-      }),
-  })
-}
-
-export function useDeletePage(boardId: string, courseId?: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (pageId: string) => whiteboardApi.deletePage(pageId, boardId),
     onSuccess: () =>
       qc.invalidateQueries({
         queryKey: courseId ? boardKeys.byCourse(courseId) : ['board'],

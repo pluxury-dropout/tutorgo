@@ -151,11 +151,50 @@ func (h *WhiteboardHandler) StudentBoardToken(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load board"})
 		return
 	}
-	// ponytail: CreateInvite rotates the invite UUID on every call (ON CONFLICT
-	// (board_id) DO UPDATE SET id = gen_random_uuid()). Acceptable here — the
-	// authenticated student always fetches a fresh board-token immediately
-	// before connecting the WS. The tutor joins via JWT, not the invite, so
-	// tutor sessions are unaffected by the rotation.
+	invite, err := h.svc.CreateInvite(c.Request.Context(), board.Board.ID, tutorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create invite"})
+		return
+	}
+	pageID := ""
+	if len(board.Pages) > 0 {
+		pageID = board.Pages[0].ID
+	}
+	c.JSON(http.StatusOK, gin.H{"invite_token": invite.ID, "page_id": pageID})
+}
+
+// GET /student/courses/:id/board-token — постоянный invite доски курса для
+// зачисленного ученика (индивидуальный курс или через course_enrollments).
+func (h *WhiteboardHandler) StudentCourseBoardToken(c *gin.Context) {
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	courseID := c.Param("id")
+	courses, err := h.studentService.ListCourses(c.Request.Context(), studentID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not enrolled in this course"})
+		return
+	}
+	var tutorID string
+	found := false
+	for _, course := range courses {
+		if course.ID == courseID {
+			tutorID = course.TutorID
+			found = true
+			break
+		}
+	}
+	if !found {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not enrolled in this course"})
+		return
+	}
+	board, err := h.svc.GetOrCreateBoard(c.Request.Context(), courseID, tutorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load board"})
+		return
+	}
 	invite, err := h.svc.CreateInvite(c.Request.Context(), board.Board.ID, tutorID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create invite"})

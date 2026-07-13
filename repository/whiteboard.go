@@ -150,11 +150,14 @@ func (r *whiteboardRepository) DeletePage(ctx context.Context, pageID, boardID s
 }
 
 func (r *whiteboardRepository) CreateInvite(ctx context.Context, boardID string) (models.BoardInvite, error) {
-	// Atomically create or rotate the single active invite per board.
+	// Atomically create the single invite per board, or return the existing one
+	// unchanged. The invite is a stable, permanent link — repeated calls must
+	// not rotate its id (ON CONFLICT DO UPDATE is a no-op update, kept only so
+	// RETURNING still yields a row).
 	var inv models.BoardInvite
 	err := r.conn.QueryRow(ctx,
 		`INSERT INTO board_invites (board_id) VALUES ($1)
-         ON CONFLICT (board_id) DO UPDATE SET id = gen_random_uuid(), created_at = now()
+         ON CONFLICT (board_id) DO UPDATE SET board_id = EXCLUDED.board_id
          RETURNING id, board_id, created_at`,
 		boardID,
 	).Scan(&inv.ID, &inv.BoardID, &inv.CreatedAt)

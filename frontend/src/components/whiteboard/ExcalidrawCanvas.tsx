@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import {
   Excalidraw,
   convertToExcalidrawElements,
@@ -19,7 +19,6 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import { blobToDataURL } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
-import { BoardPageMenu } from './BoardPageMenu'
 import { PdfRangeDialog } from './PdfRangeDialog'
 import { loadPdf, renderPages } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
@@ -29,9 +28,6 @@ interface Props {
   page: BoardPage | null
   token?: string
   boardId: string
-  pages: BoardPage[]
-  activePageId: string
-  onSelectPage: (id: string) => void
   courseId?: string
   isGuest?: boolean
   displayName?: string
@@ -41,9 +37,6 @@ export function ExcalidrawCanvas({
   page,
   token,
   boardId,
-  pages,
-  activePageId,
-  onSelectPage,
   courseId,
   isGuest = false,
   displayName,
@@ -62,18 +55,6 @@ export function ExcalidrawCanvas({
     done: number
     total: number
   } | null>(null)
-  const [pagesOpen, setPagesOpen] = useState(false)
-
-  // Закрытие меню страниц по клику вне.
-  useEffect(() => {
-    if (!pagesOpen) return
-    function onDown(e: PointerEvent) {
-      if ((e.target as HTMLElement).closest('[data-board-ui]')) return
-      setPagesOpen(false)
-    }
-    document.addEventListener('pointerdown', onDown, true)
-    return () => document.removeEventListener('pointerdown', onDown, true)
-  }, [pagesOpen])
 
   // Общий путь вставки картинки: S3 → локальный dataURL → files-карта →
   // image-элемент. Base64 в WS/снапшот не попадает (только URL).
@@ -235,9 +216,7 @@ export function ExcalidrawCanvas({
   }
 
   return (
-    <BoardContextProvider
-      value={{ boardId, courseId, pages, activePageId, onSelectPage, isGuest }}
-    >
+    <BoardContextProvider value={{ boardId, courseId, isGuest }}>
       <div className="relative w-full h-full" onDropCapture={onDropCapture}>
         {status === 'disconnected' && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm px-3 py-1 rounded-full">
@@ -290,43 +269,6 @@ export function ExcalidrawCanvas({
                     <path d="M21 16l-5-5L5 21" />
                   </svg>
                 </button>
-              )}
-              <button
-                onClick={() => setPagesOpen((v) => !v)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  border: 'none',
-                  background: 'transparent',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  padding: '6px 10px',
-                }}
-              >
-                Урок
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-              {pagesOpen && (
-                <div
-                  style={{ position: 'absolute', top: 40, right: 0, zIndex: 20 }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <BoardPageMenu />
-                </div>
               )}
             </div>
           )}

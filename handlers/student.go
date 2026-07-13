@@ -171,6 +171,25 @@ func (h *StudentHandler) Homework(c *gin.Context) {
 	c.JSON(http.StatusOK, hw)
 }
 
+// GET /student/courses — курсы ученика (для выбора доски).
+func (h *StudentHandler) Courses(c *gin.Context) {
+	studentID := c.GetString("studentID")
+	if studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	courses, err := h.service.ListCourses(c.Request.Context(), studentID)
+	if err != nil {
+		h.log.Error("student courses failed", slog.String("error", err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load courses"})
+		return
+	}
+	if courses == nil {
+		courses = []models.StudentCourse{}
+	}
+	c.JSON(http.StatusOK, courses)
+}
+
 // GET /student/lessons?filter=upcoming|past — уроки текущего ученика.
 func (h *StudentHandler) ListLessons(c *gin.Context) {
 	studentID := c.GetString("studentID")

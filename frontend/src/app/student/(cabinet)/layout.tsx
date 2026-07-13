@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { GraduationCap, LogOut } from 'lucide-react'
+import { GraduationCap, LogOut, PenLine } from 'lucide-react'
 
 import { StudentGate } from '@/components/student/StudentGate'
 import { useStudentAuthStore } from '@/stores/studentAuth'
@@ -30,6 +30,13 @@ export default function StudentCabinetLayout({ children }: { children: React.Rea
               TutorHub
             </Link>
             <div className="flex items-center gap-3">
+              <Link
+                href="/student/board"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <PenLine className="h-4 w-4" />
+                Доска
+              </Link>
               <Link
                 href="/student/profile"
                 className="text-sm text-muted-foreground hover:text-foreground"

@@ -97,6 +97,11 @@ func (m *mockStudentRepo) ListHomework(ctx context.Context, studentID string) ([
 	return args.Get(0).([]models.StudentHomework), args.Error(1)
 }
 
+func (m *mockStudentRepo) ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).([]models.StudentCourse), args.Error(1)
+}
+
 // Тесты
 func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
@@ -270,6 +275,38 @@ func TestStudentDelete_RepoError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.False(t, errors.Is(err, service.ErrNotFound))
+	repo.AssertExpectations(t)
+}
+
+// ListCourses
+
+func TestListCourses_IndividualAndGroup(t *testing.T) {
+	repo := new(mockStudentRepo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
+
+	expected := []models.StudentCourse{
+		{ID: "c1", Subject: "Algebra", TutorID: "tutor-1"},   // индивидуальный курс
+		{ID: "c2", Subject: "Chemistry", TutorID: "tutor-2"}, // групповой курс (через enrollment)
+	}
+	repo.On("ListCourses", mock.Anything, "student-1").Return(expected, nil)
+
+	courses, err := svc.ListCourses(context.Background(), "student-1")
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, courses)
+	repo.AssertExpectations(t)
+}
+
+func TestListCourses_Error(t *testing.T) {
+	repo := new(mockStudentRepo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
+
+	repo.On("ListCourses", mock.Anything, "student-1").Return([]models.StudentCourse{}, errors.New("db error"))
+
+	courses, err := svc.ListCourses(context.Background(), "student-1")
+
+	assert.Error(t, err)
+	assert.Empty(t, courses)
 	repo.AssertExpectations(t)
 }
 

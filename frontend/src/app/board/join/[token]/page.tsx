@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useJoinByInvite } from '@/lib/hooks/useWhiteboard'
@@ -18,7 +17,6 @@ const ExcalidrawCanvas = dynamic(
 export default function GuestBoardPage() {
   const { token } = useParams<{ token: string }>()
   const { data: board, isLoading, error } = useJoinByInvite(token)
-  const [activePageId, setActivePageId] = useState<string | null>(null)
   const displayName = useBoardDisplayName('guest')
 
   if (isLoading)
@@ -39,17 +37,13 @@ export default function GuestBoardPage() {
       </div>
     )
 
-  const currentPageId = activePageId ?? board.pages[0]?.id ?? null
-  const currentPage = board.pages.find((p) => p.id === currentPageId) ?? null
+  const currentPage = board.pages[0] ?? null
 
   return (
     <div className="h-screen">
       <ExcalidrawCanvas
         page={currentPage}
         boardId={board.id}
-        pages={board.pages}
-        activePageId={currentPageId ?? ''}
-        onSelectPage={setActivePageId}
         token={token}
         isGuest={true}
         displayName={displayName}

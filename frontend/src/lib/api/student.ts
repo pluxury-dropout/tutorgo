@@ -1,5 +1,5 @@
 import { studentHttp } from './studentClient'
-import type { CalendarLesson, StudentHomework } from '@/types/api'
+import type { CalendarLesson, StudentCourse, StudentHomework } from '@/types/api'
 import type { RoomTokenResponse } from './calls'
 
 export interface StudentProfile {
@@ -49,5 +49,12 @@ export const studentApi = {
   boardToken: (lessonId: string) =>
     studentHttp
       .get<{ invite_token: string; page_id: string }>(`/student/lessons/${lessonId}/board-token`)
+      .then((r) => r.data),
+
+  courses: () => studentHttp.get<StudentCourse[]>('/student/courses').then((r) => r.data),
+
+  courseBoardToken: (courseId: string) =>
+    studentHttp
+      .get<{ invite_token: string; page_id: string }>(`/student/courses/${courseId}/board-token`)
       .then((r) => r.data),
 }

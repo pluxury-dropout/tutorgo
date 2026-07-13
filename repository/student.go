@@ -25,6 +25,7 @@ type StudentRepository interface {
 	GetPasswordHash(ctx context.Context, studentID string) (string, error)
 	UpdatePassword(ctx context.Context, studentID, hash string) error
 	ListHomework(ctx context.Context, studentID string) ([]models.StudentHomework, error)
+	ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error)
 }
 
 type studentRepository struct {
@@ -195,6 +196,31 @@ func (r *studentRepository) ListHomework(ctx context.Context, studentID string) 
 			return nil, err
 		}
 		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+func (r *studentRepository) ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error) {
+	// enrollment-джойн идентичен ListHomework: индивидуальный курс ИЛИ групповой
+	// через course_enrollments. Без фильтра по homework.
+	rows, err := r.conn.Query(ctx,
+		`SELECT c.id, c.subject, c.tutor_id FROM courses c
+		 WHERE (c.student_id = $1
+		        OR EXISTS (SELECT 1 FROM course_enrollments ce
+		                   WHERE ce.course_id = c.id AND ce.student_id = $1))
+		 ORDER BY c.subject`, studentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.StudentCourse
+	for rows.Next() {
+		var sc models.StudentCourse
+		if err := rows.Scan(&sc.ID, &sc.Subject, &sc.TutorID); err != nil {
+			return nil, err
+		}
+		out = append(out, sc)
 	}
 	return out, rows.Err()
 }

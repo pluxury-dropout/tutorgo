@@ -25,6 +25,7 @@ type StudentService interface {
 	GetPasswordHash(ctx context.Context, studentID string) (string, error)
 	UpdatePassword(ctx context.Context, studentID, hash string) error
 	ListHomework(ctx context.Context, studentID string) ([]models.StudentHomework, error)
+	ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error)
 }
 
 type studentService struct {
@@ -145,4 +146,8 @@ func (s *studentService) UpdatePassword(ctx context.Context, studentID, hash str
 
 func (s *studentService) ListHomework(ctx context.Context, studentID string) ([]models.StudentHomework, error) {
 	return s.repo.ListHomework(ctx, studentID)
+}
+
+func (s *studentService) ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error) {
+	return s.repo.ListCourses(ctx, studentID)
 }

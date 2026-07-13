@@ -219,6 +219,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		stu.GET("/me", studentHandler.Me)
 		stu.GET("/lessons", studentHandler.ListLessons)
 		stu.GET("/homework", studentHandler.Homework)
+		stu.GET("/courses", studentHandler.Courses)
+		stu.GET("/courses/:id/board-token", whiteboardHandler.StudentCourseBoardToken)
 		stu.POST("/password", studentAuthHandler.ChangePassword)
 	}
 

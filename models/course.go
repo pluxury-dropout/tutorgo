@@ -25,6 +25,13 @@ type StudentHomework struct {
 	Homework string `json:"homework"`
 }
 
+// StudentCourse — курс ученика в кабинете (для выбора доски и т.п.).
+type StudentCourse struct {
+	ID      string `json:"id"`
+	Subject string `json:"subject"`
+	TutorID string `json:"-"`
+}
+
 type CourseBalance struct {
 	LessonsPaid      int `json:"lessons_paid"`
 	LessonsCompleted int `json:"lessons_completed"`

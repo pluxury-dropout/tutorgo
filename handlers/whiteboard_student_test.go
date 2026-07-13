@@ -18,6 +18,7 @@ func newWhiteboardStudentRouter(svc *mockWhiteboardService, studentSvc *mockStud
 	student := r.Group("/")
 	student.Use(withStudentID(testStudentID))
 	student.GET("/student/lessons/:id/board-token", h.StudentBoardToken)
+	student.GET("/student/courses/:id/board-token", h.StudentCourseBoardToken)
 	return r
 }
 
@@ -66,6 +67,65 @@ func TestStudentBoardToken_Success(t *testing.T) {
 	svc.On("CreateInvite", mock.Anything, boardID, testTutorID).Return(models.BoardInvite{ID: inviteID, BoardID: boardID}, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/student/lessons/"+testLessonID+"/board-token", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	decodeJSON(t, w, &resp)
+	assert.Equal(t, inviteID, resp["invite_token"])
+	assert.Equal(t, pageID, resp["page_id"])
+	studentSvc.AssertExpectations(t)
+	svc.AssertExpectations(t)
+}
+
+// StudentCourseBoardToken
+
+func TestStudentCourseBoardToken_NotEnrolled(t *testing.T) {
+	svc := new(mockWhiteboardService)
+	studentSvc := new(mockStudentService)
+	r := newWhiteboardStudentRouter(svc, studentSvc)
+
+	const otherCourseID = "99999999-9999-9999-9999-999999999999"
+	studentSvc.On("ListCourses", mock.Anything, testStudentID).
+		Return([]models.StudentCourse{{ID: testCourseID, Subject: "Math", TutorID: testTutorID}}, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/student/courses/"+otherCourseID+"/board-token", nil)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	studentSvc.AssertExpectations(t)
+	svc.AssertNotCalled(t, "GetOrCreateBoard", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestStudentCourseBoardToken_ListCoursesError(t *testing.T) {
+	svc := new(mockWhiteboardService)
+	studentSvc := new(mockStudentService)
+	r := newWhiteboardStudentRouter(svc, studentSvc)
+
+	studentSvc.On("ListCourses", mock.Anything, testStudentID).Return([]models.StudentCourse{}, errors.New("db error"))
+
+	w := makeRequest(t, r, http.MethodGet, "/student/courses/"+testCourseID+"/board-token", nil)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	studentSvc.AssertExpectations(t)
+}
+
+func TestStudentCourseBoardToken_Success(t *testing.T) {
+	svc := new(mockWhiteboardService)
+	studentSvc := new(mockStudentService)
+	r := newWhiteboardStudentRouter(svc, studentSvc)
+
+	const boardID = "66666666-6666-6666-6666-666666666666"
+	const pageID = "77777777-7777-7777-7777-777777777777"
+	const inviteID = "88888888-8888-8888-8888-888888888888"
+
+	studentSvc.On("ListCourses", mock.Anything, testStudentID).
+		Return([]models.StudentCourse{{ID: testCourseID, Subject: "Math", TutorID: testTutorID}}, nil)
+	svc.On("GetOrCreateBoard", mock.Anything, testCourseID, testTutorID).Return(models.BoardWithPages{
+		Board: models.Board{ID: boardID, CourseID: testCourseID, TutorID: testTutorID},
+		Pages: []models.BoardPage{{ID: pageID, BoardID: boardID}},
+	}, nil)
+	svc.On("CreateInvite", mock.Anything, boardID, testTutorID).Return(models.BoardInvite{ID: inviteID, BoardID: boardID}, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/student/courses/"+testCourseID+"/board-token", nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]string

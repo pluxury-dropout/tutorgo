@@ -176,6 +176,10 @@ func (m *mockStudentService) ListHomework(ctx context.Context, studentID string)
 	args := m.Called(ctx, studentID)
 	return args.Get(0).([]models.StudentHomework), args.Error(1)
 }
+func (m *mockStudentService) ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).([]models.StudentCourse), args.Error(1)
+}
 
 // --- Mock: WhiteboardService ---
 

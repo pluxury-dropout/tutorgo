@@ -1,14 +1,10 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import type { BoardPage } from '@/types/api'
 
 interface BoardContextValue {
   boardId: string
   courseId?: string
-  pages: BoardPage[]
-  activePageId: string
-  onSelectPage: (id: string) => void
   isGuest: boolean
 }
 

@@ -68,6 +68,11 @@ export interface StudentHomework {
   homework: string
 }
 
+export interface StudentCourse {
+  id: string
+  subject: string
+}
+
 export interface Payment {
   id: string
   course_id: string

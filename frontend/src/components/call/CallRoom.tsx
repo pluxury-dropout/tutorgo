@@ -56,7 +56,6 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const displayName = useBoardDisplayName(role)
   const [mode, setMode] = useState<Mode>('call')
   const [boardLoading, setBoardLoading] = useState(false)
-  const [activePageId, setActivePageId] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [homeworkOpen, setHomeworkOpen] = useState(false)
   const { messages, send, unread } = useCallChat({ chatOpen })
@@ -118,7 +117,6 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
         setMode('call')
         setGuestBoardToken(null)
         setGuestBoard(null)
-        setActivePageId(null)
       }
     }
 
@@ -145,7 +143,6 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
         toast.error('Не удалось закрыть доску')
       } finally {
         setMode('call')
-        setActivePageId(null)
       }
       return
     }
@@ -182,8 +179,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   // Resolve which board + page to render
   const activeBoard = role === 'tutor' ? tutorBoard : guestBoard
   const activeBoardToken = role === 'guest' ? guestBoardToken ?? undefined : undefined
-  const resolvedPageId = activePageId ?? activeBoard?.pages[0]?.id ?? null
-  const currentPage = activeBoard?.pages.find((p) => p.id === resolvedPageId) ?? null
+  const currentPage = activeBoard?.pages[0] ?? null
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -196,13 +192,10 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
       >
         {mode === 'call' && <CallStage />}
 
-        {mode === 'board' && activeBoard && resolvedPageId && (
+        {mode === 'board' && activeBoard && currentPage && (
           <ExcalidrawCanvas
             page={currentPage}
             boardId={activeBoard.id}
-            pages={activeBoard.pages}
-            activePageId={resolvedPageId}
-            onSelectPage={setActivePageId}
             token={activeBoardToken}
             courseId={role === 'tutor' ? courseId ?? undefined : undefined}
             isGuest={role === 'guest'}

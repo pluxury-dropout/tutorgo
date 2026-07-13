@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useBoardByCourse } from '@/lib/hooks/useWhiteboard'
@@ -18,7 +17,6 @@ const ExcalidrawCanvas = dynamic(
 export default function BoardPage() {
   const { courseId } = useParams<{ courseId: string }>()
   const { data: board, isLoading, error } = useBoardByCourse(courseId)
-  const [activePageId, setActivePageId] = useState<string | null>(null)
   const displayName = useBoardDisplayName('tutor')
 
   if (isLoading)
@@ -34,17 +32,13 @@ export default function BoardPage() {
       </div>
     )
 
-  const currentPageId = activePageId ?? board.pages[0]?.id ?? null
-  const currentPage = board.pages.find((p) => p.id === currentPageId) ?? null
+  const currentPage = board.pages[0] ?? null
 
   return (
     <div className="h-screen">
       <ExcalidrawCanvas
         page={currentPage}
         boardId={board.id}
-        pages={board.pages}
-        activePageId={currentPageId ?? ''}
-        onSelectPage={setActivePageId}
         courseId={courseId}
         isGuest={false}
         displayName={displayName}
