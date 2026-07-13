@@ -437,3 +437,12 @@
   height: 0;
   pointer-events: none;
 }
+/* Зелёное кольцо у говорящего в панели участников звонка (CallParticipants) */
+@keyframes speakPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(59,165,93,0.95); }
+  50% { box-shadow: 0 0 0 3px rgba(59,165,93,0.55); }
+}
+@keyframes speakPulseBox {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(59,165,93,0.95), 0 4px 14px rgba(0,0,0,0.25); }
+  50% { box-shadow: 0 0 0 3px rgba(59,165,93,0.55), 0 4px 14px rgba(0,0,0,0.25); }
+}

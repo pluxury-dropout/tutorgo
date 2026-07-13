@@ -10,7 +10,7 @@ import { DeviceSettings } from './DeviceSettings'
 const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'
 
 // Иконки 15×15, stroke=currentColor, strokeWidth 1.8.
-const ICONS = {
+export const ICONS = {
   linkChain: (<><path d="M9 15l6-6" /><path d="M8 11L6.5 12.5a3.5 3.5 0 0 0 5 5L13 16" /><path d="M16 13l1.5-1.5a3.5 3.5 0 0 0-5-5L11 8" /></>),
   check: <path d="M20 6L9 17l-5-5" />,
   micOn: (<><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><path d="M12 18v4" /><path d="M8 22h8" /></>),

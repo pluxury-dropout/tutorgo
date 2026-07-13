@@ -9,11 +9,12 @@ import {
   useRoomContext,
 } from '@livekit/components-react'
 import { ConnectionState, RoomEvent } from 'livekit-client'
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@livekit/components-styles'
 import { toast } from 'sonner'
 
 import { useTheme } from 'next-themes'
-import { PipCameras } from './PipCameras'
+import { CallParticipants } from './CallParticipants'
 import { CallStage } from './CallStage'
 import { CallToolbar } from './CallToolbar'
 import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
@@ -59,6 +60,8 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const [boardLoading, setBoardLoading] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [homeworkOpen, setHomeworkOpen] = useState(false)
+  // api доски нужен панели участников (follow за коллаборатором).
+  const [boardApi, setBoardApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const { messages, send, unread } = useCallChat({ chatOpen })
 
   // Enable camera+mic once per call. Must live here (not in CallStage): CallStage
@@ -214,10 +217,14 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
             courseId={role === 'tutor' ? courseId ?? undefined : undefined}
             isGuest={role === 'guest'}
             identity={identity}
+            onApi={setBoardApi}
+            hideUserList
           />
         )}
 
-        {mode === 'board' && <PipCameras chatOpen={chatOpen} />}
+        {mode === 'board' && (
+          <CallParticipants excalidrawApi={boardApi} identity={identity} />
+        )}
       </div>
 
       {chatOpen && (

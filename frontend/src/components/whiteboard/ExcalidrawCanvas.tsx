@@ -46,6 +46,10 @@ interface Props {
   courseId?: string
   isGuest?: boolean
   identity?: BoardIdentity
+  /** Отдаёт api наружу — звонку он нужен для follow из панели участников. */
+  onApi?: (api: ExcalidrawImperativeAPI) => void
+  /** Скрыть встроенный список участников: его роль берёт на себя панель звонка. */
+  hideUserList?: boolean
 }
 
 export function ExcalidrawCanvas({
@@ -55,6 +59,8 @@ export function ExcalidrawCanvas({
   courseId,
   isGuest = false,
   identity,
+  onApi,
+  hideUserList = false,
 }: Props) {
   const { status, onApiReady, onChange, sendCursor, broadcastViewport, registerFile } =
     useExcalidrawSync(page, token, identity)
@@ -241,7 +247,10 @@ export function ExcalidrawCanvas({
 
   return (
     <BoardContextProvider value={{ boardId, courseId, isGuest }}>
-      <div className="relative w-full h-full" onDropCapture={onDropCapture}>
+      <div
+        className={`relative w-full h-full${hideUserList ? ' board-hide-userlist' : ''}`}
+        onDropCapture={onDropCapture}
+      >
         {status === 'disconnected' && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm px-3 py-1 rounded-full">
             Переподключение...
@@ -256,6 +265,7 @@ export function ExcalidrawCanvas({
           excalidrawAPI={(api) => {
             apiRef.current = api
             onApiReady(api)
+            onApi?.(api)
           }}
           onChange={onChange}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}

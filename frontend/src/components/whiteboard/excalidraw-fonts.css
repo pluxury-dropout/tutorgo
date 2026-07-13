@@ -11,6 +11,16 @@
    Чтобы вернуть слот в пикер, положи свою гарнитуру в fonts/<Слот>.woff2
    (npm run fonts) и удали соответствующую строку отсюда. */
 
+/* Список участников Excalidraw (аватарки справа сверху) не отключается через
+   UIOptions. Прячем его там, где доска идёт вместе со звонком: участников и
+   follow показывает наша панель (CallParticipants). Вне звонка — на страницах
+   доски без LiveKit — UserList остаётся единственным списком, поэтому класс
+   вешается точечно на контейнер, а не глобально. */
+.board-hide-userlist .UserList__wrapper,
+.board-hide-userlist .UserList_mobile {
+  display: none !important;
+}
+
 /* Excalifont — «От руки» */
 .excalidraw [data-testid='font-family-hand-drawn'],
 /* Comic Shanns — «Код» */
