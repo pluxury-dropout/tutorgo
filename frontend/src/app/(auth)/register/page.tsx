@@ -97,14 +97,14 @@ export default function RegisterPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="first_name">Имя</Label>
-            <Input id="first_name" placeholder="Айгерим" {...register('first_name')} />
+            <Input id="first_name" {...register('first_name')} />
             {errors.first_name && (
               <p className="text-xs text-destructive">{errors.first_name.message}</p>
             )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="last_name">Фамилия</Label>
-            <Input id="last_name" placeholder="Бекова" {...register('last_name')} />
+            <Input id="last_name" {...register('last_name')} />
             {errors.last_name && (
               <p className="text-xs text-destructive">{errors.last_name.message}</p>
             )}

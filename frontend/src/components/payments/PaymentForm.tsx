@@ -41,7 +41,7 @@ export function PaymentForm({
     formState: { errors, isSubmitting },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: { amount: 0, lessons_count: 0, paid_at: '' },
+    defaultValues: { paid_at: '' },
   })
 
   const amount = watch('amount')
@@ -51,7 +51,7 @@ export function PaymentForm({
       if (initialValues) {
         reset(initialValues)
       } else {
-        reset({ amount: 0, lessons_count: 0, paid_at: new Date().toISOString().slice(0, 10) })
+        reset({ paid_at: new Date().toISOString().slice(0, 10) })
       }
     }
   }, [open, reset, initialValues])

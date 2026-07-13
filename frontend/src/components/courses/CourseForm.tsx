@@ -35,7 +35,7 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     formState: { errors, isSubmitting },
   } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: { type: 'individual', subject: '', price_per_cycle: 0, lessons_per_cycle: 1, started_at: '', ended_at: '' },
+    defaultValues: { type: 'individual', subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' },
   })
 
   const courseType      = watch('type')
@@ -55,7 +55,7 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
         ended_at:          initial.ended_at?.slice(0, 10) ?? '',
       })
     } else {
-      reset({ type: 'individual', subject: '', price_per_cycle: 0, lessons_per_cycle: 1, started_at: '', ended_at: '' })
+      reset({ type: 'individual', subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' })
     }
   }, [initial, open, reset])
 
