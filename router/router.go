@@ -211,6 +211,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.POST("/calls/quick/:id/end", callHandler.EndQuickRoom)
 
 		// Whiteboard protected routes
+		auth.GET("/boards/trial", whiteboardHandler.GetTrialBoard)
 		auth.GET("/boards/course/:courseId", whiteboardHandler.GetBoardByCourse)
 		auth.POST("/boards/:boardId/pages", whiteboardHandler.CreatePage)
 		auth.PUT("/board-pages/:pageId", whiteboardHandler.UpdatePage)

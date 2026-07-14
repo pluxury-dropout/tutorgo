@@ -189,6 +189,10 @@ func (m *mockWhiteboardService) GetOrCreateBoard(ctx context.Context, courseID, 
 	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).(models.BoardWithPages), args.Error(1)
 }
+func (m *mockWhiteboardService) GetOrCreateTrialBoard(ctx context.Context, tutorID string) (models.BoardWithPages, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).(models.BoardWithPages), args.Error(1)
+}
 func (m *mockWhiteboardService) ValidateInvite(ctx context.Context, inviteID string) (models.BoardWithPages, error) {
 	args := m.Called(ctx, inviteID)
 	return args.Get(0).(models.BoardWithPages), args.Error(1)

@@ -11,6 +11,7 @@ import (
 type WhiteboardRepository interface {
 	CourseBelongsToTutor(ctx context.Context, courseID, tutorID string) (bool, error)
 	GetOrCreateBoard(ctx context.Context, courseID, tutorID string) (models.Board, error)
+	GetOrCreateTrialBoard(ctx context.Context, tutorID string) (models.Board, error)
 	GetBoardByID(ctx context.Context, boardID string) (models.Board, error)
 	GetBoardByInvite(ctx context.Context, inviteID string) (models.Board, error)
 	GetPagesByBoard(ctx context.Context, boardID string) ([]models.BoardPage, error)
@@ -47,7 +48,7 @@ func (r *whiteboardRepository) CourseBelongsToTutor(ctx context.Context, courseI
 func (r *whiteboardRepository) GetBoardByID(ctx context.Context, boardID string) (models.Board, error) {
 	var b models.Board
 	err := r.conn.QueryRow(ctx,
-		`SELECT id, course_id, tutor_id, created_at FROM boards WHERE id = $1`,
+		`SELECT id, COALESCE(course_id::text, ''), tutor_id, created_at FROM boards WHERE id = $1`,
 		boardID,
 	).Scan(&b.ID, &b.CourseID, &b.TutorID, &b.CreatedAt)
 	return b, err
@@ -59,8 +60,25 @@ func (r *whiteboardRepository) GetOrCreateBoard(ctx context.Context, courseID, t
 		`INSERT INTO boards (course_id, tutor_id)
          VALUES ($1, $2)
          ON CONFLICT (course_id) DO UPDATE SET course_id = EXCLUDED.course_id
-         RETURNING id, course_id, tutor_id, created_at`,
+         RETURNING id, COALESCE(course_id::text, ''), tutor_id, created_at`,
 		courseID, tutorID,
+	).Scan(&b.ID, &b.CourseID, &b.TutorID, &b.CreatedAt)
+	return b, err
+}
+
+// GetOrCreateTrialBoard — доска для пробных уроков: одна на препода, вне курсов.
+// ON CONFLICT целится в частичный индекс idx_boards_trial (tutor_id) WHERE
+// course_id IS NULL — предикат в конфликте обязателен, иначе Postgres не поймёт,
+// какой индекс имеется в виду.
+func (r *whiteboardRepository) GetOrCreateTrialBoard(ctx context.Context, tutorID string) (models.Board, error) {
+	var b models.Board
+	err := r.conn.QueryRow(ctx,
+		`INSERT INTO boards (course_id, tutor_id)
+         VALUES (NULL, $1)
+         ON CONFLICT (tutor_id) WHERE course_id IS NULL
+         DO UPDATE SET tutor_id = EXCLUDED.tutor_id
+         RETURNING id, COALESCE(course_id::text, ''), tutor_id, created_at`,
+		tutorID,
 	).Scan(&b.ID, &b.CourseID, &b.TutorID, &b.CreatedAt)
 	return b, err
 }
@@ -68,7 +86,7 @@ func (r *whiteboardRepository) GetOrCreateBoard(ctx context.Context, courseID, t
 func (r *whiteboardRepository) GetBoardByInvite(ctx context.Context, inviteID string) (models.Board, error) {
 	var b models.Board
 	err := r.conn.QueryRow(ctx,
-		`SELECT bo.id, bo.course_id, bo.tutor_id, bo.created_at
+		`SELECT bo.id, COALESCE(bo.course_id::text, ''), bo.tutor_id, bo.created_at
          FROM boards bo
          JOIN board_invites bi ON bi.board_id = bo.id
          WHERE bi.id = $1`,

@@ -25,6 +25,10 @@ func (m *mockWhiteboardRepo) GetOrCreateBoard(ctx context.Context, courseID, tut
 	args := m.Called(ctx, courseID, tutorID)
 	return args.Get(0).(models.Board), args.Error(1)
 }
+func (m *mockWhiteboardRepo) GetOrCreateTrialBoard(ctx context.Context, tutorID string) (models.Board, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).(models.Board), args.Error(1)
+}
 func (m *mockWhiteboardRepo) GetBoardByInvite(ctx context.Context, inviteID string) (models.Board, error) {
 	args := m.Called(ctx, inviteID)
 	return args.Get(0).(models.Board), args.Error(1)
@@ -141,6 +145,36 @@ func TestWhiteboardService_GetOrCreateBoard_PreexistingForeignBoard(t *testing.T
 
 	_, err := svc.GetOrCreateBoard(context.Background(), "course-1", "tutor-1")
 	assert.ErrorIs(t, err, service.ErrNotFound)
+}
+
+// Пробная доска препода отдаётся вместе с первой страницей.
+func TestGetOrCreateTrialBoard_CreatesFirstPage(t *testing.T) {
+	repo := new(mockWhiteboardRepo)
+	board := models.Board{ID: "b1", CourseID: "", TutorID: "me"}
+	repo.On("GetOrCreateTrialBoard", mock.Anything, "me").Return(board, nil)
+	repo.On("GetPagesByBoard", mock.Anything, "b1").Return([]models.BoardPage{}, nil)
+	repo.On("CreatePage", mock.Anything, "b1", "Страница 1", 0).
+		Return(models.BoardPage{ID: "p1", BoardID: "b1", Title: "Страница 1"}, nil)
+
+	svc := service.NewWhiteboardService(repo)
+	got, err := svc.GetOrCreateTrialBoard(context.Background(), "me")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "b1", got.Board.ID)
+	assert.Len(t, got.Pages, 1)
+}
+
+// Доска, вернувшаяся с чужим tutor_id, наружу не уходит.
+func TestGetOrCreateTrialBoard_ForeignBoard(t *testing.T) {
+	repo := new(mockWhiteboardRepo)
+	repo.On("GetOrCreateTrialBoard", mock.Anything, "me").
+		Return(models.Board{ID: "b1", TutorID: "other"}, nil)
+
+	svc := service.NewWhiteboardService(repo)
+	_, err := svc.GetOrCreateTrialBoard(context.Background(), "me")
+
+	assert.ErrorIs(t, err, service.ErrNotFound)
+	repo.AssertNotCalled(t, "GetPagesByBoard", mock.Anything, mock.Anything)
 }
 
 // (a) UpdatePage rejects a page whose board belongs to another tutor.

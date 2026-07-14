@@ -41,6 +41,21 @@ func (h *WhiteboardHandler) GetBoardByCourse(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// GET /boards/trial — общая доска всех пробных уроков препода.
+func (h *WhiteboardHandler) GetTrialBoard(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	result, err := h.svc.GetOrCreateTrialBoard(c.Request.Context(), tutorID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 func (h *WhiteboardHandler) CreatePage(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

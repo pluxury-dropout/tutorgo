@@ -9,6 +9,7 @@ import (
 
 type WhiteboardService interface {
 	GetOrCreateBoard(ctx context.Context, courseID, tutorID string) (models.BoardWithPages, error)
+	GetOrCreateTrialBoard(ctx context.Context, tutorID string) (models.BoardWithPages, error)
 	ValidateInvite(ctx context.Context, inviteID string) (models.BoardWithPages, error)
 	CreatePage(ctx context.Context, boardID, tutorID, title string) (models.BoardPage, error)
 	UpdatePage(ctx context.Context, pageID, tutorID string, req models.UpdateBoardPageRequest) (models.BoardPage, error)
@@ -45,6 +46,33 @@ func (s *whiteboardService) GetOrCreateBoard(ctx context.Context, courseID, tuto
 	}
 	// The upsert ignores tutor_id on conflict, so a pre-existing board could
 	// belong to another tutor — verify ownership of the returned board.
+	if board.TutorID != tutorID {
+		return models.BoardWithPages{}, ErrNotFound
+	}
+	pages, err := s.repo.GetPagesByBoard(ctx, board.ID)
+	if err != nil {
+		return models.BoardWithPages{}, err
+	}
+	if len(pages) == 0 {
+		first, err := s.repo.CreatePage(ctx, board.ID, "Страница 1", 0)
+		if err != nil {
+			return models.BoardWithPages{}, err
+		}
+		pages = []models.BoardPage{first}
+	}
+	return models.BoardWithPages{Board: board, Pages: pages}, nil
+}
+
+// GetOrCreateTrialBoard — общая доска пробных уроков препода (одна на препода,
+// вне курсов). Проверки курса нет: курса у пробной доски не существует,
+// владение проверяем по tutor_id вернувшейся доски.
+func (s *whiteboardService) GetOrCreateTrialBoard(ctx context.Context, tutorID string) (models.BoardWithPages, error) {
+	board, err := s.repo.GetOrCreateTrialBoard(ctx, tutorID)
+	if err != nil {
+		return models.BoardWithPages{}, err
+	}
+	// Upsert при конфликте не трогает tutor_id — на всякий случай убеждаемся,
+	// что вернулась доска именно этого препода (та же проверка, что в GetOrCreateBoard).
 	if board.TutorID != tutorID {
 		return models.BoardWithPages{}, ErrNotFound
 	}
