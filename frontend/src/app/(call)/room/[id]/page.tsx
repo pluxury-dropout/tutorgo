@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
+import { Loader2 } from 'lucide-react'
 
 import { callsApi } from '@/lib/api/calls'
-import { Check, Copy, Loader2 } from 'lucide-react'
+import { CallRoom } from '@/components/call/CallRoom'
 
 type Stage = 'loading' | 'in-room' | 'error'
 
@@ -17,17 +17,6 @@ export default function QuickRoomPage() {
   const [stage, setStage]         = useState<Stage>('loading')
   const [token, setToken]         = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
-  const [copied, setCopied]       = useState(false)
-
-  const joinUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/join/room/${id}`
-    : `/join/room/${id}`
-
-  function handleCopy() {
-    navigator.clipboard.writeText(joinUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   useEffect(() => {
     // LiveKit bug: placeholder→real track transition triggers a spurious console.error
@@ -41,21 +30,21 @@ export default function QuickRoomPage() {
 
   useEffect(() => {
     const raw = sessionStorage.getItem(`quick-room-${id}`)
-    if (!raw) { router.replace('/dashboard'); return }
+    if (!raw) { router.replace('/trial'); return }
     try {
       const { token: t, server_url: s } = JSON.parse(raw) as { token: string; server_url: string }
       setToken(t)
       setServerUrl(s)
       setStage('in-room')
     } catch {
-      router.replace('/dashboard')
+      router.replace('/trial')
     }
   }, [id, router])
 
   async function handleDisconnected() {
     try { await callsApi.endQuickRoom(id) } catch {}
     sessionStorage.removeItem(`quick-room-${id}`)
-    router.replace('/dashboard')
+    router.replace('/trial')
   }
 
   if (stage === 'loading') {
@@ -71,43 +60,27 @@ export default function QuickRoomPage() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', gap: 16 }}>
         <p className="text-muted-foreground text-sm">Не удалось подключиться к комнате</p>
         <button
-          onClick={() => router.replace('/dashboard')}
+          onClick={() => router.replace('/trial')}
           style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13 }}
         >
-          На главную
+          К пробным урокам
         </button>
       </div>
     )
   }
 
+  const inviteUrl = `${window.location.origin}/join/room/${id}`
+
   return (
     <div style={{ height: '100dvh', position: 'relative' }}>
-      <LiveKitRoom
-        key={token}
+      <CallRoom
+        trial
         serverUrl={serverUrl}
         token={token}
+        role="tutor"
+        inviteUrl={inviteUrl}
         onDisconnected={handleDisconnected}
-        data-lk-theme="default"
-        style={{ height: '100%' }}
-      >
-        <VideoConference />
-      </LiveKitRoom>
-
-      <button
-        onClick={handleCopy}
-        title="Скопировать ссылку для ученика"
-        style={{
-          position: 'absolute', top: 12, right: 12, zIndex: 50,
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 12px', borderRadius: 8,
-          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        }}
-      >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
-        {copied ? 'Скопировано' : 'Ссылка для ученика'}
-      </button>
+      />
     </div>
   )
 }

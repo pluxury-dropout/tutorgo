@@ -7,6 +7,9 @@ export const whiteboardApi = {
   getBoardByCourse: (courseId: string) =>
     api.get<BoardWithPages>(`/boards/course/${courseId}`).then((r) => r.data),
 
+  getTrialBoard: () =>
+    api.get<BoardWithPages>('/boards/trial').then((r) => r.data),
+
   createPage: (boardId: string, title: string) =>
     api.post<BoardPage>(`/boards/${boardId}/pages`, { title }).then((r) => r.data),
 

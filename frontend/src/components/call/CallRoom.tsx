@@ -48,9 +48,11 @@ interface CallRoomInnerProps {
   courseId?: string
   role: 'tutor' | 'guest'
   inviteUrl?: string
+  /** Пробный урок: доска берётся из общей trial-доски препода, курса нет. */
+  trial?: boolean
 }
 
-function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
+function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps) {
   const room = useRoomContext()
   const { resolvedTheme } = useTheme()
   const theme = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
@@ -128,9 +130,12 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
     return () => { room.off(RoomEvent.DataReceived, onData) }
   }, [room, role])
 
+  // Раньше courseId играл роль флага «доска есть». С пробной доской источников два.
+  const hasBoard = Boolean(courseId) || Boolean(trial)
+
   // Tutor: toggle board open/close
   const handleToggle = useCallback(async () => {
-    if (!courseId) {
+    if (!hasBoard) {
       toast.error('Доска недоступна: урок не привязан к курсу')
       return
     }
@@ -153,7 +158,9 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
 
     setBoardLoading(true)
     try {
-      const board = tutorBoard ?? await whiteboardApi.getBoardByCourse(courseId)
+      const board = tutorBoard ?? (trial
+        ? await whiteboardApi.getTrialBoard()
+        : await whiteboardApi.getBoardByCourse(courseId as string))
       if (!tutorBoard) setTutorBoard(board)
 
       let inviteToken = inviteTokenRef.current
@@ -178,7 +185,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
     } finally {
       setBoardLoading(false)
     }
-  }, [courseId, mode, tutorBoard, room])
+  }, [courseId, trial, hasBoard, mode, tutorBoard, room])
 
   // Tutor: доска — основной режим урока, открываем её сразу после подключения.
   // Ждём Connected: publishData на неподключённой комнате бросает ошибку.
@@ -186,12 +193,12 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
   const connectionState = useConnectionState()
   const autoOpenedRef = useRef(false)
   useEffect(() => {
-    if (role !== 'tutor' || !courseId) return
+    if (role !== 'tutor' || !hasBoard) return
     if (connectionState !== ConnectionState.Connected) return
     if (autoOpenedRef.current) return
     autoOpenedRef.current = true
     handleToggle()
-  }, [role, courseId, connectionState, handleToggle])
+  }, [role, hasBoard, connectionState, handleToggle])
 
   // Resolve which board + page to render
   const activeBoard = role === 'tutor' ? tutorBoard : guestBoard
@@ -242,6 +249,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
         boardActive={mode === 'board'}
         chatActive={chatOpen}
         chatUnread={unread}
+        showHomework={!trial}
         onToggleBoard={handleToggle}
         onToggleChat={() => setChatOpen((v) => !v)}
         onHomework={() => setHomeworkOpen(true)}
@@ -251,7 +259,7 @@ function CallRoomInner({ courseId, role, inviteUrl }: CallRoomInnerProps) {
       {role === 'tutor' && courseId && (
         <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={courseId} />
       )}
-      {role === 'guest' && (
+      {role === 'guest' && !trial && (
         <HomeworkViewDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} />
       )}
     </div>
@@ -267,6 +275,8 @@ export interface CallRoomProps {
   role: 'tutor' | 'guest'
   enableMedia?: boolean
   inviteUrl?: string
+  /** Пробный урок: доска берётся из общей trial-доски препода, курса нет. */
+  trial?: boolean
   onDisconnected: () => void
 }
 
@@ -277,6 +287,7 @@ export function CallRoom({
   role,
   enableMedia = false,
   inviteUrl,
+  trial,
   onDisconnected,
 }: CallRoomProps) {
   return (
@@ -291,7 +302,7 @@ export function CallRoom({
       style={{ height: '100%' }}
     >
       <RoomAudioRenderer />
-      <CallRoomInner courseId={courseId} role={role} inviteUrl={inviteUrl} />
+      <CallRoomInner courseId={courseId} role={role} inviteUrl={inviteUrl} trial={trial} />
     </LiveKitRoom>
   )
 }

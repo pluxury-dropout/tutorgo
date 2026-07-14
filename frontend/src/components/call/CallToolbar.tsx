@@ -39,6 +39,8 @@ interface Props {
   boardActive: boolean
   chatActive: boolean
   chatUnread: number
+  /** Домашка есть только у курсового урока. */
+  showHomework?: boolean
   onToggleBoard: () => void
   onToggleChat: () => void
   onHomework: () => void
@@ -46,7 +48,7 @@ interface Props {
 }
 
 export function CallToolbar({
-  role, inviteUrl, boardActive, chatActive, chatUnread,
+  role, inviteUrl, boardActive, chatActive, chatUnread, showHomework = true,
   onToggleBoard, onToggleChat, onHomework, onLeave,
 }: Props) {
   const { resolvedTheme } = useTheme()
@@ -176,9 +178,11 @@ export function CallToolbar({
             <Icon>{ICONS.board}</Icon>
           </button>
         )}
-        <button onClick={() => { setMoreOpen(false); onHomework() }} title="Домашнее задание" style={btnBase({})}>
-          <Icon>{ICONS.homework}</Icon>
-        </button>
+        {showHomework && (
+          <button onClick={() => { setMoreOpen(false); onHomework() }} title="Домашнее задание" style={btnBase({})}>
+            <Icon>{ICONS.homework}</Icon>
+          </button>
+        )}
         <button onClick={() => { setMoreOpen(false); onToggleChat() }} title="Чат" style={btnBase({ active: chatActive })}>
           <Icon>{ICONS.chat}</Icon>
           {chatUnread > 0 && !chatActive && (
