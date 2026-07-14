@@ -23,8 +23,10 @@ export default function CallPage() {
     let cancelled = false
     ;(async () => {
       try {
-        await callsApi.startRoom(id)
-        const [data, lesson] = await Promise.all([
+        // start-room только помечает урок активным для ученика, токен от него
+        // не зависит — гоняем оба запроса разом.
+        const [, data, lesson] = await Promise.all([
+          callsApi.startRoom(id),
           callsApi.getRoomToken(id),
           lessonsApi.get(id).catch(() => null),
         ])

@@ -59,7 +59,6 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
 
   const identity = useBoardDisplayName(role)
   const [mode, setMode] = useState<Mode>('call')
-  const [boardLoading, setBoardLoading] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [homeworkOpen, setHomeworkOpen] = useState(false)
   // api доски нужен панели участников (follow за коллаборатором).
@@ -79,7 +78,7 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
 
   // Tutor state
   const [tutorBoard, setTutorBoard] = useState<BoardWithPages | null>(null)
-  const inviteTokenRef = useRef<string | null>(null)
+  const [boardFailed, setBoardFailed] = useState(false)
 
   // Guest state
   const [guestBoardToken, setGuestBoardToken] = useState<string | null>(null)
@@ -133,6 +132,38 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
   // Раньше courseId играл роль флага «доска есть». С пробной доской источников два.
   const hasBoard = Boolean(courseId) || Boolean(trial)
 
+  // Доска + invite: один общий промис на автооткрытие и на кнопку тулбара.
+  // Это чистый HTTP — коннекта LiveKit он не ждёт (см. эффект автооткрытия).
+  const boardRef = useRef<Promise<{ board: BoardWithPages; inviteToken: string }> | null>(null)
+  const ensureBoard = useCallback(() => {
+    if (!boardRef.current) {
+      boardRef.current = (async () => {
+        const board = trial
+          ? await whiteboardApi.getTrialBoard()
+          : await whiteboardApi.getBoardByCourse(courseId as string)
+        const invite = await whiteboardApi.createInvite(board.id)
+        return { board, inviteToken: invite.id }
+      })().catch((err) => {
+        boardRef.current = null // дать повторить по кнопке
+        throw err
+      })
+    }
+    return boardRef.current
+  }, [courseId, trial])
+
+  // Сообщить гостю, что доска открыта. Требует Connected: publishData на
+  // неподключённой комнате бросает.
+  const announceOpen = useCallback(async (inviteToken: string) => {
+    const openMsg: DataMessage = { type: 'board-open', board_token: inviteToken }
+    await room.localParticipant.publishData(
+      new TextEncoder().encode(JSON.stringify(openMsg)),
+      { reliable: true },
+    )
+    await room.localParticipant.setMetadata(
+      JSON.stringify({ boardOpen: true, boardToken: inviteToken }),
+    )
+  }, [room])
+
   // Tutor: toggle board open/close
   const handleToggle = useCallback(async () => {
     if (!hasBoard) {
@@ -156,54 +187,63 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
       return
     }
 
-    setBoardLoading(true)
     try {
-      const board = tutorBoard ?? (trial
-        ? await whiteboardApi.getTrialBoard()
-        : await whiteboardApi.getBoardByCourse(courseId as string))
-      if (!tutorBoard) setTutorBoard(board)
-
-      let inviteToken = inviteTokenRef.current
-      if (!inviteToken) {
-        const invite = await whiteboardApi.createInvite(board.id)
-        inviteToken = invite.id
-        inviteTokenRef.current = inviteToken
-      }
-
-      const openMsg: DataMessage = { type: 'board-open', board_token: inviteToken }
-      await room.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(openMsg)),
-        { reliable: true },
-      )
-      await room.localParticipant.setMetadata(
-        JSON.stringify({ boardOpen: true, boardToken: inviteToken }),
-      )
+      const { board, inviteToken } = await ensureBoard()
+      setTutorBoard(board)
+      setBoardFailed(false)
+      await announceOpen(inviteToken)
       setMode('board')
     } catch (err) {
       console.error('[CallRoom] handleToggle error:', err)
       toast.error('Не удалось открыть доску')
-    } finally {
-      setBoardLoading(false)
     }
-  }, [courseId, trial, hasBoard, mode, tutorBoard, room])
+  }, [hasBoard, mode, room, ensureBoard, announceOpen])
 
-  // Tutor: доска — основной режим урока, открываем её сразу после подключения.
-  // Ждём Connected: publishData на неподключённой комнате бросает ошибку.
+  // Tutor: доска — основной режим урока, тянем её сразу на маунте, параллельно
+  // с коннектом LiveKit, и показываем как только пришла — ждать WebRTC незачем.
   // Урок без курса — доски нет, молча остаёмся в сетке камер.
-  const connectionState = useConnectionState()
-  const autoOpenedRef = useRef(false)
   useEffect(() => {
     if (role !== 'tutor' || !hasBoard) return
+    let cancelled = false
+    ensureBoard()
+      .then(({ board }) => {
+        if (cancelled) return
+        setTutorBoard(board)
+        setMode('board')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setBoardFailed(true)
+        toast.error('Не удалось открыть доску')
+      })
+    return () => { cancelled = true }
+  }, [role, hasBoard, ensureBoard])
+
+  // Гостю о доске сообщаем по факту коннекта — отдельно от её загрузки.
+  const connectionState = useConnectionState()
+  const announcedRef = useRef(false)
+  useEffect(() => {
+    if (role !== 'tutor' || mode !== 'board' || announcedRef.current) return
     if (connectionState !== ConnectionState.Connected) return
-    if (autoOpenedRef.current) return
-    autoOpenedRef.current = true
-    handleToggle()
-  }, [role, hasBoard, connectionState, handleToggle])
+    announcedRef.current = true
+    ensureBoard()
+      .then(({ inviteToken }) => announceOpen(inviteToken))
+      .catch(() => {})
+  }, [role, mode, connectionState, ensureBoard, announceOpen])
+
+  // Чанк Excalidraw ~тяжёлый: греем его сразу, пока идёт коннект, чтобы
+  // dynamic() отрисовался мгновенно. Гостю тоже — доску ему откроет препод.
+  useEffect(() => {
+    if (hasBoard || role === 'guest') void import('@/components/whiteboard/ExcalidrawCanvas')
+  }, [hasBoard, role])
 
   // Resolve which board + page to render
   const activeBoard = role === 'tutor' ? tutorBoard : guestBoard
   const activeBoardToken = role === 'guest' ? guestBoardToken ?? undefined : undefined
   const currentPage = activeBoard?.pages[0] ?? null
+
+  // Доска у препода вот-вот откроется — не мигаем сеткой камер по дороге.
+  const boardPending = role === 'tutor' && hasBoard && !tutorBoard && !boardFailed
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -214,7 +254,7 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
           right: chatOpen ? 280 : 0, transition: 'right .25s ease',
         }}
       >
-        {mode === 'call' && <CallStage />}
+        {mode === 'call' && (boardPending ? <BoardPlaceholder /> : <CallStage />)}
 
         {mode === 'board' && activeBoard && currentPage && (
           <ExcalidrawCanvas
@@ -264,6 +304,12 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
       )}
     </div>
   )
+}
+
+// Пустой холст цвета доски, пока она грузится: подмена сетки камер на пару
+// сотен миллисекунд смотрится спокойнее, чем два переключения экрана.
+function BoardPlaceholder() {
+  return <div style={{ width: '100%', height: '100%', background: '#fff' }} />
 }
 
 // ─── Public component ────────────────────────────────────────────────────────
