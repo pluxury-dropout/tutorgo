@@ -9,6 +9,7 @@ import {
   BookOpen,
   CreditCard,
   User,
+  Video,
   GraduationCap,
   Sun,
   Moon,
@@ -19,9 +20,9 @@ import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/lib/api/auth'
-import { callsApi } from '@/lib/api/calls'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { useCalendar } from '@/lib/hooks/useCalendar'
+import { pickActiveLesson } from './nextLesson'
 import type { LessonStatus, CalendarLesson } from '@/types/api'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -243,27 +244,35 @@ function CalendarSidebarPanel() {
   const router = useRouter()
   const [starting, setStarting] = useState(false)
 
-  async function handleStartLesson() {
-    if (starting) return
-    setStarting(true)
-    try {
-      const { room_id, token, server_url } = await callsApi.startQuickRoom()
-      sessionStorage.setItem(`quick-room-${room_id}`, JSON.stringify({ token, server_url }))
-      router.push(`/room/${room_id}`)
-    } catch {
-      setStarting(false)
-    }
-  }
-
   const todayRange = useMemo(() => {
     const n     = new Date()
     const start = new Date(n.getFullYear(), n.getMonth(), n.getDate())
     const end   = new Date(start)
-    end.setDate(end.getDate() + 1)
+    // +2 суток: список «Сегодня» фильтрует сам, а кнопке нужен урок,
+    // который может начаться уже после полуночи.
+    end.setDate(end.getDate() + 2)
     return { from: start.toISOString(), to: end.toISOString() }
   }, [])
 
   const { data: todayLessons = [] } = useCalendar(todayRange.from, todayRange.to)
+
+  // Тикер: без него кнопка не появится сама на уже открытой вкладке.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+
+  const activeLesson = useMemo(() => pickActiveLesson(todayLessons, now), [todayLessons, now])
+  const started = activeLesson
+    ? now.getTime() >= new Date(activeLesson.scheduled_at).getTime()
+    : false
+
+  function handleStartLesson() {
+    if (!activeLesson || starting) return
+    setStarting(true)
+    router.push(`/lessons/${activeLesson.id}/call`)
+  }
 
   const [displayedDates, setDisplayedDates] = useState<{ start: Date; end: Date }>(() => {
     const n     = new Date()
@@ -295,29 +304,41 @@ function CalendarSidebarPanel() {
         <TodayList lessons={todayLessons} />
       </div>
       <div className="flex-1 min-h-0" />
-      <style>{`
-        @keyframes liveDot {
-          0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-          50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
-        }
-      `}</style>
-      <button
-        onClick={handleStartLesson}
-        disabled={starting}
-        className="shrink-0 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-[10px] transition-colors hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: 'var(--secondary)' }}
-      >
-        <span
-          style={{
-            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-            background: starting ? '#888' : '#2D9964',
-            animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
-          }}
-        />
-        <span style={{ fontSize: 13, color: 'var(--foreground)', fontWeight: 600 }}>
-          {starting ? 'Подключение...' : 'Начать урок'}
-        </span>
-      </button>
+      {activeLesson && (
+        <>
+          <style>{`
+            @keyframes liveDot {
+              0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+              50% { opacity:.75; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+            }
+          `}</style>
+          <div className="shrink-0 rounded-[12px] border border-border bg-card p-2.5">
+            <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
+              {activeLesson.subject}
+            </div>
+            <div className="text-[11px] text-[var(--sidebar-text)] tabular-nums mb-2">
+              {formatTime(activeLesson.scheduled_at)}
+            </div>
+            <button
+              onClick={handleStartLesson}
+              disabled={starting}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] transition-colors hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: 'var(--secondary)' }}
+            >
+              <span
+                style={{
+                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  background: starting ? '#888' : '#2D9964',
+                  animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
+                }}
+              />
+              <span style={{ fontSize: 13, color: 'var(--foreground)', fontWeight: 600 }}>
+                {starting ? 'Подключение...' : started ? 'Присоединиться' : 'Начать урок'}
+              </span>
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -325,11 +346,12 @@ function CalendarSidebarPanel() {
 // ─── NAV ──────────────────────────────────────────────────────────────────────
 
 const NAV = [
-  { href: '/dashboard',  label: 'Главная',    icon: LayoutDashboard },
-  { href: '/calendar',   label: 'Расписание', icon: CalendarDays },
-  { href: '/courses',    label: 'Курсы',      icon: BookOpen },
-  { href: '/payments',   label: 'Платежи',    icon: CreditCard },
-  { href: '/profile',    label: 'Профиль',    icon: User },
+  { href: '/dashboard',  label: 'Главная',      icon: LayoutDashboard },
+  { href: '/calendar',   label: 'Расписание',   icon: CalendarDays },
+  { href: '/courses',    label: 'Курсы',        icon: BookOpen },
+  { href: '/trial',      label: 'Пробный урок', icon: Video },
+  { href: '/payments',   label: 'Платежи',      icon: CreditCard },
+  { href: '/profile',    label: 'Профиль',      icon: User },
 ]
 
 function initials(firstName?: string, lastName?: string) {
