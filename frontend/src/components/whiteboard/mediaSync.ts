@@ -33,6 +33,20 @@ export function nextMediaState(
   return prev
 }
 
+/** Локальное play/pause плеера — эхо нашей же удалённой команды или живой человек?
+ *
+ *  `agreed` — состояние, которое стороны уже согласовали: его ставит и приём
+ *  чужого кадра, и собственное действие пользователя. Совпало — значит плеер
+ *  просто подтвердил то, что мы ему сами велели, и рассылать это нельзя.
+ *  Подавлять по таймеру нельзя: события YouTube едут через postMessage из
+ *  iframe и приходят когда захотят. */
+export function isEchoOfRemote(
+  agreed: boolean | undefined,
+  action: 'play' | 'pause'
+): boolean {
+  return agreed === (action === 'play')
+}
+
 export function isPlayable(mimeType: string): boolean {
   return mimeType.startsWith('audio/') || mimeType.startsWith('video/')
 }

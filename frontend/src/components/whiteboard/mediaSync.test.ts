@@ -1,6 +1,26 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nextMediaState, isPlayable, parseYouTubeId } from './mediaSync.ts'
+import {
+  nextMediaState,
+  isPlayable,
+  parseYouTubeId,
+  isEchoOfRemote,
+} from './mediaSync.ts'
+
+test('плеер подтверждает применённую чужую команду — это эхо, рассылать нельзя', () => {
+  assert.equal(isEchoOfRemote(true, 'play'), true)
+  assert.equal(isEchoOfRemote(false, 'pause'), true)
+})
+
+test('плеер сменил состояние вопреки согласованному — это живой человек', () => {
+  assert.equal(isEchoOfRemote(true, 'pause'), false)
+  assert.equal(isEchoOfRemote(false, 'play'), false)
+})
+
+test('первое действие с роликом (согласованного состояния ещё нет) — не эхо', () => {
+  assert.equal(isEchoOfRemote(undefined, 'play'), false)
+  assert.equal(isEchoOfRemote(undefined, 'pause'), false)
+})
 
 test('open вводит новое состояние', () => {
   const s = nextMediaState(null, {

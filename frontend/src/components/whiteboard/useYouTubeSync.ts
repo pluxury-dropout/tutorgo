@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef } from 'react'
-import type { MediaPayload } from './mediaSync'
+import { isEchoOfRemote, type MediaPayload } from './mediaSync'
 import type { SyncTarget } from './useMediaPlayer'
 
 /** Расхождение больше этого — подтягиваем позицию; меньше — не дёргаем плеер,
@@ -31,9 +31,14 @@ export interface YouTubeSyncApi {
  *  Здесь ездит только позиция и play/pause, привязанные к id элемента: роликов
  *  на доске может быть несколько.
  *
- *  ponytail: applying — один флаг на все ролики, а не на каждый. Приём кадра
- *  живёт доли секунды, одновременные кадры по разным роликам развести можно,
- *  но пока незачем — максимум пропадёт один эхо-кадр.
+ *  Кадр рассылает только тот, у кого нажал живой человек. Принявший применяет
+ *  команду и молчит: иначе его подтверждение уезжает обратно с отставшей
+ *  позицией, отправитель откатывается на неё — и стороны бесконечно тянут друг
+ *  друга назад.
+ *
+ *  ponytail: остаточное расхождение (буферизация у сторон разная) не правим —
+ *  оно постоянное и не копится. Нужно точнее — синхронизация часов по серверной
+ *  метке времени и старт по общей отметке в будущем.
  */
 export function useYouTubeSync(
   sendMedia: (p: MediaPayload) => void
@@ -42,18 +47,10 @@ export function useYouTubeSync(
   // Кадр, пришедший раньше плеера: элемент едет по WS отдельно от кадра, и без
   // буфера позиция ролика, включённого до входа ученика, терялась бы.
   const pending = useRef(new Map<string, { position: number; play: boolean }>())
-  // Пока применяем удалённый кадр, локальные onPlay/onPause/onSeek молчат —
-  // иначе приём порождает отправку и получается эхо-петля между вкладками.
-  const applying = useRef(false)
-
-  const withSuppressed = useCallback((fn: () => void) => {
-    applying.current = true
-    fn()
-    // Снимаем флаг в макрозадаче: play/pause/seek прилетают асинхронно.
-    setTimeout(() => {
-      applying.current = false
-    }, 0)
-  }, [])
+  // Согласованное состояние ролика: играет или нет. Ставится и при приёме чужого
+  // кадра, и при собственном действии пользователя. По нему отличаем эхо
+  // применённой команды от живого клика — см. isEchoOfRemote.
+  const agreed = useRef(new Map<string, boolean>())
 
   const attach = useCallback(
     (id: string, target: SyncTarget | null, onBlocked: () => void = () => {}) => {
@@ -65,12 +62,11 @@ export function useYouTubeSync(
       const pend = pending.current.get(id)
       if (!pend) return
       pending.current.delete(id)
-      withSuppressed(() => {
-        target.currentTime = pend.position
-        if (pend.play) void target.play().catch(onBlocked)
-      })
+      agreed.current.set(id, pend.play)
+      target.currentTime = pend.position
+      if (pend.play) void target.play().catch(onBlocked)
     },
-    [withSuppressed]
+    []
   )
 
   const receive = useCallback(
@@ -97,23 +93,25 @@ export function useYouTubeSync(
         return
       }
 
-      withSuppressed(() => {
-        if (
-          p.position !== undefined &&
-          Math.abs(e.target.currentTime - p.position) > SEEK_TOLERANCE_SEC
-        ) {
-          e.target.currentTime = p.position
-        }
-        if (p.action === 'play') void e.target.play().catch(e.onBlocked)
-        if (p.action === 'pause') e.target.pause()
-      })
+      if (p.action === 'play') agreed.current.set(p.id, true)
+      if (p.action === 'pause') agreed.current.set(p.id, false)
+
+      // Перемотку глушить отдельно не надо: сеттер currentTime переставляет
+      // ожидаемую позицию внутри плеера, и опрос не примет её за движение ползунка.
+      if (
+        p.position !== undefined &&
+        Math.abs(e.target.currentTime - p.position) > SEEK_TOLERANCE_SEC
+      ) {
+        e.target.currentTime = p.position
+      }
+      if (p.action === 'play') void e.target.play().catch(e.onBlocked)
+      if (p.action === 'pause') e.target.pause()
     },
-    [sendMedia, withSuppressed]
+    [sendMedia]
   )
 
   const emit = useCallback(
     (action: MediaPayload['action'], id: string) => {
-      if (applying.current) return
       sendMedia({
         action,
         id,
@@ -123,8 +121,26 @@ export function useYouTubeSync(
     [sendMedia]
   )
 
-  const onLocalPlay = useCallback((id: string) => emit('play', id), [emit])
-  const onLocalPause = useCallback((id: string) => emit('pause', id), [emit])
+  /** Плеер сообщил play/pause. Своё это или отзвук применённой чужой команды —
+   *  решает согласованное состояние; попутно оно же ловит перебуферизацию,
+   *  которая даёт лишний PLAYING на ровном месте. */
+  const localToggle = useCallback(
+    (id: string, action: 'play' | 'pause') => {
+      if (isEchoOfRemote(agreed.current.get(id), action)) return
+      agreed.current.set(id, action === 'play')
+      emit(action, id)
+    },
+    [emit]
+  )
+
+  const onLocalPlay = useCallback(
+    (id: string) => localToggle(id, 'play'),
+    [localToggle]
+  )
+  const onLocalPause = useCallback(
+    (id: string) => localToggle(id, 'pause'),
+    [localToggle]
+  )
   const onLocalSeeked = useCallback((id: string) => emit('seek', id), [emit])
 
   const resume = useCallback((id: string) => {
