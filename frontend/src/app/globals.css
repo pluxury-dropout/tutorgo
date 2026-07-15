@@ -231,8 +231,9 @@
   display: none !important;
 }
 
-/* Slot height — 64px per hour = 32px per 30min slot */
-.fc-timegrid-slot {
+/* Slot height — 64px per hour = 32px per 30min slot.
+   .fc-префикс для специфичности выше дефолтного `.fc .fc-timegrid-slot{height:1.5em}` */
+.fc .fc-timegrid-slot {
   height: 32px !important;
   min-height: 0 !important;
 }
@@ -336,22 +337,6 @@
 }
 .fc .fc-today-button:disabled {
   opacity: 0.4 !important;
-}
-
-/* contentHeight=auto → сетка натуральной высоты, скролл у внешнего контейнера.
-   Тулбар и строку с днями недели держим прилипшими к верху, чтобы не уезжали. */
-.fc .fc-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  background: var(--background);
-  padding-top: 4px;
-}
-.fc .fc-scrollgrid-section-header > * {
-  position: sticky;
-  top: 44px;                 /* высота тулбара */
-  z-index: 5;
-  background: var(--background);
 }
 
 /* Toolbar title */

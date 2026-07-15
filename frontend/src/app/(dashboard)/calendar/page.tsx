@@ -277,7 +277,7 @@ export default function CalendarPage() {
         end={newTaskSlot?.end ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
-      <div className={`${isTouch ? 'hidden' : 'block'} h-full min-h-0 overflow-y-auto`}>
+      <div className={`${isTouch ? 'hidden' : 'block'} h-full min-h-0 overflow-hidden`}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -370,7 +370,8 @@ export default function CalendarPage() {
             )
           }}
           snapDuration="00:15:00"
-          contentHeight="auto"
+          height="100%"
+          expandRows={false}
           eventLongPressDelay={300}
           allDaySlot={false}
           slotDuration="00:30:00"
