@@ -12,8 +12,13 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // maximumScale убран намеренно: блокировка зума нарушает WCAG 1.4.4 (масштаб до 200%).
   viewportFit: 'cover',
+  colorScheme: 'light dark', // нативные контролы/скроллбары следуют теме
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F8F8F9' }, // = --background
+    { media: '(prefers-color-scheme: dark)', color: '#141414' },
+  ],
 }
 
 export const metadata: Metadata = {

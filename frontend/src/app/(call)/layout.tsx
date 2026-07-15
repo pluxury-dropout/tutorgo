@@ -19,7 +19,7 @@ export default function CallLayout({ children }: { children: React.ReactNode }) 
   if (!mounted || !isAuthenticated) return null
 
   return (
-    <div className="h-screen overflow-hidden">
+    <div className="h-[100dvh] overflow-hidden">
       {children}
     </div>
   )

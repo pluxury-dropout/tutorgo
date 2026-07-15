@@ -21,13 +21,13 @@ export default function BoardPage() {
 
   if (isLoading)
     return (
-      <div className="flex items-center justify-center h-screen text-gray-500">
+      <div className="flex items-center justify-center h-[100dvh] text-gray-500">
         Загрузка доски...
       </div>
     )
   if (error || !board)
     return (
-      <div className="flex items-center justify-center h-screen text-red-500">
+      <div className="flex items-center justify-center h-[100dvh] text-red-500">
         Ошибка загрузки доски
       </div>
     )
@@ -35,7 +35,7 @@ export default function BoardPage() {
   const currentPage = board.pages[0] ?? null
 
   return (
-    <div className="h-screen">
+    <div className="h-[100dvh]">
       <ExcalidrawCanvas
         page={currentPage}
         boardId={board.id}

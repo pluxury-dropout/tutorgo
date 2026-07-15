@@ -69,7 +69,7 @@ export default function JoinRoomPage() {
 
   if (stage === 'ended') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-sm space-y-6">
           <div className="flex items-center gap-2 justify-center">
             <GraduationCap className="h-6 w-6 text-primary" />
@@ -85,7 +85,7 @@ export default function JoinRoomPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex items-center gap-2 justify-center">
           <GraduationCap className="h-6 w-6 text-primary" />

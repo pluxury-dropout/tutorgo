@@ -21,13 +21,13 @@ export default function GuestBoardPage() {
 
   if (isLoading)
     return (
-      <div className="flex items-center justify-center h-screen text-gray-500">
+      <div className="flex items-center justify-center h-[100dvh] text-gray-500">
         Загрузка доски...
       </div>
     )
   if (error || !board)
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-[100dvh]">
         <div className="text-center">
           <p className="text-red-500 text-lg font-medium">Ссылка недействительна</p>
           <p className="text-gray-500 text-sm mt-1">
@@ -40,7 +40,7 @@ export default function GuestBoardPage() {
   const currentPage = board.pages[0] ?? null
 
   return (
-    <div className="h-screen">
+    <div className="h-[100dvh]">
       <ExcalidrawCanvas
         page={currentPage}
         boardId={board.id}

@@ -22,7 +22,7 @@ export default function StudentCabinetLayout({ children }: { children: React.Rea
 
   return (
     <StudentGate>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-[100dvh] bg-background">
         <header style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
             <Link href="/student/lessons" className="flex items-center gap-2 font-semibold">

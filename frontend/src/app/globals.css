@@ -220,6 +220,22 @@
   html {
     @apply font-sans;
   }
+  /* Базовое кольцо фокуса для «сырых» <button>/<a> (shadcn-компоненты используют ring + outline-none,
+     поэтому конфликта нет). WCAG 2.4.7 — фокус клавиатурой всегда виден. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* WCAG 2.3.3 — уважать системную настройку «меньше движения». */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* FullCalendar: now indicator */
