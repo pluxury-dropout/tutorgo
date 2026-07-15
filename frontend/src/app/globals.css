@@ -338,6 +338,22 @@
   opacity: 0.4 !important;
 }
 
+/* contentHeight=auto → сетка натуральной высоты, скролл у внешнего контейнера.
+   Тулбар и строку с днями недели держим прилипшими к верху, чтобы не уезжали. */
+.fc .fc-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--background);
+  padding-top: 4px;
+}
+.fc .fc-scrollgrid-section-header > * {
+  position: sticky;
+  top: 44px;                 /* высота тулбара */
+  z-index: 5;
+  background: var(--background);
+}
+
 /* Toolbar title */
 .fc .fc-toolbar-title {
   font-size: 16px !important;
