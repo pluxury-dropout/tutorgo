@@ -198,6 +198,10 @@ export default function CourseDetailPage() {
       toast.success('Урок обновлён')
     } else if (recurrence) {
       const dates = generateDates(baseISO, recurrence, course?.ended_at)
+      if (dates.length === 0) {
+        toast.error('Дата урока позже даты окончания курса — продлите курс или выберите более раннюю дату')
+        return
+      }
       await createLessons.mutateAsync({
         course_id:        id,
         scheduled_ats:    dates,
