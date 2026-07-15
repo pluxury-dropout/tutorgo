@@ -308,6 +308,7 @@ export default function CourseDetailPage() {
           <div className="flex gap-2">
             <Link
               href={`/boards/${id}`}
+              target="_blank"
               className="text-sm px-3 py-1.5 rounded border border-border hover:bg-muted text-foreground inline-flex items-center"
             >
               Доска

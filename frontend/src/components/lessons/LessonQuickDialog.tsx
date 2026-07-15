@@ -171,7 +171,7 @@ export function LessonQuickDialog({ lesson, onClose }: Props) {
             variant="outline"
             size="sm"
             className="flex-1 gap-1.5"
-            onClick={() => { router.push(`/lessons/${lesson?.id}/call`); onClose() }}
+            onClick={() => { window.open(`/lessons/${lesson?.id}/call`, '_blank'); onClose() }}
           >
             <Video size={14} />
             Начать звонок

@@ -40,15 +40,18 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFirst: boolean; upcoming: boolean }) {
-  const router = useRouter()
-
-  const openBoard = async () => {
-    try {
-      const { invite_token } = await studentApi.boardToken(lesson.id)
-      router.push(`/board/join/${invite_token}`)
-    } catch {
-      toast.error('Не удалось открыть доску')
-    }
+  // Вкладку открываем синхронно по клику, иначе popup-блокировщик зарубит window.open после await.
+  const openBoard = () => {
+    const w = window.open('', '_blank')
+    studentApi
+      .boardToken(lesson.id)
+      .then(({ invite_token }) => {
+        if (w) w.location.href = `/board/join/${invite_token}`
+      })
+      .catch(() => {
+        w?.close()
+        toast.error('Не удалось открыть доску')
+      })
   }
 
   return (
@@ -76,7 +79,7 @@ function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFi
             <Button size="sm" variant="outline" onClick={openBoard}>
               Доска
             </Button>
-            <Button size="sm" onClick={() => router.push(`/student/lessons/${lesson.id}/call`)}>
+            <Button size="sm" onClick={() => window.open(`/student/lessons/${lesson.id}/call`, '_blank')}>
               Войти в урок
             </Button>
           </div>
