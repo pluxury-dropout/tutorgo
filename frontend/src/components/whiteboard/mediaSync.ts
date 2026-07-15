@@ -47,6 +47,13 @@ export function isEchoOfRemote(
   return agreed === (action === 'play')
 }
 
+/** Наш ли это отзвук удалённой перемотки. Программная установка `currentTime`
+ *  тоже стреляет событием `seeked` у <audio>/<video>; совпало с позицией,
+ *  которую мы сами выставили удалённым кадром, — эхо, рассылать нельзя. */
+export function isSeekEcho(expected: number | null, current: number): boolean {
+  return expected !== null && Math.abs(current - expected) < 0.5
+}
+
 export function isPlayable(mimeType: string): boolean {
   return mimeType.startsWith('audio/') || mimeType.startsWith('video/')
 }

@@ -5,6 +5,7 @@ import {
   isPlayable,
   parseYouTubeId,
   isEchoOfRemote,
+  isSeekEcho,
 } from './mediaSync.ts'
 
 test('плеер подтверждает применённую чужую команду — это эхо, рассылать нельзя', () => {
@@ -56,6 +57,16 @@ test('open без url игнорируется — не сносим играю�
 test('req не меняет состояние', () => {
   const open = { url: 'u', mimeType: 'audio/mpeg', name: 'n' }
   assert.deepEqual(nextMediaState(open, { action: 'req' }), open)
+})
+
+test('isSeekEcho: попали в выставленную нами позицию — это эхо', () => {
+  assert.equal(isSeekEcho(30, 30.1), true)
+  assert.equal(isSeekEcho(30, 30), true)
+})
+
+test('isSeekEcho: живая перемотка далеко от нашей метки — не эхо', () => {
+  assert.equal(isSeekEcho(30, 42), false)
+  assert.equal(isSeekEcho(null, 30), false)
 })
 
 test('isPlayable: только аудио и видео', () => {
