@@ -45,7 +45,7 @@ export default function CalendarPage() {
 
   const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
   const [newTaskSlot, setNewTaskSlot]       = useState<{ start: Date; end: Date } | null>(null)
-  const [isTouch, setIsTouch]               = useState(false)
+  const [isMobile, setIsMobile]             = useState(false)
 
   const calendarRef       = useRef<FullCalendar>(null)
   const edgeTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,8 +53,14 @@ export default function CalendarPage() {
   const calendarRectRef   = useRef<DOMRect | null>(null)
   const pointerHandlerRef = useRef<((e: PointerEvent) => void) | null>(null)
 
+  // Мобильный календарь — по ширине экрана (md=768px), а не по типу указателя:
+  // ноутбуки с тачскрином дают coarse-pointer, но им нужен десктопный календарь.
   useEffect(() => {
-    setIsTouch(window.matchMedia('(pointer: coarse)').matches)
+    const mq = window.matchMedia('(max-width: 767px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
   }, [])
 
   // Listen for navigation requests from the sidebar mini-calendar
@@ -264,7 +270,7 @@ export default function CalendarPage() {
   return (
     <>
       {/* Mobile: full-screen compact week */}
-      {isTouch && (
+      {isMobile && (
         <div className="h-full">
           <MobileWeekCalendar />
         </div>
@@ -277,7 +283,7 @@ export default function CalendarPage() {
         end={newTaskSlot?.end ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
-      <div className={`${isTouch ? 'hidden' : 'block'} h-full min-h-0 overflow-hidden`}>
+      <div className={`${isMobile ? 'hidden' : 'block'} h-full min-h-0 overflow-hidden`}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -296,7 +302,7 @@ export default function CalendarPage() {
           selectable={true}
           unselectAuto={false}
           select={handleSelect}
-          eventDurationEditable={!isTouch}
+          eventDurationEditable={!isMobile}
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           eventDragStart={handleEventDragStart}
