@@ -222,6 +222,10 @@ func (m *mockWhiteboardService) SaveAsset(ctx context.Context, boardID, tutorID,
 	args := m.Called(ctx, boardID, tutorID, filePath, mimeType, sizeBytes)
 	return args.Get(0).(models.BoardAsset), args.Error(1)
 }
+func (m *mockWhiteboardService) SaveAssetByInvite(ctx context.Context, inviteID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error) {
+	args := m.Called(ctx, inviteID, filePath, mimeType, sizeBytes)
+	return args.Get(0).(models.BoardAsset), args.Error(1)
+}
 func (m *mockWhiteboardService) GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error) {
 	args := m.Called(ctx, assetID)
 	return args.Get(0).(models.BoardAsset), args.Error(1)

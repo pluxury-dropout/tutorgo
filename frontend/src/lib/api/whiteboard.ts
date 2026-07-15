@@ -28,11 +28,16 @@ export const whiteboardApi = {
   joinByInvite: (token: string) =>
     api.get<BoardWithPages>(`/public/board/join/${token}`).then((r) => r.data),
 
-  uploadAsset: (boardId: string, file: File) => {
+  // inviteToken задан → гость (ученик): льём через публичный роут доски, tutor JWT
+  // не нужен. Иначе — препод по защищённому роуту.
+  uploadAsset: (boardId: string, file: File, inviteToken?: string) => {
     const form = new FormData()
     form.append('file', file)
+    const path = inviteToken
+      ? `/public/board/${inviteToken}/assets`
+      : `/boards/${boardId}/assets`
     return api
-      .post<BoardAssetResponse>(`/boards/${boardId}/assets`, form, {
+      .post<BoardAssetResponse>(path, form, {
         // false → axios удаляет заголовок, и браузер сам выставит
         // multipart/form-data c boundary. Со строкой 'multipart/form-data'
         // boundary теряется и Go не может распарсить тело (FormFile → 400).

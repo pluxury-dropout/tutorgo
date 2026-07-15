@@ -9,6 +9,11 @@ import { DeviceSettings } from './DeviceSettings'
 
 const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'
 
+// Единица-множитель для флюид-масштаба тулбара: плавно растёт с шириной вьюпорта.
+// 1px до ~1440px (пол), до 1.5px к ~2200px+ (потолок). Все размеры = calc(N * var(--u)).
+const U = 'clamp(1px, 0.069vw, 1.5px)'
+const u = (n: number) => `calc(${n} * var(--u))`
+
 // Иконки 15×15, stroke=currentColor, strokeWidth 1.8.
 export const ICONS = {
   linkChain: (<><path d="M9 15l6-6" /><path d="M8 11L6.5 12.5a3.5 3.5 0 0 0 5 5L13 16" /><path d="M16 13l1.5-1.5a3.5 3.5 0 0 0-5-5L11 8" /></>),
@@ -27,7 +32,7 @@ export const ICONS = {
 
 function Icon({ children }: { children: ReactNode }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg style={{ width: u(15), height: u(15) }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       {children}
     </svg>
   )
@@ -89,24 +94,24 @@ export function CallToolbar({
     else if (opts.copied) { bg = c.successBg; color = c.success }
     else if (opts.active) { bg = c.accentBg; color = c.accent }
     return {
-      position: 'relative', width: 32, height: 32, minWidth: 32,
+      position: 'relative', width: u(32), height: u(32), minWidth: u(32),
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 0, border: 'none', borderRadius: 8, background: bg, color,
+      padding: 0, border: 'none', borderRadius: u(8), background: bg, color,
       cursor: 'pointer', flexShrink: 0, transition: 'background .15s,color .15s',
     }
   }
 
   return (
-    <>
+    <div style={{ display: 'contents', '--u': U } as React.CSSProperties}>
       {/* Тост копирования */}
       {copied && (
         <div style={{
           position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(20,20,21,0.9)', color: '#fff', padding: '8px 14px',
-          borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 13, fontWeight: 500, zIndex: 60, fontFamily: FONT,
+          background: 'rgba(20,20,21,0.9)', color: '#fff', padding: `${u(8)} ${u(14)}`,
+          borderRadius: u(10), display: 'flex', alignItems: 'center', gap: u(8),
+          fontSize: u(13), fontWeight: 500, zIndex: 60, fontFamily: FONT,
         }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4F9768" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <svg style={{ width: u(15), height: u(15) }} viewBox="0 0 24 24" fill="none" stroke="#4F9768" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
           Ссылка на звонок скопирована
@@ -116,7 +121,7 @@ export function CallToolbar({
       {/* Меню «Ещё» (вверх) */}
       {moreOpen && (
         <div data-call-more style={{
-          position: 'absolute', right: 22, bottom: 72, background: c.panel,
+          position: 'absolute', right: 22, bottom: u(72), background: c.panel,
           border: `1px solid ${c.border}`, borderRadius: 12, padding: 6,
           display: 'flex', flexDirection: 'column', minWidth: 240,
           boxShadow: '0 16px 34px rgba(0,0,0,0.3)', zIndex: 20, fontFamily: FONT,
@@ -145,9 +150,9 @@ export function CallToolbar({
 
       {/* Сам тулбар */}
       <div style={{
-        position: 'absolute', left: '50%', bottom: 14, transform: 'translateX(-50%)',
-        display: 'flex', alignItems: 'center', gap: 2, padding: '5px 6px',
-        borderRadius: 10, background: c.panel, border: `1px solid ${c.border}`,
+        position: 'absolute', left: '50%', bottom: u(14), transform: 'translateX(-50%)',
+        display: 'flex', alignItems: 'center', gap: u(2), padding: `${u(5)} ${u(6)}`,
+        borderRadius: u(10), background: c.panel, border: `1px solid ${c.border}`,
         boxShadow: '0 6px 18px rgba(0,0,0,0.22)', zIndex: 10, fontFamily: FONT,
       }}>
         {role === 'tutor' && inviteUrl && (
@@ -187,9 +192,9 @@ export function CallToolbar({
           <Icon>{ICONS.chat}</Icon>
           {chatUnread > 0 && !chatActive && (
             <span style={{
-              position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15,
-              padding: '0 4px', borderRadius: 8, background: c.destructive, color: '#fff',
-              fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'absolute', top: u(-2), right: u(-2), minWidth: u(15), height: u(15),
+              padding: `0 ${u(4)}`, borderRadius: u(8), background: c.destructive, color: '#fff',
+              fontSize: u(9), fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>{chatUnread}</span>
           )}
         </button>
@@ -200,6 +205,6 @@ export function CallToolbar({
           <Icon>{ICONS.leave}</Icon>
         </button>
       </div>
-    </>
+    </div>
   )
 }

@@ -81,3 +81,14 @@ export function blobToDataURL(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob)
   })
 }
+
+// Первый image-файл из буфера обмена, или null. Используется onPasteCapture, чтобы
+// увести вставку картинки в S3-путь мимо отключённой нативки Excalidraw. Текст и
+// сериализованные элементы Excalidraw файлов не несут → null → отдаём Excalidraw.
+export function imageFromClipboard(dt: DataTransfer | null): File | null {
+  if (!dt) return null
+  for (const file of Array.from(dt.files)) {
+    if (file.type.startsWith('image/')) return file
+  }
+  return null
+}

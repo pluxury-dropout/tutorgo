@@ -24,7 +24,7 @@ import type {
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
-import { blobToDataURL } from './excalidrawSync'
+import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
 import { PdfRangeDialog } from './PdfRangeDialog'
 import { MaterialsPanel } from './MaterialsPanel'
@@ -149,7 +149,12 @@ export function ExcalidrawCanvas({
           `файл ${formatMb(file.size)} МБ, максимум ${formatMb(MAX_ASSET_BYTES)} МБ`
         )
       }
-      const { url } = await whiteboardApi.uploadAsset(boardId, file)
+      // Гость (ученик) не имеет tutor JWT — льёт через публичный роут по invite-токену.
+      const { url } = await whiteboardApi.uploadAsset(
+        boardId,
+        file,
+        isGuest ? token : undefined
+      )
       const fullUrl = `${BASE_URL}${url}`
       const fileId = crypto.randomUUID() as FileId
       const dataURL = (await blobToDataURL(blob)) as DataURL
@@ -177,7 +182,7 @@ export function ExcalidrawCanvas({
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       })
     },
-    [boardId, registerFile]
+    [boardId, registerFile, isGuest, token]
   )
 
   // Центр вьюпорта в координатах сцены — точка вставки по кнопке.
@@ -350,6 +355,19 @@ export function ExcalidrawCanvas({
   // картинок Excalidraw кладёт base64 в files; для брошенных мышкой мелких
   // картинок приемлемо, наша кнопка вставки идёт через S3.
   // ponytail: фоновая догрузка таких base64-файлов в S3 — когда заметим раздутые снапшоты.
+  // Перехват Ctrl+V картинки ДО Excalidraw: нативный image-инструмент отключён
+  // (tools.image:false), его paste-обработчик на document.body ответил бы
+  // «Изображения отключены». Capture-фаза обёртки идёт раньше bubble на body —
+  // ловим blob и уводим в S3-путь. Текст/элементы Excalidraw файлов не несут →
+  // пропускаем к нативной вставке.
+  const onPasteCapture = (e: React.ClipboardEvent) => {
+    const file = imageFromClipboard(e.clipboardData)
+    if (!file) return
+    e.preventDefault()
+    e.stopPropagation()
+    void insertImageFile(file)
+  }
+
   const onDropCapture = (e: React.DragEvent) => {
     if (isGuest) return // гостю вставка недоступна (кнопки скрыты) — не ловим drop
     const file = Array.from(e.dataTransfer?.files ?? []).find(
@@ -383,6 +401,7 @@ export function ExcalidrawCanvas({
       <div
         className={`relative w-full h-full${hideUserList ? ' board-hide-userlist' : ''}`}
         onDropCapture={onDropCapture}
+        onPasteCapture={onPasteCapture}
       >
         {status === 'disconnected' && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm px-3 py-1 rounded-full">

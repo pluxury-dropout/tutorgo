@@ -18,6 +18,7 @@ type WhiteboardService interface {
 	CreateInvite(ctx context.Context, boardID, tutorID string) (models.BoardInvite, error)
 	DeleteInvite(ctx context.Context, boardID, tutorID string) error
 	SaveAsset(ctx context.Context, boardID, tutorID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error)
+	SaveAssetByInvite(ctx context.Context, inviteID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error)
 	GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error)
 	GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error)
 	// PageBelongsToTutor reports whether pageID's board is owned by tutorID.
@@ -180,6 +181,17 @@ func (s *whiteboardService) SaveAsset(ctx context.Context, boardID, tutorID, fil
 		return models.BoardAsset{}, err
 	}
 	return s.repo.CreateAsset(ctx, boardID, filePath, mimeType, sizeBytes)
+}
+
+// SaveAssetByInvite — гостевая заливка: доступ к доске доказывает валидный invite,
+// поэтому проверку владения tutorID пропускаем (её у гостя нет), но скоупим ассет
+// строго к доске этого инвайта — залить в чужую доску нельзя.
+func (s *whiteboardService) SaveAssetByInvite(ctx context.Context, inviteID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error) {
+	board, err := s.repo.GetBoardByInvite(ctx, inviteID)
+	if err != nil {
+		return models.BoardAsset{}, ErrNotFound
+	}
+	return s.repo.CreateAsset(ctx, board.ID, filePath, mimeType, sizeBytes)
 }
 
 func (s *whiteboardService) GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error) {

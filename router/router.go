@@ -129,6 +129,10 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	// Whiteboard public routes (no JWT required)
 	r.GET("/public/board/join/:token", whiteboardHandler.JoinByInvite)
 	r.GET("/public/board-assets/:id", whiteboardHandler.ServeAsset)
+	// Гостевая заливка картинки (Ctrl+V ученика). Публично → rate-limit против
+	// абьюза: invite-ссылка расшариваема. Только image-MIME (в хендлере).
+	guestAssetLimiter := middleware.RateLimit(rate.Every(3*time.Second), 5)
+	r.POST("/public/board/:token/assets", guestAssetLimiter, whiteboardHandler.UploadAssetByInvite)
 	r.GET("/ws/board/:pageId", wbHubManager.ServeWS(whiteboardService))
 
 	// open — авторизовано, но доступно даже при истёкшей подписке (чтобы заплатить)

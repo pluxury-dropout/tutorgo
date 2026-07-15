@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"tutorgo/models"
@@ -259,6 +260,51 @@ func (h *WhiteboardHandler) UploadAsset(c *gin.Context) {
 	if err != nil {
 		// Remove the just-uploaded object if persisting the asset failed
 		// (e.g. board not owned by this tutor).
+		_ = h.store.Remove(c.Request.Context(), key)
+		handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, models.BoardAssetResponse{
+		ID:  asset.ID,
+		URL: fmt.Sprintf("/public/board-assets/%s", asset.ID),
+	})
+}
+
+// UploadAssetByInvite — гостевая заливка картинки (Ctrl+V у ученика). Публичный
+// роут: авторизация — валидный invite-токен доски. Публичность = ужесточаем:
+// принимаем ТОЛЬКО картинки (не даём анонимам лить произвольные файлы в S3).
+func (h *WhiteboardHandler) UploadAssetByInvite(c *gin.Context) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file required"})
+		return
+	}
+	defer file.Close()
+
+	const maxSize = 50 << 20 // 50MB, как у препода
+	if header.Size > maxSize {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 50MB)"})
+		return
+	}
+
+	mimeType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(mimeType, "image/") {
+		c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "only images allowed"})
+		return
+	}
+
+	ext := filepath.Ext(header.Filename)
+	key := fmt.Sprintf("board-assets/%s%s", uuid.New().String(), ext)
+
+	if err := h.store.Put(c.Request.Context(), key, file, header.Size, mimeType); err != nil {
+		h.log.Error("guest upload asset to storage", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "storage error"})
+		return
+	}
+
+	asset, err := h.svc.SaveAssetByInvite(c.Request.Context(), c.Param("token"), key, mimeType, int(header.Size))
+	if err != nil {
 		_ = h.store.Remove(c.Request.Context(), key)
 		handleServiceError(c, err)
 		return

@@ -5,8 +5,22 @@ import {
   parseSnapshot,
   utf8ByteSize,
   mergeCollaborators,
+  imageFromClipboard,
   SNAPSHOT_MAX_BYTES,
 } from './excalidrawSync.ts'
+
+test('imageFromClipboard: возвращает первый image-файл', () => {
+  const png = new File([new Uint8Array([1])], 'a.png', { type: 'image/png' })
+  const dt = { files: [png] } as unknown as DataTransfer
+  assert.equal(imageFromClipboard(dt), png)
+})
+
+test('imageFromClipboard: не-картинка и пустой буфер → null', () => {
+  const txt = new File(['x'], 'a.txt', { type: 'text/plain' })
+  assert.equal(imageFromClipboard({ files: [txt] } as unknown as DataTransfer), null)
+  assert.equal(imageFromClipboard({ files: [] } as unknown as DataTransfer), null)
+  assert.equal(imageFromClipboard(null), null)
+})
 
 test('diffChangedElements: новые и изменённые элементы попадают в changed', () => {
   const prev = new Map([['a', 1], ['b', 2]])
