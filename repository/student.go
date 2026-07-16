@@ -254,9 +254,9 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	         WHERE l.course_id IN (SELECT id FROM stu_courses)`
 	var q string
 	if past {
-		q = base + ` AND l.scheduled_at < now() ORDER BY l.scheduled_at DESC`
+		q = base + ` AND l.scheduled_at + l.duration_minutes * interval '1 minute' < now() ORDER BY l.scheduled_at DESC`
 	} else {
-		q = base + ` AND l.scheduled_at >= now() ORDER BY l.scheduled_at ASC`
+		q = base + ` AND l.scheduled_at + l.duration_minutes * interval '1 minute' >= now() ORDER BY l.scheduled_at ASC`
 	}
 	rows, err := r.conn.Query(ctx, q, studentID)
 	if err != nil {
