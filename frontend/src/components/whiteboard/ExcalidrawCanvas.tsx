@@ -56,6 +56,12 @@ const YT_RATIO = YT_HEIGHT / YT_WIDTH
 // Меньше — считаем округлением, а не растяжкой: чинить каждый onChange незачем.
 const ASPECT_EPS = 0.5
 
+// Толщина пера: рендерер умножает strokeWidth на 4.25, так что штатное «тонкое»
+// (1) — это 4.25px. Тулбар предлагает только 1/2/4, но поле элемента — обычный
+// number, поэтому 0.5 (≈2.1px) валидно и даёт перо тоньше минимального.
+const UNIFORM_PEN_WIDTH = 0.5
+const DEFAULT_PEN_WIDTH = 1
+
 interface Props {
   page: BoardPage | null
   token?: string
@@ -125,10 +131,38 @@ export function ExcalidrawCanvas({
   const pdfRef = useRef<PDFDocumentProxy | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const [materialsOpen, setMaterialsOpen] = useState(false)
+  const [uniformPen, setUniformPen] = useState(false)
   const [pdfDialog, setPdfDialog] = useState<{
     numPages: number
     point: { x: number; y: number }
   } | null>(null)
+
+  // Флаг читает пропатченный бандл Excalidraw в момент создания freedraw-элемента
+  // (см. scripts/excalidraw-pen.mjs): при __uniformPen он ставит элементу
+  // simulatePressure:false, и толщина перестаёт зависеть от скорости. Дальше всё
+  // штатное — поле едет по WS, ученик рендерит то же перо.
+  useEffect(() => {
+    const g = globalThis as { __uniformPen?: boolean }
+    g.__uniformPen = uniformPen
+    return () => {
+      g.__uniformPen = false
+    }
+  }, [uniformPen])
+
+  const toggleUniformPen = useCallback(() => {
+    setUniformPen((on) => {
+      const next = !on
+      apiRef.current?.updateScene({
+        appState: {
+          currentItemStrokeWidth: next ? UNIFORM_PEN_WIDTH : DEFAULT_PEN_WIDTH,
+        },
+        // Смена пера — не правка сцены, в undo ей делать нечего.
+        captureUpdate: CaptureUpdateAction.EVENTUALLY,
+      })
+      if (next) apiRef.current?.setActiveTool({ type: 'freedraw' })
+      return next
+    })
+  }, [])
 
   // Общий путь вставки картинки: S3 → локальный dataURL → files-карта →
   // image-элемент. Base64 в WS/снапшот не попадает (только URL).
@@ -440,6 +474,36 @@ export function ExcalidrawCanvas({
               data-board-ui
               style={{ position: 'relative', display: 'flex', gap: 4 }}
             >
+              {/* Ровное перо: без «нажима» от скорости и тоньше штатного
+                  «тонкого». Гостю тоже нужно — рисуют оба. */}
+              <button
+                title={uniformPen ? 'Обычное перо' : 'Ровное перо'}
+                aria-pressed={uniformPen}
+                onClick={toggleUniformPen}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  border: 'none',
+                  background: uniformPen ? 'var(--color-primary-light)' : 'transparent',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  padding: '6px 8px',
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 19l7-7a2.8 2.8 0 0 0-4-4l-7 7-1 5z" />
+                  <path d="M3 21h6" />
+                </svg>
+              </button>
               {/* Вставка картинки через S3 (нативный image-инструмент
                   Excalidraw отключён — он кладёт base64 в снапшот). */}
               {!isGuest && (
