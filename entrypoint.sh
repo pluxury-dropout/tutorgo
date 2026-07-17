@@ -18,5 +18,7 @@ until nc -z "$DB_HOST" "$DB_PORT"; do
 done
 echo "PostgreSQL is ready."
 
-./goose -dir migrations postgres "$DB_URL" up
+if [ "$ROLE" != "worker" ]; then
+  ./goose -dir migrations postgres "$DB_URL" up
+fi
 exec ./main

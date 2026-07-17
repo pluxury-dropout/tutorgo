@@ -17,6 +17,9 @@ import (
 	"tutorgo/router"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 )
 
 func runIntervalLoop(ctx context.Context, interval time.Duration, name string, job func(context.Context) (int64, error), log *slog.Logger) {
@@ -47,6 +50,23 @@ func main() {
 
 	pool := database.Connect(cfg.DBUrl, log)
 	defer pool.Close()
+
+	// Схема River (river_job и служебные таблицы) — программной миграцией,
+	// не через goose: у River свои версии. Идемпотентно, гоняется обеими ролями.
+	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
+	if err != nil {
+		log.Error("river migrator", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	if _, err := migrator.Migrate(context.Background(), rivermigrate.DirectionUp, nil); err != nil {
+		log.Error("river migrate", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	if os.Getenv("ROLE") == "worker" {
+		runWorker(pool, &cfg, log) // блокируется до SIGTERM
+		return
+	}
 
 	r, subscriptionService := router.Setup(pool, log, &cfg)
 
@@ -101,4 +121,11 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("Server exited cleanly")
+}
+
+// runWorker — роль worker: River-воркер PDF-импортов. Тело появится вместе с
+// пакетом worker; до тех пор роль нерабочая.
+func runWorker(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger) {
+	log.Error("worker role not implemented yet")
+	os.Exit(1)
 }
