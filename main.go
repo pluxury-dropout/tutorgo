@@ -13,6 +13,7 @@ import (
 
 	"tutorgo/config"
 	"tutorgo/database"
+	"tutorgo/handlers"
 	"tutorgo/repository"
 	"tutorgo/router"
 	"tutorgo/worker"
@@ -69,7 +70,7 @@ func main() {
 		return
 	}
 
-	r, subscriptionService := router.Setup(pool, log, &cfg)
+	r, subscriptionService, wbHubManager := router.Setup(pool, log, &cfg)
 
 	// Auto-complete: mark expired lessons as completed every minute
 	lessonRepo := repository.NewLessonRepository(pool)
@@ -84,6 +85,9 @@ func main() {
 	})
 	bgWg.Go(func() {
 		runIntervalLoop(bgCtx, 10*time.Minute, "cleanup pending registrations", pendingRepo.DeleteExpired, log)
+	})
+	bgWg.Go(func() {
+		handlers.ListenBoardEvents(bgCtx, pool, wbHubManager, log)
 	})
 
 	r.GET("/health", func(c *gin.Context) {

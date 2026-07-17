@@ -22,7 +22,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engine, service.SubscriptionService) {
+func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engine, service.SubscriptionService, *handlers.WbHubManager) {
 	// Repositories
 	tutorRepo := repository.NewTutorRepository(pool)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(pool)
@@ -246,5 +246,5 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		stu.POST("/password", studentAuthHandler.ChangePassword)
 	}
 
-	return r, subscriptionService
+	return r, subscriptionService, wbHubManager
 }

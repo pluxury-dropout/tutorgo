@@ -297,6 +297,26 @@ func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbH
 	return hub
 }
 
+// PushToPage вбрасывает серверное сообщение в хаб страницы. Если хаба нет —
+// никто не подключён, и слать некому: молча выходим (клиент увидит контент из
+// снапшота/S3 при следующем подключении). sender=nil ⇒ run() раздаст всем.
+// ВАЖНО: только для типов, которые run() ретранслирует вербатим (default-ветка);
+// cursor/viewport разыменовывают sender и с nil упадут.
+func (m *WbHubManager) PushToPage(pageID string, data []byte) {
+	m.mu.Lock()
+	hub, ok := m.hubs[pageID]
+	m.mu.Unlock()
+	if !ok {
+		return
+	}
+	select {
+	case hub.broadcast <- wbBroadcast{sender: nil, data: data}:
+	default:
+		// Переполненный канал — не повод блокировать слушателя NOTIFY.
+		m.log.Warn("board hub broadcast full, drop server event", slog.String("pageId", pageID))
+	}
+}
+
 // authorizeWS validates the ?token= query param. It first tries to parse it as a
 // tutor access JWT (same scheme as middleware.Auth); on success it requires that
 // pageID's board belongs to the tutor. Otherwise it treats the token as an invite
