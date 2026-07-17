@@ -1,5 +1,12 @@
 import { api } from './client'
-import type { BoardWithPages, BoardPage, BoardInvite, BoardAssetResponse } from '@/types/api'
+import type {
+  BoardWithPages,
+  BoardPage,
+  BoardInvite,
+  BoardAssetResponse,
+  PdfPreflightResponse,
+  PdfStartResponse,
+} from '@/types/api'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
@@ -45,6 +52,23 @@ export const whiteboardApi = {
       })
       .then((r) => r.data)
   },
+
+  // Preflight: оригинал PDF уезжает на сервер, обратно — паспорт документа.
+  uploadPdf: (boardId: string, pageId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('page_id', pageId)
+    return api
+      .post<PdfPreflightResponse>(`/boards/${boardId}/pdf`, form, {
+        headers: { 'Content-Type': false }, // boundary выставит браузер
+      })
+      .then((r) => r.data)
+  },
+
+  startPdfImport: (importId: string, from: number, to: number) =>
+    api
+      .post<PdfStartResponse>(`/pdf-imports/${importId}/start`, { from, to })
+      .then((r) => r.data),
 }
 
 export function getWsUrl(pageId: string, token?: string): string {

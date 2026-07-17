@@ -21,7 +21,6 @@ import type {
   FileId,
   ExcalidrawElement,
 } from '@excalidraw/excalidraw/element/types'
-import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
@@ -34,7 +33,6 @@ import { useMediaPlayer } from './useMediaPlayer'
 import { useYouTubeSync } from './useYouTubeSync'
 import { YouTubeEmbed } from './YouTubeEmbed'
 import { parseYouTubeId, type MediaPayload } from './mediaSync'
-import { loadPdf, pageSize, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
 import { withRetry } from '@/lib/retry'
 import type { BoardPage, Material } from '@/types/api'
@@ -50,11 +48,6 @@ if (typeof window !== 'undefined') {
 const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
-
-// ponytail: 4 страницы PDF в работе одновременно — вслепую, без замеров.
-// Растеризация всё равно упирается в main thread; апгрейд, если упрёмся, —
-// рендер в пуле воркеров через OffscreenCanvas.
-const PAGE_CONCURRENCY = 4
 
 // Стартовый размер ролика на доске — 16:9, дальше препод тянет за угол.
 const YT_WIDTH = 560
@@ -114,6 +107,29 @@ export function ExcalidrawCanvas({
     [player, yt]
   )
 
+  // Ожидаемые страницы текущего импорта: file-события с этими id двигают тост.
+  const pdfProgressRef = useRef<{ pending: Set<string>; total: number; toastId: string } | null>(null)
+
+  const onPdfFile = useCallback((fileId: string) => {
+    const pr = pdfProgressRef.current
+    if (!pr || !pr.pending.delete(fileId)) return
+    const done = pr.total - pr.pending.size
+    if (pr.pending.size === 0) {
+      toast.success(`PDF вставлен: ${pr.total} стр.`, { id: pr.toastId })
+      pdfProgressRef.current = null
+    } else {
+      toast.loading(`PDF: ${done} / ${pr.total}…`, { id: pr.toastId })
+    }
+  }, [])
+
+  const onPdfFailed = useCallback((fileIds: string[]) => {
+    const pr = pdfProgressRef.current
+    if (pr && fileIds.some((id) => pr.pending.has(id))) {
+      toast.error('Не удалось обработать PDF', { id: pr.toastId })
+      pdfProgressRef.current = null
+    }
+  }, [])
+
   const {
     status,
     onApiReady,
@@ -122,7 +138,7 @@ export function ExcalidrawCanvas({
     broadcastViewport,
     registerFile,
     sendMedia,
-  } = useExcalidrawSync(page, token, identity, onMedia)
+  } = useExcalidrawSync(page, token, identity, onMedia, onPdfFile, onPdfFailed)
   useEffect(() => {
     sendMediaRef.current = sendMedia
   }, [sendMedia])
@@ -135,7 +151,8 @@ export function ExcalidrawCanvas({
 
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
 
-  const pdfRef = useRef<PDFDocumentProxy | null>(null)
+  // Паспорт preflight'а: PDF уже на сервере, ждём выбора диапазона.
+  const pdfImportRef = useRef<{ importId: string; sizes: { w: number; h: number }[] } | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const [materialsOpen, setMaterialsOpen] = useState(false)
   const [uniformPen, setUniformPen] = useState(false)
@@ -289,44 +306,37 @@ export function ExcalidrawCanvas({
   }
 
   // Диалог закрывается сразу, обработка идёт в фоне с прогрессом в toast.
+  // Раскладка и плейсхолдеры встают сразу, страницы проявляются file-событиями
+  // по мере того, как сервер их рендерит.
   const handlePdfConfirm = (from: number, to: number) => {
-    const pdf = pdfRef.current
+    const imp = pdfImportRef.current
     const origin = pdfDialog?.point
-    if (!pdf || !origin) return
-    // Забираем владение документом: диалог закрыт, следующий drop перезапишет ref.
-    pdfRef.current = null
+    if (!imp || !origin) return
+    pdfImportRef.current = null
     setPdfDialog(null)
 
     const toastId = `pdf-${Date.now()}`
-    const pages = Array.from({ length: to - from + 1 }, (_, k) => from + k)
-    const total = pages.length
-    toast.loading(`PDF: 0 / ${total}…`, { id: toastId })
+    toast.loading('PDF: готовим страницы…', { id: toastId })
 
     void (async () => {
       const api = apiRef.current
       if (!api) return
-      let done = 0
-      let failed = 0
-      const progress = () =>
-        toast.loading(`PDF: ${done} / ${total}…`, { id: toastId })
       try {
-        // Как в Miro: сначала весь документ разом встаёт на доску рамками, потом
-        // страницы проявляются. Габариты берём без растеризации, поэтому
-        // раскладка готова раньше, чем отрисуется первая страница.
-        const sizes = await Promise.all(pages.map((p) => pageSize(pdf, p)))
-        const placed = layoutPages(sizes, origin)
-        const fileIds = pages.map(() => crypto.randomUUID() as FileId)
+        const { pages } = await whiteboardApi.startPdfImport(imp.importId, from, to)
+        // Сервер отдаёт пункты PDF — масштаб сцены наш.
+        const LAYOUT_SCALE = 1.5
+        const placed = layoutPages(
+          pages.map((p) => ({ w: p.w * LAYOUT_SCALE, h: p.h * LAYOUT_SCALE })),
+          origin
+        )
         const els = convertToExcalidrawElements(
           placed.map((l, k) => ({
             type: 'image' as const,
-            fileId: fileIds[k],
+            fileId: pages[k].file_id as FileId,
             x: l.x,
             y: l.y,
             width: l.w,
             height: l.h,
-            // Файла ещё нет — Excalidraw держит рамку-плейсхолдер и сам заменит
-            // её картинкой, когда доедет addFiles. Тем же путём страницы
-            // проявляются у пира, которому элемент приходит раньше файла.
             status: 'pending' as const,
           }))
         )
@@ -334,65 +344,20 @@ export function ExcalidrawCanvas({
           elements: [...api.getSceneElementsIncludingDeleted(), ...els],
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         })
-
-        // Дальше страницы едут пулом: пока одна растеризуется на main thread,
-        // соседние кодируются в webp и льются в S3 — это и даёт параллельность.
-        const dead = new Set<FileId>()
-        let next = 0
-        const worker = async () => {
-          while (next < pages.length) {
-            const k = next++
-            const i = pages[k]
-            try {
-              const p = await renderPage(pdf, i)
-              await uploadFile(
-                fileIds[k],
-                p.blob,
-                p.mimeType,
-                `page-${i}.${p.mimeType.split('/')[1]}`
-              )
-              done++
-            } catch (e) {
-              // Упавшая страница не уносит остальные: 49 из 50 лучше, чем ноль.
-              failed++
-              dead.add(fileIds[k])
-              console.error(`PDF: страница ${i}`, e)
-            }
-            progress()
-          }
+        // Указатели fileId→URL сразу в files-карту и пирам: раскладка и ссылки
+        // переживают закрытие вкладки — сервер дорендерит без нас.
+        for (const p of pages) {
+          registerFile(p.file_id, `${BASE_URL}${p.url}`, 'image/jpeg')
         }
-        await Promise.all(
-          Array.from({ length: Math.min(PAGE_CONCURRENCY, total) }, worker)
-        )
-
-        if (failed) {
-          // Файла для этих рамок не будет уже никогда — убираем, иначе вечный
-          // серый плейсхолдер уедет к пиру и переживёт перезагрузку.
-          api.updateScene({
-            elements: api
-              .getSceneElementsIncludingDeleted()
-              .map((el) =>
-                el.type === 'image' && el.fileId && dead.has(el.fileId)
-                  ? newElementWith(el, { isDeleted: true })
-                  : el
-              ),
-            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-          })
-          toast.error(
-            `PDF: вставлено ${done} из ${total} стр., ${failed} не удалось`,
-            { id: toastId }
-          )
-        } else {
-          toast.success(`PDF вставлен: ${total} стр.`, { id: toastId })
+        pdfProgressRef.current = {
+          pending: new Set(pages.map((p) => p.file_id)),
+          total: pages.length,
+          toastId,
         }
+        toast.loading(`PDF: 0 / ${pages.length}…`, { id: toastId })
       } catch (e) {
-        // Сюда падает только раскладка — воркеры свои ошибки гасят сами.
         const msg = (e as { message?: string })?.message
-        toast.error(`Не удалось обработать PDF${msg ? `: ${msg}` : ''}`, {
-          id: toastId,
-        })
-      } finally {
-        void pdf.cleanup()
+        toast.error(`Не удалось обработать PDF${msg ? `: ${msg}` : ''}`, { id: toastId })
       }
     })()
   }
@@ -493,6 +458,7 @@ export function ExcalidrawCanvas({
 
   const onDropCapture = (e: React.DragEvent) => {
     if (isGuest) return // гостю вставка недоступна (кнопки скрыты) — не ловим drop
+    if (!page) return // канвас без страницы доски не смонтирован — drop невозможен
     const file = Array.from(e.dataTransfer?.files ?? []).find(
       (f) => f.type === 'application/pdf'
     )
@@ -508,11 +474,9 @@ export function ExcalidrawCanvas({
       : { x: 0, y: 0 }
     void (async () => {
       try {
-        const pdf = await loadPdf(file)
-        // Повторный drop поверх незакрытого документа — чистим старый.
-        void pdfRef.current?.cleanup()
-        pdfRef.current = pdf
-        setPdfDialog({ numPages: pdf.numPages, point })
+        const preflight = await whiteboardApi.uploadPdf(boardId, page.id, file)
+        pdfImportRef.current = { importId: preflight.import_id, sizes: preflight.page_sizes }
+        setPdfDialog({ numPages: preflight.num_pages, point })
       } catch {
         toast.error('Не удалось открыть PDF')
       }
@@ -727,8 +691,7 @@ export function ExcalidrawCanvas({
             numPages={pdfDialog.numPages}
             onConfirm={handlePdfConfirm}
             onCancel={() => {
-              void pdfRef.current?.cleanup()
-              pdfRef.current = null
+              pdfImportRef.current = null
               setPdfDialog(null)
             }}
           />

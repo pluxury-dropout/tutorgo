@@ -174,6 +174,23 @@ export interface BoardWithPages extends Board {
   pages: BoardPage[]
 }
 
+export interface PdfPreflightResponse {
+  import_id: string
+  num_pages: number
+  page_sizes: { w: number; h: number }[] // пункты PDF
+}
+
+export interface PdfImportPageOut {
+  file_id: string
+  url: string // относительный, префиксуем BASE_URL
+  w: number
+  h: number
+}
+
+export interface PdfStartResponse {
+  pages: PdfImportPageOut[]
+}
+
 export type MaterialKind = 'folder' | 'file'
 
 /** Элемент библиотеки препода: папка (kind: 'folder') или файл. У папок

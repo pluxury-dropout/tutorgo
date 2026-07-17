@@ -6,6 +6,7 @@ import {
   CaptureUpdateAction,
   zoomToFitBounds,
   getVisibleSceneBounds,
+  newElementWith,
 } from '@excalidraw/excalidraw'
 import type { SceneBounds } from '@excalidraw/excalidraw/element/bounds'
 import type {
@@ -20,7 +21,7 @@ import type {
   FileId,
 } from '@excalidraw/excalidraw/element/types'
 import type { RemoteExcalidrawElement } from '@excalidraw/excalidraw/data/reconcile'
-import { getWsUrl } from '@/lib/api/whiteboard'
+import { getWsUrl, BASE_URL } from '@/lib/api/whiteboard'
 import { getTokenAsync } from '@/lib/api/client'
 import {
   diffChangedElements,
@@ -60,7 +61,9 @@ export function useExcalidrawSync(
   page: BoardPage | null,
   token?: string,
   identity?: BoardIdentity,
-  onMedia?: (p: MediaPayload) => void
+  onMedia?: (p: MediaPayload) => void,
+  onFile?: (fileId: string) => void,
+  onImportFailed?: (fileIds: string[]) => void
 ): ExcalidrawSyncResult {
   const displayName = identity?.name
   const myUid = identity?.uid
@@ -70,6 +73,12 @@ export function useExcalidrawSync(
   useEffect(() => {
     onMediaRef.current = onMedia
   }, [onMedia])
+  const onFileRef = useRef(onFile)
+  const onImportFailedRef = useRef(onImportFailed)
+  useEffect(() => {
+    onFileRef.current = onFile
+    onImportFailedRef.current = onImportFailed
+  }, [onFile, onImportFailed])
   const [status, setStatus] = useState<ConnStatus>('connecting')
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -132,7 +141,8 @@ export function useExcalidrawSync(
       if (have[id]) continue
       void (async () => {
         try {
-          const resp = await fetch(meta.url)
+          const src = meta.url.startsWith('/') ? `${BASE_URL}${meta.url}` : meta.url
+          const resp = await fetch(src)
           if (!resp.ok) throw new Error(`${resp.status}`)
           const dataURL = await blobToDataURL(await resp.blob())
           apiRef.current?.addFiles([
@@ -280,8 +290,31 @@ export function useExcalidrawSync(
           url?: string
           mimeType?: string
         }
-        if (p?.fileId && p.url && p.mimeType)
+        if (p?.fileId && p.url && p.mimeType) {
           hydrateFiles({ [p.fileId]: { url: p.url, mimeType: p.mimeType } })
+          onFileRef.current?.(p.fileId)
+        }
+        return
+      }
+
+      // Сервер не смог отрендерить PDF: убираем плейсхолдеры навсегда —
+      // файла для них не будет. Тумбстоуны уедут пирам обычным диффом.
+      if (msg.type === 'import_failed') {
+        const p = msg.payload as { fileIds?: string[] }
+        const dead = new Set(p?.fileIds ?? [])
+        const api = apiRef.current
+        if (!api || dead.size === 0) return
+        api.updateScene({
+          elements: api
+            .getSceneElementsIncludingDeleted()
+            .map((el) =>
+              el.type === 'image' && el.fileId && dead.has(el.fileId)
+                ? newElementWith(el, { isDeleted: true })
+                : el
+            ),
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        })
+        onImportFailedRef.current?.(p?.fileIds ?? [])
         return
       }
 
