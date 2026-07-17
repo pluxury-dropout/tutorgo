@@ -45,12 +45,20 @@ func (h *PdfImportHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "page_id required"})
 		return
 	}
-	file, header, err := c.Request.FormFile("file")
+	// c.FormFile возвращает только заголовок — сам файл нам не нужен, читаем
+	// его с диска через SaveUploadedFile/os.Open ниже. Глобальный middleware
+	// уже обернул тело в http.MaxBytesReader(50MB); при превышении лимита
+	// ошибка приходит сюда как *http.MaxBytesError — отличаем её от "нет файла".
+	header, err := c.FormFile("file")
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 50MB)"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file required"})
 		return
 	}
-	defer file.Close()
 	if header.Size > maxPdfBytes {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file too large (max 50MB)"})
 		return
@@ -63,21 +71,23 @@ func (h *PdfImportHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	defer os.Remove(tmp.Name())
-	if err := c.SaveUploadedFile(header, tmp.Name()); err != nil {
+	tmpName := tmp.Name()
+	tmp.Close() // нужен только путь; SaveUploadedFile/os.Open открывают файл сами
+	defer os.Remove(tmpName)
+	if err := c.SaveUploadedFile(header, tmpName); err != nil {
 		h.log.Error("pdf upload: save", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	sizes, err := h.infoFn(c.Request.Context(), tmp.Name())
+	sizes, err := h.infoFn(c.Request.Context(), tmpName)
 	if err != nil {
 		h.log.Warn("pdf upload: pdfinfo", "err", err)
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "не удалось прочитать PDF"})
 		return
 	}
 
-	src, err := os.Open(tmp.Name())
+	src, err := os.Open(tmpName)
 	if err != nil {
 		h.log.Error("pdf upload: reopen", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -118,12 +128,12 @@ func (h *PdfImportHandler) Start(c *gin.Context) {
 	}
 	resp, err := h.svc.Start(c.Request.Context(), c.Param("id"), tutorID, req.From, req.To)
 	if err != nil {
-		if errors.Is(err, service.ErrForbidden) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-			return
+		// ErrForbidden/ErrNotFound/ErrBadRequest — ожидаемые исходы, маппит
+		// handleServiceError; всё прочее — неожиданно, логируем перед 500.
+		if !errors.Is(err, service.ErrForbidden) && !errors.Is(err, service.ErrNotFound) && !errors.Is(err, service.ErrBadRequest) {
+			h.log.Error("pdf import start", "err", err)
 		}
-		h.log.Warn("pdf import start", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)

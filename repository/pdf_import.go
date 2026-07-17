@@ -3,12 +3,20 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"tutorgo/models"
+)
+
+var (
+	// ErrImportAlreadyStarted — Start вызван повторно (status уже не pending).
+	ErrImportAlreadyStarted = errors.New("import already started")
+	// ErrBadPageRange — запрошенный диапазон страниц невалиден или выходит за границы документа.
+	ErrBadPageRange = errors.New("bad page range")
 )
 
 type PdfImportRepository interface {
@@ -81,14 +89,14 @@ func (r *pdfImportRepository) Start(ctx context.Context, id string, from, to int
 		return nil, err
 	}
 	if status != "pending" {
-		return nil, fmt.Errorf("import %s already started (status %s)", id, status)
+		return nil, fmt.Errorf("import %s already started (status %s): %w", id, status, ErrImportAlreadyStarted)
 	}
 	var all []models.PdfImportPage
 	if err := json.Unmarshal(pagesJSON, &all); err != nil {
 		return nil, err
 	}
 	if from < 1 || to > len(all) || from > to {
-		return nil, fmt.Errorf("range %d-%d out of 1-%d", from, to, len(all))
+		return nil, fmt.Errorf("range %d-%d out of 1-%d: %w", from, to, len(all), ErrBadPageRange)
 	}
 
 	selected := all[from-1 : to] // страницы 1-индексированы и лежат по порядку

@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"tutorgo/models"
+	"tutorgo/repository"
 	"tutorgo/service"
 )
 
@@ -90,6 +92,26 @@ func TestStartChecksOwnership(t *testing.T) {
 
 	_, err := svc.Start(context.Background(), "imp1", "t1", 1, 2)
 	assert.ErrorIs(t, err, service.ErrForbidden)
+}
+
+func TestStartOnMissingImportReturnsNotFound(t *testing.T) {
+	repo := new(mockPdfImportRepo)
+	svc := service.NewPdfImportService(repo, noEnqueue)
+	repo.On("GetByID", mock.Anything, "missing").Return(models.PdfImport{}, pgx.ErrNoRows)
+
+	_, err := svc.Start(context.Background(), "missing", "t1", 1, 2)
+	assert.ErrorIs(t, err, service.ErrNotFound)
+}
+
+func TestStartAlreadyStartedReturnsBadRequest(t *testing.T) {
+	repo := new(mockPdfImportRepo)
+	svc := service.NewPdfImportService(repo, noEnqueue)
+	repo.On("GetByID", mock.Anything, "imp1").Return(models.PdfImport{ID: "imp1", TutorID: "t1"}, nil)
+	repo.On("Start", mock.Anything, "imp1", 1, 2, mock.Anything).Return(
+		[]models.PdfImportPage(nil), fmt.Errorf("import imp1 already started (status rendering): %w", repository.ErrImportAlreadyStarted))
+
+	_, err := svc.Start(context.Background(), "imp1", "t1", 1, 2)
+	assert.ErrorIs(t, err, service.ErrBadRequest)
 }
 
 func TestStartBuildsRelativeURLs(t *testing.T) {

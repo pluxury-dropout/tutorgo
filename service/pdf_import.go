@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
@@ -55,6 +57,9 @@ func (s *pdfImportService) CreateImport(ctx context.Context, boardID, pageID, tu
 func (s *pdfImportService) Start(ctx context.Context, importID, tutorID string, from, to int) (models.PdfStartResponse, error) {
 	imp, err := s.repo.GetByID(ctx, importID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.PdfStartResponse{}, fmt.Errorf("import: %w", ErrNotFound)
+		}
 		return models.PdfStartResponse{}, err
 	}
 	if imp.TutorID != tutorID {
@@ -64,6 +69,11 @@ func (s *pdfImportService) Start(ctx context.Context, importID, tutorID string, 
 		return s.enqueue(ctx, tx, importID)
 	})
 	if err != nil {
+		// ErrImportAlreadyStarted/ErrBadPageRange — наши безопасные сообщения,
+		// клиент может показать err.Error() напрямую (см. handleServiceError).
+		if errors.Is(err, repository.ErrImportAlreadyStarted) || errors.Is(err, repository.ErrBadPageRange) {
+			return models.PdfStartResponse{}, fmt.Errorf("%v: %w", err, ErrBadRequest)
+		}
 		return models.PdfStartResponse{}, err
 	}
 	out := make([]models.PdfImportPageOut, len(selected))
