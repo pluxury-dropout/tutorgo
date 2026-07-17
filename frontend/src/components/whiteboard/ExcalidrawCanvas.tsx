@@ -27,14 +27,16 @@ import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
 import { PdfRangeDialog } from './PdfRangeDialog'
+import { layoutPages } from '@/lib/pdfRange'
 import { MaterialsPanel } from './MaterialsPanel'
 import { MediaPlayer } from './MediaPlayer'
 import { useMediaPlayer } from './useMediaPlayer'
 import { useYouTubeSync } from './useYouTubeSync'
 import { YouTubeEmbed } from './YouTubeEmbed'
 import { parseYouTubeId, type MediaPayload } from './mediaSync'
-import { loadPdf, renderPage } from '@/lib/pdf'
+import { loadPdf, pageSize, renderPage } from '@/lib/pdf'
 import { whiteboardApi, BASE_URL } from '@/lib/api/whiteboard'
+import { withRetry } from '@/lib/retry'
 import type { BoardPage, Material } from '@/types/api'
 
 // Шрифты берём из public/fonts (см. scripts/excalidraw-fonts.mjs). Без этого
@@ -49,9 +51,10 @@ const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 
-// ponytail: 4 параллельные заливки страниц PDF — вслепую, без замеров.
-// Апгрейд, если упрёмся: адаптивная глубина по времени ответа.
-const UPLOAD_CONCURRENCY = 4
+// ponytail: 4 страницы PDF в работе одновременно — вслепую, без замеров.
+// Растеризация всё равно упирается в main thread; апгрейд, если упрёмся, —
+// рендер в пуле воркеров через OffscreenCanvas.
+const PAGE_CONCURRENCY = 4
 
 // Стартовый размер ролика на доске — 16:9, дальше препод тянет за угол.
 const YT_WIDTH = 560
@@ -168,16 +171,12 @@ export function ExcalidrawCanvas({
     })
   }, [])
 
-  // Общий путь вставки картинки: S3 → локальный dataURL → files-карта →
-  // image-элемент. Base64 в WS/снапшот не попадает (только URL).
-  const insertImageBlob = useCallback(
-    async (
-      blob: Blob,
-      mimeType: string,
-      pos: { x: number; y: number },
-      size: { w: number; h: number },
-      fileName: string
-    ) => {
+  // Заливает картинку и отдаёт её Excalidraw под заранее известным fileId:
+  // S3 → локальный dataURL → files-карта. Base64 в WS/снапшот не попадает
+  // (только URL). fileId приходит снаружи, чтобы image-элемент можно было
+  // положить на доску ДО заливки — addFiles потом сам дорисует его на месте.
+  const uploadFile = useCallback(
+    async (fileId: FileId, blob: Blob, mimeType: string, fileName: string) => {
       const api = apiRef.current
       if (!api) return
       const file = new File([blob], fileName, { type: mimeType })
@@ -188,14 +187,15 @@ export function ExcalidrawCanvas({
         )
       }
       // Гость (ученик) не имеет tutor JWT — льёт через публичный роут по invite-токену.
-      const { url } = await whiteboardApi.uploadAsset(
-        boardId,
-        file,
-        isGuest ? token : undefined
+      // Повторяем транзиентные сбои: одна моргнувшая заливка из полусотни — это
+      // дыра посреди документа, а не «ну не повезло».
+      const { url } = await withRetry(() =>
+        whiteboardApi.uploadAsset(boardId, file, isGuest ? token : undefined)
       )
       const fullUrl = `${BASE_URL}${url}`
-      const fileId = crypto.randomUUID() as FileId
       const dataURL = (await blobToDataURL(blob)) as DataURL
+      // addFiles чистит image-кэш и передёргивает сцену — уже стоящий на доске
+      // pending-элемент с этим fileId сам сменит плейсхолдер на картинку.
       api.addFiles([
         {
           id: fileId,
@@ -205,6 +205,24 @@ export function ExcalidrawCanvas({
         },
       ])
       registerFile(fileId, fullUrl, mimeType)
+    },
+    [boardId, registerFile, isGuest, token]
+  )
+
+  // Одиночная картинка (вставка из буфера, drop с диска): заливаем, потом кладём
+  // на доску. Плейсхолдер тут не нужен — ждать всё равно нечего.
+  const insertImageBlob = useCallback(
+    async (
+      blob: Blob,
+      mimeType: string,
+      pos: { x: number; y: number },
+      size: { w: number; h: number },
+      fileName: string
+    ) => {
+      const api = apiRef.current
+      if (!api) return
+      const fileId = crypto.randomUUID() as FileId
+      await uploadFile(fileId, blob, mimeType, fileName)
       const [el] = convertToExcalidrawElements([
         {
           type: 'image',
@@ -220,7 +238,7 @@ export function ExcalidrawCanvas({
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       })
     },
-    [boardId, registerFile, isGuest, token]
+    [uploadFile]
   )
 
   // Центр вьюпорта в координатах сцены — точка вставки по кнопке.
@@ -280,49 +298,86 @@ export function ExcalidrawCanvas({
     setPdfDialog(null)
 
     const toastId = `pdf-${Date.now()}`
-    const total = to - from + 1
+    const pages = Array.from({ length: to - from + 1 }, (_, k) => from + k)
+    const total = pages.length
     toast.loading(`PDF: 0 / ${total}…`, { id: toastId })
 
     void (async () => {
+      const api = apiRef.current
+      if (!api) return
       let done = 0
       let failed = 0
       const progress = () =>
         toast.loading(`PDF: ${done} / ${total}…`, { id: toastId })
-      // Рендер серийный (pdf.js всё равно держит один worker), а заливки летят
-      // пулом: сеть — самая долгая часть вставки, простаивать ей незачем.
-      const inFlight = new Set<Promise<void>>()
-      let x = origin.x
       try {
-        for (let i = from; i <= to; i++) {
-          const p = await renderPage(pdf, i)
-          const at = { x, y: origin.y }
-          x += p.width // встык по горизонтали
-          const task = insertImageBlob(
-            p.blob,
-            p.mimeType,
-            at,
-            { w: p.width, h: p.height },
-            `page-${i}.${p.mimeType.split('/')[1]}`
-          )
-            .then(
-              () => {
-                done++
-              },
+        // Как в Miro: сначала весь документ разом встаёт на доску рамками, потом
+        // страницы проявляются. Габариты берём без растеризации, поэтому
+        // раскладка готова раньше, чем отрисуется первая страница.
+        const sizes = await Promise.all(pages.map((p) => pageSize(pdf, p)))
+        const placed = layoutPages(sizes, origin)
+        const fileIds = pages.map(() => crypto.randomUUID() as FileId)
+        const els = convertToExcalidrawElements(
+          placed.map((l, k) => ({
+            type: 'image' as const,
+            fileId: fileIds[k],
+            x: l.x,
+            y: l.y,
+            width: l.w,
+            height: l.h,
+            // Файла ещё нет — Excalidraw держит рамку-плейсхолдер и сам заменит
+            // её картинкой, когда доедет addFiles. Тем же путём страницы
+            // проявляются у пира, которому элемент приходит раньше файла.
+            status: 'pending' as const,
+          }))
+        )
+        api.updateScene({
+          elements: [...api.getSceneElementsIncludingDeleted(), ...els],
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        })
+
+        // Дальше страницы едут пулом: пока одна растеризуется на main thread,
+        // соседние кодируются в webp и льются в S3 — это и даёт параллельность.
+        const dead = new Set<FileId>()
+        let next = 0
+        const worker = async () => {
+          while (next < pages.length) {
+            const k = next++
+            const i = pages[k]
+            try {
+              const p = await renderPage(pdf, i)
+              await uploadFile(
+                fileIds[k],
+                p.blob,
+                p.mimeType,
+                `page-${i}.${p.mimeType.split('/')[1]}`
+              )
+              done++
+            } catch (e) {
               // Упавшая страница не уносит остальные: 49 из 50 лучше, чем ноль.
-              (e: unknown) => {
-                failed++
-                console.error(`PDF: страница ${i}`, e)
-              }
-            )
-            .finally(() => {
-              inFlight.delete(task)
-              progress()
-            })
-          inFlight.add(task)
-          if (inFlight.size >= UPLOAD_CONCURRENCY) await Promise.race(inFlight)
+              failed++
+              dead.add(fileIds[k])
+              console.error(`PDF: страница ${i}`, e)
+            }
+            progress()
+          }
         }
-        await Promise.all(inFlight)
+        await Promise.all(
+          Array.from({ length: Math.min(PAGE_CONCURRENCY, total) }, worker)
+        )
+
         if (failed) {
+          // Файла для этих рамок не будет уже никогда — убираем, иначе вечный
+          // серый плейсхолдер уедет к пиру и переживёт перезагрузку.
+          api.updateScene({
+            elements: api
+              .getSceneElementsIncludingDeleted()
+              .map((el) =>
+                el.type === 'image' && el.fileId && dead.has(el.fileId)
+                  ? newElementWith(el, { isDeleted: true })
+                  : el
+              ),
+            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+          })
           toast.error(
             `PDF: вставлено ${done} из ${total} стр., ${failed} не удалось`,
             { id: toastId }
@@ -331,7 +386,7 @@ export function ExcalidrawCanvas({
           toast.success(`PDF вставлен: ${total} стр.`, { id: toastId })
         }
       } catch (e) {
-        // Сюда падает только рендер — заливки свои ошибки гасят сами.
+        // Сюда падает только раскладка — воркеры свои ошибки гасят сами.
         const msg = (e as { message?: string })?.message
         toast.error(`Не удалось обработать PDF${msg ? `: ${msg}` : ''}`, {
           id: toastId,

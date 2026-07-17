@@ -30,6 +30,17 @@ const RENDER_SCALE = 4 // ponytail: константа, не devicePixelRatio �
 const RASTER_TYPE = 'image/webp'
 const RASTER_QUALITY = 0.85
 
+// Габариты страницы в единицах доски, без растеризации — дёшево. Нужны, чтобы
+// разложить и показать все страницы плейсхолдерами до того, как отрисуется первая.
+export async function pageSize(
+  pdf: PDFDocumentProxy,
+  pageNum: number
+): Promise<{ w: number; h: number }> {
+  const page = await pdf.getPage(pageNum)
+  const vp = page.getViewport({ scale: LAYOUT_SCALE })
+  return { w: vp.width, h: vp.height }
+}
+
 // Рендерит одну страницу (1-индексированную) в растр.
 export async function renderPage(
   pdf: PDFDocumentProxy,
