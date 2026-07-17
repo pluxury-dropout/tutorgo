@@ -15,6 +15,7 @@ import (
 	"tutorgo/database"
 	"tutorgo/repository"
 	"tutorgo/router"
+	"tutorgo/worker"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -123,9 +124,13 @@ func main() {
 	log.Info("Server exited cleanly")
 }
 
-// runWorker — роль worker: River-воркер PDF-импортов. Тело появится вместе с
-// пакетом worker; до тех пор роль нерабочая.
+// runWorker — роль worker: River-воркер PDF-импортов.
 func runWorker(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger) {
-	log.Error("worker role not implemented yet")
-	os.Exit(1)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	if err := worker.Run(ctx, pool, cfg, log); err != nil {
+		log.Error("worker", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	log.Info("worker exited cleanly")
 }

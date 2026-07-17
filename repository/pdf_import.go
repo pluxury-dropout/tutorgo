@@ -184,3 +184,14 @@ func (r *pdfImportRepository) PageBelongsToBoard(ctx context.Context, pageID, bo
 	).Scan(&ok)
 	return ok, err
 }
+
+// NotifyBoardEvent шлёт событие всем API-инстансам через pg_notify. Payload
+// NOTIFY ограничен 8000 байтами — наши события на порядок меньше.
+func NotifyBoardEvent(ctx context.Context, conn *pgxpool.Pool, ev models.BoardEvent) error {
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(ctx, `SELECT pg_notify('board_events', $1)`, string(payload))
+	return err
+}

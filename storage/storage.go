@@ -72,6 +72,18 @@ func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) 
 	return req.URL, nil
 }
 
+// Get скачивает объект целиком. Вызывающий закрывает reader.
+func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	out, err := c.s3.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.Body, nil
+}
+
 // Remove удаляет объект (используется для отката, если запись в БД не удалась).
 func (c *Client) Remove(ctx context.Context, key string) error {
 	_, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
