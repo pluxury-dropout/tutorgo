@@ -11,6 +11,7 @@ import (
 	"tutorgo/config"
 	"tutorgo/email"
 	"tutorgo/handlers"
+	"tutorgo/jobs"
 	"tutorgo/middleware"
 	"tutorgo/repository"
 	"tutorgo/service"
@@ -18,7 +19,10 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"golang.org/x/time/rate"
 )
 
@@ -38,6 +42,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	studentRefreshRepo := repository.NewStudentRefreshTokenRepository(pool)
 	pendingRepo := repository.NewPendingRegistrationRepository(pool)
 	materialRepo := repository.NewMaterialRepository(pool)
+	pdfImportRepo := repository.NewPdfImportRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
@@ -55,6 +60,18 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
 	materialService := service.NewMaterialService(materialRepo)
+
+	// Insert-only River-клиент: воркеров в API-роли нет, только постановка джоб.
+	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{})
+	if err != nil {
+		log.Error("river client", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	pdfImportService := service.NewPdfImportService(pdfImportRepo,
+		func(ctx context.Context, tx pgx.Tx, importID string) error {
+			_, err := riverClient.InsertTx(ctx, tx, jobs.PdfImportArgs{ImportID: importID}, nil)
+			return err
+		})
 
 	// Handlers
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
@@ -82,6 +99,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	wbHubManager := handlers.NewWbHubManager(whiteboardService, subscriptionService, log, cfg.JWTSecret, origins)
 	whiteboardHandler := handlers.NewWhiteboardHandler(whiteboardService, log, wbHubManager, store, studentService)
 	materialHandler := handlers.NewMaterialHandler(materialService, store, log)
+	pdfImportHandler := handlers.NewPdfImportHandler(pdfImportService, store, log)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -223,6 +241,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.POST("/boards/:boardId/invite", whiteboardHandler.CreateInvite)
 		auth.DELETE("/boards/:boardId/invite", whiteboardHandler.DeleteInvite)
 		auth.POST("/boards/:boardId/assets", whiteboardHandler.UploadAsset)
+		auth.POST("/boards/:boardId/pdf", pdfImportHandler.Upload)
+		auth.POST("/pdf-imports/:id/start", pdfImportHandler.Start)
 
 		// Materials library
 		auth.GET("/materials", materialHandler.List)
