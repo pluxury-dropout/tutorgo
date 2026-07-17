@@ -54,8 +54,16 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.
 			if err != nil {
 				return "", err
 			}
-			// Директорию не чистим сразу — файл нужен Upload'у; уборка ниже в Upload.
-			return pdftool.RenderPage(ctx, pdfPath, n, renderDPI, dir)
+			// Директорию не чистим сразу при успехе — файл нужен Upload'у;
+			// уборка ниже в Upload. При ошибке RenderPage файла для Upload не
+			// будет, поэтому директорию убираем здесь же — иначе она навсегда
+			// осядет в /tmp воркера.
+			jpeg, err := pdftool.RenderPage(ctx, pdfPath, n, renderDPI, dir)
+			if err != nil {
+				os.RemoveAll(dir)
+				return "", err
+			}
+			return jpeg, nil
 		},
 		Upload: func(ctx context.Context, s3Key, jpegPath string) error {
 			f, err := os.Open(jpegPath)

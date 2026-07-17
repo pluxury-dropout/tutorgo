@@ -106,6 +106,74 @@ func TestWorkFinalAttemptMarksFailed(t *testing.T) {
 	assert.Equal(t, []string{"a2"}, ev.Payload.FileIDs)
 }
 
+// TestWorkFinalAttemptPartialSuccessListsOnlyUnrendered — регрессия на баг,
+// когда список fileIds для import_failed строился по снапшоту imp.Pages,
+// прочитанному ДО renderAll: успешно отрендеренные в этой же попытке
+// страницы попадали в «провалившиеся», и клиент удалял их уже готовые
+// плейсхолдеры.
+func TestWorkFinalAttemptPartialSuccessListsOnlyUnrendered(t *testing.T) {
+	repo := new(mockRepo)
+	var events []models.BoardEvent
+	imp := models.PdfImport{
+		ID: "imp1", PageID: "page1", S3Key: "board-pdf/x.pdf", Status: "rendering",
+		Pages: []models.PdfImportPage{
+			{N: 1, AssetID: "a1", W: 612, H: 792},
+			{N: 2, AssetID: "a2", W: 612, H: 792},
+			{N: 3, AssetID: "a3", W: 612, H: 792},
+		},
+	}
+	w := &PdfImportWorker{
+		Repo:  repo,
+		Fetch: func(ctx context.Context, key string) (string, error) { return "/tmp/fake.pdf", nil },
+		Render: func(ctx context.Context, pdfPath string, n int) (string, error) {
+			if n == 3 {
+				return "", errors.New("страница 3 битая")
+			}
+			return "/tmp/fake.jpg", nil
+		},
+		Upload: func(ctx context.Context, key, jpegPath string) error { return nil },
+		Notify: func(ctx context.Context, ev models.BoardEvent) error {
+			events = append(events, ev)
+			return nil
+		},
+	}
+	repo.On("GetByID", mock.Anything, "imp1").Return(imp, nil)
+	repo.On("MarkPageDone", mock.Anything, "imp1", 1).Return(nil)
+	repo.On("MarkPageDone", mock.Anything, "imp1", 2).Return(nil)
+	repo.On("SetStatus", mock.Anything, "imp1", "failed", mock.Anything).Return(nil)
+
+	err := w.Work(context.Background(), job(5, 5)) // последняя попытка
+	assert.Error(t, err)
+	repo.AssertCalled(t, "SetStatus", mock.Anything, "imp1", "failed", mock.Anything)
+	repo.AssertCalled(t, "MarkPageDone", mock.Anything, "imp1", 1)
+	repo.AssertCalled(t, "MarkPageDone", mock.Anything, "imp1", 2)
+	repo.AssertNotCalled(t, "MarkPageDone", mock.Anything, "imp1", 3)
+
+	var fileEvents, failedEvents int
+	var failedIDs []string
+	for _, ev := range events {
+		var parsed struct {
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
+		}
+		assert.NoError(t, json.Unmarshal(ev.Msg, &parsed))
+		switch parsed.Type {
+		case "file":
+			fileEvents++
+		case "import_failed":
+			failedEvents++
+			var payload struct {
+				FileIDs []string `json:"fileIds"`
+			}
+			assert.NoError(t, json.Unmarshal(parsed.Payload, &payload))
+			failedIDs = payload.FileIDs
+		}
+	}
+	assert.Equal(t, 2, fileEvents, "file-события должны уйти для a1 и a2")
+	assert.Equal(t, 1, failedEvents)
+	assert.Equal(t, []string{"a3"}, failedIDs)
+}
+
 func TestWorkTransientErrorRetries(t *testing.T) {
 	repo := new(mockRepo)
 	var events []models.BoardEvent

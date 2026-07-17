@@ -64,7 +64,7 @@ func (w *PdfImportWorker) Work(ctx context.Context, job *river.Job[jobs.PdfImpor
 		return nil // гонка повторов — уже отработано
 	}
 
-	err = w.renderAll(ctx, imp)
+	pages, err := w.renderAll(ctx, imp)
 	if err == nil {
 		return w.Repo.SetStatus(ctx, imp.ID, "done", nil)
 	}
@@ -75,38 +75,50 @@ func (w *PdfImportWorker) Work(ctx context.Context, job *river.Job[jobs.PdfImpor
 		msg := err.Error()
 		_ = w.Repo.SetStatus(ctx, imp.ID, "failed", &msg)
 		var pending []string
-		for _, p := range imp.Pages {
+		for _, p := range pages {
 			if !p.Done {
 				pending = append(pending, p.AssetID)
 			}
 		}
-		_ = w.Notify(ctx, models.BoardEvent{PageID: imp.PageID, Msg: failMsg(pending)})
+		if err := w.Notify(ctx, models.BoardEvent{PageID: imp.PageID, Msg: failMsg(pending)}); err != nil && w.Log != nil {
+			w.Log.Warn("pdf import notify failed", slog.String("error", err.Error()))
+		}
 	}
 	return err
 }
 
-func (w *PdfImportWorker) renderAll(ctx context.Context, imp models.PdfImport) error {
+// renderAll рендерит недостающие страницы и возвращает актуальный список
+// страниц импорта: страницы, успешно отрендеренные и загруженные в этой же
+// попытке, помечаются Done=true в возвращаемой копии — вызывающий код (ветка
+// последней попытки в Work) должен ориентироваться на неё, а не на снапшот
+// imp.Pages, прочитанный до рендера, иначе только что готовые страницы
+// попадут в список «провалившихся».
+func (w *PdfImportWorker) renderAll(ctx context.Context, imp models.PdfImport) ([]models.PdfImportPage, error) {
+	pages := append([]models.PdfImportPage(nil), imp.Pages...)
+
 	pdfPath, err := w.Fetch(ctx, imp.S3Key)
 	if err != nil {
-		return fmt.Errorf("fetch original: %w", err)
+		return pages, fmt.Errorf("fetch original: %w", err)
 	}
 	defer os.Remove(pdfPath)
 
-	for _, p := range imp.Pages {
+	for i := range pages {
+		p := &pages[i]
 		if p.Done {
 			continue // идемпотентность: повтор джобы не перерендеривает готовое
 		}
 		jpegPath, err := w.Render(ctx, pdfPath, p.N)
 		if err != nil {
-			return fmt.Errorf("render page %d: %w", p.N, err)
+			return pages, fmt.Errorf("render page %d: %w", p.N, err)
 		}
 		key := models.PdfPageAssetKey(imp.ID, p.N)
 		if err := w.Upload(ctx, key, jpegPath); err != nil {
-			return fmt.Errorf("upload page %d: %w", p.N, err)
+			return pages, fmt.Errorf("upload page %d: %w", p.N, err)
 		}
 		if err := w.Repo.MarkPageDone(ctx, imp.ID, p.N); err != nil {
-			return err
+			return pages, err
 		}
+		p.Done = true
 		// Уведомление best-effort: если NOTIFY потерялся, клиент увидит страницу
 		// после reload (URL уже в files-карте снапшота).
 		if err := w.Notify(ctx, models.BoardEvent{
@@ -116,5 +128,5 @@ func (w *PdfImportWorker) renderAll(ctx context.Context, imp models.PdfImport) e
 			w.Log.Warn("pdf import notify", slog.String("error", err.Error()))
 		}
 	}
-	return nil
+	return pages, nil
 }
