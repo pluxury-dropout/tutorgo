@@ -49,6 +49,10 @@ const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 
+// ponytail: 4 параллельные заливки страниц PDF — вслепую, без замеров.
+// Апгрейд, если упрёмся: адаптивная глубина по времени ответа.
+const UPLOAD_CONCURRENCY = 4
+
 // Стартовый размер ролика на доске — 16:9, дальше препод тянет за угол.
 const YT_WIDTH = 560
 const YT_HEIGHT = 315
@@ -277,27 +281,57 @@ export function ExcalidrawCanvas({
 
     const toastId = `pdf-${Date.now()}`
     const total = to - from + 1
-    // Страницы рендерятся и заливаются по одной, поэтому счётчик общий:
-    // «готово N из total» = страница вставлена на доску.
     toast.loading(`PDF: 0 / ${total}…`, { id: toastId })
 
     void (async () => {
+      let done = 0
+      let failed = 0
+      const progress = () =>
+        toast.loading(`PDF: ${done} / ${total}…`, { id: toastId })
+      // Рендер серийный (pdf.js всё равно держит один worker), а заливки летят
+      // пулом: сеть — самая долгая часть вставки, простаивать ей незачем.
+      const inFlight = new Set<Promise<void>>()
+      let x = origin.x
       try {
-        let x = origin.x
         for (let i = from; i <= to; i++) {
           const p = await renderPage(pdf, i)
-          await insertImageBlob(
-            p.blob,
-            'image/png',
-            { x, y: origin.y },
-            { w: p.width, h: p.height },
-            `page-${i}.png`
-          )
+          const at = { x, y: origin.y }
           x += p.width // встык по горизонтали
-          toast.loading(`PDF: ${i - from + 1} / ${total}…`, { id: toastId })
+          const task = insertImageBlob(
+            p.blob,
+            p.mimeType,
+            at,
+            { w: p.width, h: p.height },
+            `page-${i}.${p.mimeType.split('/')[1]}`
+          )
+            .then(
+              () => {
+                done++
+              },
+              // Упавшая страница не уносит остальные: 49 из 50 лучше, чем ноль.
+              (e: unknown) => {
+                failed++
+                console.error(`PDF: страница ${i}`, e)
+              }
+            )
+            .finally(() => {
+              inFlight.delete(task)
+              progress()
+            })
+          inFlight.add(task)
+          if (inFlight.size >= UPLOAD_CONCURRENCY) await Promise.race(inFlight)
         }
-        toast.success(`PDF вставлен: ${total} стр.`, { id: toastId })
+        await Promise.all(inFlight)
+        if (failed) {
+          toast.error(
+            `PDF: вставлено ${done} из ${total} стр., ${failed} не удалось`,
+            { id: toastId }
+          )
+        } else {
+          toast.success(`PDF вставлен: ${total} стр.`, { id: toastId })
+        }
       } catch (e) {
+        // Сюда падает только рендер — заливки свои ошибки гасят сами.
         const msg = (e as { message?: string })?.message
         toast.error(`Не удалось обработать PDF${msg ? `: ${msg}` : ''}`, {
           id: toastId,

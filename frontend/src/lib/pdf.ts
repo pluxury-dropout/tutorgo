@@ -6,7 +6,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString()
 
-export type RenderedPage = { blob: Blob; width: number; height: number }
+export type RenderedPage = {
+  blob: Blob
+  mimeType: string
+  width: number
+  height: number
+}
 
 export async function loadPdf(file: File): Promise<PDFDocumentProxy> {
   const arrayBuffer = await file.arrayBuffer()
@@ -18,7 +23,14 @@ export async function loadPdf(file: File): Promise<PDFDocumentProxy> {
 const LAYOUT_SCALE = 1.5
 const RENDER_SCALE = 4 // ponytail: константа, не devicePixelRatio — доску зумят сильнее экрана
 
-// Рендерит одну страницу (1-индексированную) в PNG.
+// WebP вместо PNG: тот же растр примерно в 8 раз легче, а заливка в S3 — главная
+// цена вставки PDF. Качество 0.85 на скане/тексте визуально неотличимо.
+// toBlob по спеке молча отдаёт PNG, если тип не поддержан, поэтому реальный тип
+// читаем из blob.type, а не предполагаем.
+const RASTER_TYPE = 'image/webp'
+const RASTER_QUALITY = 0.85
+
+// Рендерит одну страницу (1-индексированную) в растр.
 export async function renderPage(
   pdf: PDFDocumentProxy,
   pageNum: number
@@ -30,9 +42,14 @@ export async function renderPage(
   canvas.height = viewport.height
   await page.render({ canvas, viewport }).promise
   const blob = await new Promise<Blob>((res) =>
-    canvas.toBlob((b) => res(b!), 'image/png')
+    canvas.toBlob((b) => res(b!), RASTER_TYPE, RASTER_QUALITY)
   )
   // Растр плотнее, чем место на доске → Excalidraw есть что показать при зуме.
   const k = LAYOUT_SCALE / RENDER_SCALE
-  return { blob, width: viewport.width * k, height: viewport.height * k }
+  return {
+    blob,
+    mimeType: blob.type || 'image/png',
+    width: viewport.width * k,
+    height: viewport.height * k,
+  }
 }

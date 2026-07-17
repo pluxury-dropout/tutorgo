@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -75,15 +75,11 @@ function MiniCalendar({
 }) {
   const today = useMemo(() => new Date(), [])
 
+  // Листание стрелками живёт здесь; синхронизация с основным календарём — через
+  // key на месте вызова, поэтому смена его месяца просто монтирует нас заново.
   const [miniMonth, setMiniMonth] = useState(
     () => new Date(displayedDates.start.getFullYear(), displayedDates.start.getMonth(), 1)
   )
-
-  const sy = displayedDates.start.getFullYear()
-  const sm = displayedDates.start.getMonth()
-  useEffect(() => {
-    setMiniMonth(new Date(sy, sm, 1))
-  }, [sy, sm])
 
   const year      = miniMonth.getFullYear()
   const month     = miniMonth.getMonth()
@@ -241,8 +237,6 @@ function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
 // Отдельный компонент — чтобы хуки вызывались безусловно (Rules of Hooks)
 
 function CalendarSidebarPanel() {
-  const router = useRouter()
-  const [starting, setStarting] = useState(false)
 
   const todayRange = useMemo(() => {
     const n     = new Date()
@@ -269,9 +263,8 @@ function CalendarSidebarPanel() {
     : false
 
   function handleStartLesson() {
-    if (!activeLesson || starting) return
-    setStarting(true)
-    router.push(`/lessons/${activeLesson.id}/call`)
+    if (!activeLesson) return
+    window.open(`/lessons/${activeLesson.id}/call`, '_blank')
   }
 
   const [displayedDates, setDisplayedDates] = useState<{ start: Date; end: Date }>(() => {
@@ -298,7 +291,11 @@ function CalendarSidebarPanel() {
   return (
     <div className="flex-1 overflow-hidden flex flex-col min-h-0 gap-3 px-3 pt-1 pb-3">
       <div className="rounded-[12px] border border-border bg-card shrink-0 overflow-hidden">
-        <MiniCalendar displayedDates={displayedDates} onNavigate={handleNavigate} />
+        <MiniCalendar
+          key={`${displayedDates.start.getFullYear()}-${displayedDates.start.getMonth()}`}
+          displayedDates={displayedDates}
+          onNavigate={handleNavigate}
+        />
       </div>
       <div className="rounded-[12px] border border-border bg-card flex flex-col min-h-0 overflow-hidden">
         <TodayList lessons={todayLessons} />
@@ -321,19 +318,18 @@ function CalendarSidebarPanel() {
             </div>
             <button
               onClick={handleStartLesson}
-              disabled={starting}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] transition-colors hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[10px] transition-colors hover:brightness-110"
               style={{ background: 'var(--secondary)' }}
             >
               <span
                 style={{
                   width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                  background: starting ? '#888' : '#2D9964',
-                  animation: starting ? 'none' : 'liveDot 2s ease-in-out infinite',
+                  background: '#2D9964',
+                  animation: 'liveDot 2s ease-in-out infinite',
                 }}
               />
               <span style={{ fontSize: 13, color: 'var(--foreground)', fontWeight: 600 }}>
-                {starting ? 'Подключение...' : started ? 'Присоединиться' : 'Начать урок'}
+                {started ? 'Присоединиться' : 'Начать урок'}
               </span>
             </button>
           </div>

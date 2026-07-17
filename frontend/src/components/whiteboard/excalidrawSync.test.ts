@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   diffChangedElements,
+  markRemoteVersions,
   parseSnapshot,
   utf8ByteSize,
   mergeCollaborators,
@@ -105,4 +106,30 @@ test('mergeCollaborators: без uid (аноним по ссылке) пиры �
   ])
   const merged = mergeCollaborators(peers, 'self', { username: 'Вы' }, undefined)
   assert.equal(merged.size, 3)
+})
+
+// Регрессия: страницы PDF пропадали у пира. applyRemote затирал всю карту
+// версий сценой, и локальная страница, ещё не улетевшая троттлом flushUpdate,
+// оказывалась «уже отправленной».
+test('markRemoteVersions: локальный элемент, не успевший уехать, остаётся в диффе', () => {
+  const versions = new Map<string, number>()
+  // Пир прислал свою правку, пока страница PDF ждёт flushUpdate.
+  markRemoteVersions(versions, [{ id: 'peer-stroke', version: 7 }])
+  const scene = [
+    { id: 'peer-stroke', version: 7 },
+    { id: 'pdf-page-10', version: 1 },
+  ]
+  const { changed } = diffChangedElements(versions, scene)
+  assert.deepEqual(
+    changed.map((el) => el.id),
+    ['pdf-page-10']
+  )
+})
+
+test('markRemoteVersions: победивший локальный элемент уезжает пиру', () => {
+  const versions = new Map<string, number>([['el', 3]])
+  markRemoteVersions(versions, [{ id: 'el', version: 4 }])
+  // reconcile оставил локальную версию 5 — пир о ней ещё не знает.
+  const { changed } = diffChangedElements(versions, [{ id: 'el', version: 5 }])
+  assert.deepEqual(changed, [{ id: 'el', version: 5 }])
 })

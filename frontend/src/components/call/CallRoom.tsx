@@ -84,24 +84,42 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
   const [guestBoardToken, setGuestBoardToken] = useState<string | null>(null)
   const [guestBoard, setGuestBoard] = useState<BoardWithPages | null>(null)
 
-  // Guest: handle board-open sent before this participant joined (participant metadata)
-  useEffect(() => {
-    if (role !== 'guest') return
+  const connectionState = useConnectionState()
+
+  // Guest: handle board-open sent before this participant joined (participant metadata).
+  // Ждём Connected: до коннекта remoteParticipants пуст, а объект room не меняется,
+  // поэтому без этой зависимости эффект отработал бы вхолостую ровно один раз.
+  // Токен уже открытой доски: страхует от повторного joinByInvite на ре-коннекте
+  // и на StrictMode-дубле эффекта.
+  const openedTokenRef = useRef<string | null>(null)
+  const openBoardFromMetadata = useCallback(() => {
     for (const participant of room.remoteParticipants.values()) {
       let meta: { boardOpen?: boolean; boardToken?: string } | null = null
       try { meta = participant.metadata ? JSON.parse(participant.metadata) : null } catch {}
       if (!meta?.boardOpen || !meta.boardToken) continue
       const boardToken = meta.boardToken
+      if (openedTokenRef.current === boardToken) break // уже открыта эта же доска
+      openedTokenRef.current = boardToken
       whiteboardApi.joinByInvite(boardToken).then((data) => {
         setGuestBoardToken(boardToken)
         setGuestBoard(data)
         setMode('board')
       }).catch(() => {
+        openedTokenRef.current = null // дать повторить на следующем событии
         toast.error('Не удалось открыть доску')
       })
       break
     }
-  }, [room, role])
+  }, [room])
+
+  useEffect(() => {
+    if (role !== 'guest' || connectionState !== ConnectionState.Connected) return
+    openBoardFromMetadata()
+    // Метаданные препода могли обновиться в момент нашего коннекта — тогда его
+    // publishData до нас не долетел, и единственный сигнал это событие.
+    room.on(RoomEvent.ParticipantMetadataChanged, openBoardFromMetadata)
+    return () => { room.off(RoomEvent.ParticipantMetadataChanged, openBoardFromMetadata) }
+  }, [room, role, connectionState, openBoardFromMetadata])
 
   // Both: listen for DataChannel events
   useEffect(() => {
@@ -220,7 +238,6 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
   }, [role, hasBoard, ensureBoard])
 
   // Гостю о доске сообщаем по факту коннекта — отдельно от её загрузки.
-  const connectionState = useConnectionState()
   const announcedRef = useRef(false)
   useEffect(() => {
     if (role !== 'tutor' || mode !== 'board' || announcedRef.current) return

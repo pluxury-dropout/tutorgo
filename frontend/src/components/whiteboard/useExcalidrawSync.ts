@@ -24,6 +24,7 @@ import { getWsUrl } from '@/lib/api/whiteboard'
 import { getTokenAsync } from '@/lib/api/client'
 import {
   diffChangedElements,
+  markRemoteVersions,
   parseSnapshot,
   blobToDataURL,
   mergeCollaborators,
@@ -204,7 +205,9 @@ export function useExcalidrawSync(
       api.getAppState()
     )
     // Версии — ДО updateScene: эхо-onChange даст пустой дифф и не зациклит.
-    versionsRef.current = new Map(reconciled.map((el) => [el.id, el.version]))
+    // Отмечаем только приехавшее: локальные элементы, ещё ждущие flushUpdate
+    // (вставка PDF — это минуты таких), обязаны остаться в диффе.
+    markRemoteVersions(versionsRef.current, remote)
     // NEVER — чужие правки не попадают в локальный undo-стек.
     api.updateScene({
       elements: reconciled,

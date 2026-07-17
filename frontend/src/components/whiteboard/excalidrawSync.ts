@@ -38,6 +38,20 @@ export function diffChangedElements<T extends VersionedElement>(
   return { changed, next }
 }
 
+// Отмечает известными пиру ТОЛЬКО те элементы, что реально приехали от него.
+// Затирать всю карту сценой нельзя: локальный элемент, ещё не улетевший
+// троттлом flushUpdate, попал бы в «уже отправленные» и не уехал бы к пиру
+// никогда — а следом снапшот пира затёр бы его и на сервере.
+// Элемент, где локальная версия победила в reconcile, тут получает чужую
+// версию → останется в диффе и уедет пиру. Так и надо.
+export function markRemoteVersions(
+  prev: Map<string, number>,
+  remote: readonly VersionedElement[]
+): Map<string, number> {
+  for (const el of remote) prev.set(el.id, el.version)
+  return prev
+}
+
 // Снапшот нового формата: { elements: [...], files?: {...} }.
 // Старые tldraw-снапшоты ({ document: { store } }) и мусор → null:
 // доска стартует с чистого листа (решение из спеки — конвертер не пишем).
