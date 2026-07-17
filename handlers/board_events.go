@@ -18,7 +18,10 @@ func ListenBoardEvents(ctx context.Context, pool *pgxpool.Pool, mgr *WbHubManage
 	for ctx.Err() == nil {
 		if err := listenOnce(ctx, pool, mgr); err != nil && ctx.Err() == nil {
 			log.Warn("board events listener", slog.String("error", err.Error()))
-			time.Sleep(3 * time.Second)
+			select {
+			case <-time.After(3 * time.Second):
+			case <-ctx.Done():
+			}
 		}
 	}
 }
@@ -28,9 +31,10 @@ func listenOnce(ctx context.Context, pool *pgxpool.Pool, mgr *WbHubManager) erro
 	if err != nil {
 		return err
 	}
-	// Соединение испорчено LISTEN-состоянием — в пул его не возвращаем.
-	defer conn.Conn().Close(context.Background()) //nolint:errcheck
+	// Соединение испорчено LISTEN-состоянием — в пул его не возвращаем:
+	// Close (LIFO: выполнится первым) пометит его закрытым, и Release задестроит.
 	defer conn.Release()
+	defer conn.Conn().Close(context.Background()) //nolint:errcheck
 
 	if _, err := conn.Exec(ctx, "LISTEN board_events"); err != nil {
 		return err
