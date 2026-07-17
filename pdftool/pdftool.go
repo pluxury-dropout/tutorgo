@@ -5,6 +5,7 @@ package pdftool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -43,6 +44,10 @@ func Info(ctx context.Context, path string) ([]models.PageSizePt, error) {
 	// -l с запасом: pdfinfo печатает страницы только в запрошенном диапазоне.
 	out, err := exec.CommandContext(ctx, "pdfinfo", "-f", "1", "-l", "1000000", path).Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("pdfinfo: %w: %s", err, exitErr.Stderr)
+		}
 		return nil, fmt.Errorf("pdfinfo: %w", err)
 	}
 	return ParseInfo(string(out))
