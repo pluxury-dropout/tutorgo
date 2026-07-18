@@ -61,7 +61,7 @@ export interface ExcalidrawSyncResult {
   onChange: () => void
   sendCursor: (x: number, y: number) => void
   broadcastViewport: () => void
-  sendFollow: (target: string | null, action: 'FOLLOW' | 'UNFOLLOW') => void
+  syncFollowTarget: (target: string | null) => void
   registerFile: (fileId: string, url: string, mimeType: string) => void
   sendMedia: (p: MediaPayload) => void
 }
@@ -552,7 +552,7 @@ export function useExcalidrawSync(
     // жест: не вещаем. Надёжнее синхронного applyingRemoteRef — под React 18
     // updateScene батчится, и onScrollChange прилетает уже ПОСЛЕ сброса флага.
     // Excalidraw сам гасит userToFollow на ручном пане → followTargetRef
-    // очистится через onUserFollow(UNFOLLOW), и вещание возобновится.
+    // очистится через syncFollowTarget(null), и вещание возобновится.
     if (followTargetRef.current || applyingRemoteRef.current) return
     if (viewportTimerRef.current) return
     const send = () => {
@@ -583,6 +583,19 @@ export function useExcalidrawSync(
     []
   )
 
+  // Единственный вход в follow: диффим appState.userToFollow на каждом onChange.
+  // Клик по аватарке в UserList Excalidraw и клик в панели участников звонка
+  // (CallParticipants пишет userToFollow через updateScene) дают одно и то же
+  // изменение appState — а вот onUserFollow срабатывает ТОЛЬКО на первом, из-за
+  // чего follow из звонка не доезжал до сервера и ведомый стоял на месте.
+  const syncFollowTarget = useCallback(
+    (target: string | null) => {
+      if (target === followTargetRef.current) return
+      sendFollow(target, target ? 'FOLLOW' : 'UNFOLLOW')
+    },
+    [sendFollow]
+  )
+
   const registerFile = useCallback(
     (fileId: string, url: string, mimeType: string) => {
       filesRef.current[fileId] = { url, mimeType }
@@ -607,7 +620,7 @@ export function useExcalidrawSync(
     onChange,
     sendCursor,
     broadcastViewport,
-    sendFollow,
+    syncFollowTarget,
     registerFile,
     sendMedia,
   }

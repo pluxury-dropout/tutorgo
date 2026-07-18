@@ -136,7 +136,7 @@ export function ExcalidrawCanvas({
     onChange,
     sendCursor,
     broadcastViewport,
-    sendFollow,
+    syncFollowTarget,
     registerFile,
     sendMedia,
   } = useExcalidrawSync(page, token, identity, onMedia, onPdfFile, onPdfFailed)
@@ -507,15 +507,15 @@ export function ExcalidrawCanvas({
             onApiReady(api)
             onApi?.(api)
           }}
-          onChange={(elements) => {
+          onChange={(elements, appState) => {
             keepAspect(elements)
+            // Не onUserFollow: тот молчит, когда follow включают программно из
+            // панели участников звонка. appState ловит оба входа одинаково.
+            syncFollowTarget(appState.userToFollow?.socketId ?? null)
             onChange()
           }}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
           onScrollChange={() => broadcastViewport()}
-          onUserFollow={(payload) =>
-            sendFollow(payload.userToFollow.socketId, payload.action)
-          }
           // Встраиваем только YouTube: остальные ссылки — обычные, не iframe.
           // Заодно это фильтр для ссылок, вставленных Ctrl+V.
           validateEmbeddable={(link) => parseYouTubeId(link) !== null}
