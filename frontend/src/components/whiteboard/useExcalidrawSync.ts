@@ -44,6 +44,11 @@ type ConnStatus = 'connecting' | 'connected' | 'disconnected'
 const UPDATE_THROTTLE_MS = 100
 const SNAPSHOT_DEBOUNCE_MS = 1000
 const FOLLOW_LERP = 0.3 // доля пути к цели за кадр — компромисс плавность/лаг
+const CURSOR_THROTTLE_MS = 50
+
+// Буфер сокета выше порога — bulk-данные (снапшот/диффы) забили пайп;
+// эфемерный кадр дропаем, следующий приедет свежим.
+const EPHEMERAL_BACKPRESSURE_BYTES = 128 * 1024
 
 // Локальный ключ текущего пользователя в Map коллабораторов. Сервер свой peerId
 // клиенту не сообщает, а для аватара «вы» реальный id не нужен: клик по своему
@@ -109,6 +114,7 @@ export function useExcalidrawSync(
   // Курсоры пиров меняются — применим пачкой в rAF, не на каждое сообщение.
   const collaboratorsDirtyRef = useRef(false)
   const rafRef = useRef<number | null>(null)
+  const cursorSentRef = useRef(0)
   // Кэш последней сцены для финального снапшота при teardown. НЕ читаем live
   // apiRef в cleanup: при переключении страницы новый (пустой) Excalidraw уже
   // перезаписал apiRef, а этот cleanup — пассивный и бежит позже, так что live
@@ -513,11 +519,14 @@ export function useExcalidrawSync(
 
   const sendCursor = useCallback(
     (x: number, y: number) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({ type: 'cursor', x, y, name: displayName, uid: myUid })
-        )
-      }
+      const now = performance.now()
+      if (now - cursorSentRef.current < CURSOR_THROTTLE_MS) return
+      cursorSentRef.current = now
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return
+      if (wsRef.current.bufferedAmount > EPHEMERAL_BACKPRESSURE_BYTES) return
+      wsRef.current.send(
+        JSON.stringify({ type: 'cursor', x, y, name: displayName, uid: myUid })
+      )
     },
     [displayName, myUid]
   )
@@ -536,11 +545,11 @@ export function useExcalidrawSync(
     if (viewportTimerRef.current) return
     const send = () => {
       const api = apiRef.current
-      if (!api || wsRef.current?.readyState !== WebSocket.OPEN) return
+      const ws = wsRef.current
+      if (!api || ws?.readyState !== WebSocket.OPEN) return
+      if (ws.bufferedAmount > EPHEMERAL_BACKPRESSURE_BYTES) return
       const bounds = getVisibleSceneBounds(api.getAppState())
-      wsRef.current.send(
-        JSON.stringify({ type: 'viewport', payload: { bounds } })
-      )
+      ws.send(JSON.stringify({ type: 'viewport', payload: { bounds } }))
     }
     send()
     viewportTimerRef.current = setTimeout(() => {
