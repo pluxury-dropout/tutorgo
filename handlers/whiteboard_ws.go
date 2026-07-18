@@ -183,6 +183,14 @@ func (h *wbHub) run() {
 				continue
 			}
 
+			// cursor/viewport/follow разыменовывают msg.sender. Серверные пуши
+			// (sender=nil) такие типы не шлют, но гардим — иначе будущий такой
+			// пуш уронил бы паникой всю run()-горутину хаба без recover.
+			if msg.sender == nil &&
+				(parsed.Type == "cursor" || parsed.Type == "viewport" || parsed.Type == "follow") {
+				continue
+			}
+
 			switch parsed.Type {
 			case "snapshot":
 				// Full document snapshot: store and debounce-save, do NOT relay.
@@ -365,8 +373,8 @@ func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbH
 // PushToPage вбрасывает серверное сообщение в хаб страницы. Если хаба нет —
 // никто не подключён, и слать некому: молча выходим (клиент увидит контент из
 // снапшота/S3 при следующем подключении). sender=nil ⇒ run() раздаст всем.
-// ВАЖНО: только для типов, которые run() ретранслирует вербатим (default-ветка);
-// cursor/viewport разыменовывают sender и с nil упадут.
+// Предназначено для типов, которые run() ретранслирует вербатим (default-ветка);
+// эфемерные cursor/viewport/follow с sender=nil run() безопасно отбрасывает.
 func (m *WbHubManager) PushToPage(pageID string, data []byte) {
 	m.mu.Lock()
 	hub, ok := m.hubs[pageID]

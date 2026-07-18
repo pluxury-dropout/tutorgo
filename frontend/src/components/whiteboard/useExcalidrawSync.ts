@@ -277,6 +277,18 @@ export function useExcalidrawSync(
 
     ws.onopen = () => {
       if (wsRef.current === ws) setStatus('connected')
+      // Реконнект во время активной слежки: у нового сокета новый peerId, и
+      // серверная following-карта забыла нас при уходе старого коннекта —
+      // пере-подписываемся, иначе камера ведомого молча замрёт до ручного
+      // пере-клика. Цель не переподключалась, её peerId ещё валиден.
+      if (followTargetRef.current) {
+        ws.send(
+          JSON.stringify({
+            type: 'follow',
+            payload: { target: followTargetRef.current, action: 'FOLLOW' },
+          })
+        )
+      }
     }
 
     ws.onmessage = (e: MessageEvent) => {
