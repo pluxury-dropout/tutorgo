@@ -65,8 +65,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if os.Getenv("ROLE") == "worker" {
-		runWorker(pool, &cfg, log) // блокируется до SIGTERM
+	role := os.Getenv("ROLE")
+	if role == "worker" {
+		runWorker(pool, &cfg, log) // только воркер — выделенный ROLE=worker инстанс
 		return
 	}
 
@@ -89,6 +90,18 @@ func main() {
 	bgWg.Go(func() {
 		handlers.ListenBoardEvents(bgCtx, pool, wbHubManager, log)
 	})
+	// ponytail: воркер PDF-импорта в том же процессе, что и API — одному
+	// Railway-сервису отдельный процесс не нужен. Очередь River живёт в
+	// Postgres, поэтому этот воркер безопасно сосуществует с любыми выделёнными
+	// ROLE=worker инстансами. ROLE=api глушит его, когда рендер выносят с
+	// API-боксов.
+	if role != "api" {
+		bgWg.Go(func() {
+			if err := worker.Run(bgCtx, pool, &cfg, log); err != nil {
+				log.Error("embedded worker", slog.String("error", err.Error()))
+			}
+		})
+	}
 
 	r.GET("/health", func(c *gin.Context) {
 		if err := pool.Ping(c.Request.Context()); err != nil {

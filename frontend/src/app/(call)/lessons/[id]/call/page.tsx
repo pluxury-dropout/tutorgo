@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { DisconnectReason } from 'livekit-client'
 import '@livekit/components-styles'
 
 import { callsApi, type RoomTokenResponse } from '@/lib/api/calls'
@@ -40,7 +41,13 @@ export default function CallPage() {
     return () => { cancelled = true }
   }, [id])
 
-  async function handleDisconnected() {
+  // Урок завершаем только при осознанном выходе (кнопка «Выйти» → room.disconnect()
+  // → CLIENT_INITIATED). Рефреш/обрыв сети сюда тоже прилетают, но комнату не
+  // трогаем: она остаётся active, при новой загрузке startRoom+getRoomToken
+  // (идемпотентны) заходят заново, ученика не выкидывает. Пустую комнату закроет
+  // LiveKit-webhook room_finished по empty_timeout.
+  async function handleDisconnected(reason?: DisconnectReason) {
+    if (reason !== DisconnectReason.CLIENT_INITIATED) return
     try { await callsApi.endRoom(id) } catch {}
     router.back()
   }

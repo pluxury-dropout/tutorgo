@@ -8,7 +8,7 @@ import {
   useConnectionState,
   useRoomContext,
 } from '@livekit/components-react'
-import { ConnectionState, RoomEvent } from 'livekit-client'
+import { ConnectionState, DisconnectReason, RoomEvent } from 'livekit-client'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@livekit/components-styles'
 import { toast } from 'sonner'
@@ -340,7 +340,7 @@ export interface CallRoomProps {
   inviteUrl?: string
   /** Пробный урок: доска берётся из общей trial-доски препода, курса нет. */
   trial?: boolean
-  onDisconnected: () => void
+  onDisconnected: (reason?: DisconnectReason) => void
 }
 
 export function CallRoom({
