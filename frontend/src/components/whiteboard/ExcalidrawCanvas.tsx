@@ -136,6 +136,7 @@ export function ExcalidrawCanvas({
     onChange,
     sendCursor,
     broadcastViewport,
+    sendFollow,
     registerFile,
     sendMedia,
   } = useExcalidrawSync(page, token, identity, onMedia, onPdfFile, onPdfFailed)
@@ -512,6 +513,9 @@ export function ExcalidrawCanvas({
           }}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
           onScrollChange={() => broadcastViewport()}
+          onUserFollow={(payload) =>
+            sendFollow(payload.userToFollow.socketId, payload.action)
+          }
           // Встраиваем только YouTube: остальные ссылки — обычные, не iframe.
           // Заодно это фильтр для ссылок, вставленных Ctrl+V.
           validateEmbeddable={(link) => parseYouTubeId(link) !== null}

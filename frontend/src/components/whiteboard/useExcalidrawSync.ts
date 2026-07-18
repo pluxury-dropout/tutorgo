@@ -15,6 +15,7 @@ import type {
   DataURL,
   Collaborator,
   SocketId,
+  NormalizedZoomValue,
 } from '@excalidraw/excalidraw/types'
 import type {
   ExcalidrawElement,
@@ -33,6 +34,7 @@ import {
   SNAPSHOT_MAX_BYTES,
   type SnapshotFiles,
 } from './excalidrawSync'
+import { lerpCamera, camerasClose, type Camera } from './viewportInterp'
 import type { MediaPayload } from './mediaSync'
 import type { BoardPage } from '@/types/api'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
@@ -41,6 +43,7 @@ type ConnStatus = 'connecting' | 'connected' | 'disconnected'
 
 const UPDATE_THROTTLE_MS = 100
 const SNAPSHOT_DEBOUNCE_MS = 1000
+const FOLLOW_LERP = 0.3 // доля пути к цели за кадр — компромисс плавность/лаг
 
 // Локальный ключ текущего пользователя в Map коллабораторов. Сервер свой peerId
 // клиенту не сообщает, а для аватара «вы» реальный id не нужен: клик по своему
@@ -53,6 +56,7 @@ export interface ExcalidrawSyncResult {
   onChange: () => void
   sendCursor: (x: number, y: number) => void
   broadcastViewport: () => void
+  sendFollow: (target: string | null, action: 'FOLLOW' | 'UNFOLLOW') => void
   registerFile: (fileId: string, url: string, mimeType: string) => void
   sendMedia: (p: MediaPayload) => void
 }
@@ -97,6 +101,14 @@ export function useExcalidrawSync(
   const pendingSeedRef = useRef<unknown>(null)
   // Курсоры пиров для нативного рендера Excalidraw.
   const collaboratorsRef = useRef<Map<SocketId, Collaborator>>(new Map())
+  // Follow: за кем следим (peerId) и куда ведём камеру.
+  const followTargetRef = useRef<string | null>(null)
+  const targetCamRef = useRef<Camera | null>(null)
+  // Гард: пока сами двигаем камеру в follow, onScrollChange не вещаем (эхо).
+  const applyingRemoteRef = useRef(false)
+  // Курсоры пиров меняются — применим пачкой в rAF, не на каждое сообщение.
+  const collaboratorsDirtyRef = useRef(false)
+  const rafRef = useRef<number | null>(null)
   // Кэш последней сцены для финального снапшота при teardown. НЕ читаем live
   // apiRef в cleanup: при переключении страницы новый (пустой) Excalidraw уже
   // перезаписал apiRef, а этот cleanup — пассивный и бежит позже, так что live
@@ -331,31 +343,40 @@ export function useExcalidrawSync(
           username: msg.name || 'Гость',
           id: msg.uid,
         })
-        pushCollaborators()
+        collaboratorsDirtyRef.current = true
         return
       }
 
       if (msg.type === 'leave' && msg.peerId) {
         collaboratorsRef.current.delete(msg.peerId as SocketId)
-        pushCollaborators()
+        collaboratorsDirtyRef.current = true
+        // Ушёл тот, за кем следили — снимаем слежку, иначе камера застынет.
+        if (followTargetRef.current === msg.peerId) {
+          followTargetRef.current = null
+          targetCamRef.current = null
+        }
         return
       }
 
-      // Follow-mode: ведомый двигает камеру за тем пиром, чей peerId совпал с
-      // локальным userToFollow.socketId (его ставит клик по аватару в Excalidraw).
-      // Пиры вещают границы всегда — фильтруем на приёме, без серверного трекинга.
+      // Follow: вьюпорт приходит уже только для нашей цели (сервер
+      // маршрутизирует). Считаем целевую камеру, доводит к ней rAF-цикл.
       if (msg.type === 'viewport' && msg.peerId) {
+        if (msg.peerId !== followTargetRef.current) return
         const api = apiRef.current
         if (!api) return
-        const appState = api.getAppState()
-        if (appState.userToFollow?.socketId !== msg.peerId) return
         const bounds = (msg.payload as { bounds?: SceneBounds } | undefined)
           ?.bounds
         if (!bounds) return
-        api.updateScene({
-          appState: zoomToFitBounds({ bounds, appState, fitToViewport: true })
-            .appState,
-        })
+        const fit = zoomToFitBounds({
+          bounds,
+          appState: api.getAppState(),
+          fitToViewport: true,
+        }).appState
+        targetCamRef.current = {
+          scrollX: fit.scrollX,
+          scrollY: fit.scrollY,
+          zoom: fit.zoom.value,
+        }
         return
       }
     }
@@ -378,6 +399,36 @@ export function useExcalidrawSync(
     ws.onerror = () => ws.close()
   }, [pageId, token, applySnapshot, applyRemote, hydrateFiles, pushCollaborators])
 
+  // Единый кадровый цикл: раз в кадр применяем накопленные курсоры и,
+  // если следим за кем-то, подводим камеру к цели интерполяцией.
+  const tick = useCallback(() => {
+    const api = apiRef.current
+    if (api) {
+      if (collaboratorsDirtyRef.current) {
+        collaboratorsDirtyRef.current = false
+        pushCollaborators()
+      }
+      const target = targetCamRef.current
+      if (followTargetRef.current && target) {
+        const s = api.getAppState()
+        const cur: Camera = { scrollX: s.scrollX, scrollY: s.scrollY, zoom: s.zoom.value }
+        if (!camerasClose(cur, target)) {
+          const next = lerpCamera(cur, target, FOLLOW_LERP)
+          applyingRemoteRef.current = true
+          api.updateScene({
+            appState: {
+              scrollX: next.scrollX,
+              scrollY: next.scrollY,
+              zoom: { value: next.zoom as NormalizedZoomValue },
+            },
+          })
+          applyingRemoteRef.current = false
+        }
+      }
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }, [pushCollaborators])
+
   useEffect(() => {
     closedRef.current = false
     // Синхронно сбрасываем статус соединения при смене страницы — тот же
@@ -392,8 +443,12 @@ export function useExcalidrawSync(
     pendingSeedRef.current = null
     lastSceneRef.current = null
     void connect()
+    rafRef.current = requestAnimationFrame(tick)
     return () => {
       closedRef.current = true
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      followTargetRef.current = null
+      targetCamRef.current = null
       if (retryRef.current) clearTimeout(retryRef.current)
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
       if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
@@ -411,7 +466,7 @@ export function useExcalidrawSync(
       wsRef.current = null
       ws?.close()
     }
-  }, [pageId, connect, sendSnapshotElements])
+  }, [pageId, connect, sendSnapshotElements, tick])
 
   const onApiReady = useCallback(
     (api: ExcalidrawImperativeAPI) => {
@@ -472,6 +527,7 @@ export function useExcalidrawSync(
   // но последнюю позицию гарантированно дослыаем таймером (иначе камера ведомого
   // застынет чуть раньше конца жеста).
   const broadcastViewport = useCallback(() => {
+    if (applyingRemoteRef.current) return // не вещаем свои же follow-движения
     if (viewportTimerRef.current) return
     const send = () => {
       const api = apiRef.current
@@ -487,6 +543,19 @@ export function useExcalidrawSync(
       send() // trailing: финальная позиция после последнего скролла
     }, UPDATE_THROTTLE_MS)
   }, [])
+
+  const sendFollow = useCallback(
+    (target: string | null, action: 'FOLLOW' | 'UNFOLLOW') => {
+      followTargetRef.current = action === 'FOLLOW' ? target : null
+      if (action === 'UNFOLLOW') targetCamRef.current = null
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({ type: 'follow', payload: { target, action } })
+        )
+      }
+    },
+    []
+  )
 
   const registerFile = useCallback(
     (fileId: string, url: string, mimeType: string) => {
@@ -512,6 +581,7 @@ export function useExcalidrawSync(
     onChange,
     sendCursor,
     broadcastViewport,
+    sendFollow,
     registerFile,
     sendMedia,
   }
