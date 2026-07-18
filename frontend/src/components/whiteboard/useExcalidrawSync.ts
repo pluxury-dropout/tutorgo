@@ -527,7 +527,12 @@ export function useExcalidrawSync(
   // но последнюю позицию гарантированно дослыаем таймером (иначе камера ведомого
   // застынет чуть раньше конца жеста).
   const broadcastViewport = useCallback(() => {
-    if (applyingRemoteRef.current) return // не вещаем свои же follow-движения
+    // Пока следим за кем-то, все движения камеры — наша интерполяция, не наш
+    // жест: не вещаем. Надёжнее синхронного applyingRemoteRef — под React 18
+    // updateScene батчится, и onScrollChange прилетает уже ПОСЛЕ сброса флага.
+    // Excalidraw сам гасит userToFollow на ручном пане → followTargetRef
+    // очистится через onUserFollow(UNFOLLOW), и вещание возобновится.
+    if (followTargetRef.current || applyingRemoteRef.current) return
     if (viewportTimerRef.current) return
     const send = () => {
       const api = apiRef.current
