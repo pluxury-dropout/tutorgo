@@ -91,6 +91,31 @@ func (h *wbHub) saveSnapshot(snap json.RawMessage) {
 }
 
 func (h *wbHub) run() {
+	reg := newPresenceRegistry()
+	// Коалесцируем эфемерные сообщения: свежий кадр вытесняет старый, рассылаем
+	// пачкой раз в ~33мс — курсоры всем, вьюпорт только подписчикам.
+	ticker := time.NewTicker(33 * time.Millisecond)
+	defer ticker.Stop()
+
+	send := func(data []byte, to *wbClient) {
+		select {
+		case to.send <- data:
+		default:
+			delete(h.clients, to)
+			close(to.send)
+		}
+	}
+	// ponytail: линейный поиск клиента по peerID. Клиентов на страницу единицы
+	// (препод+ученик), карта byPeer себя не окупает; ввести, если N вырастет.
+	clientByPeer := func(peerID string) *wbClient {
+		for c := range h.clients {
+			if c.peerID == peerID {
+				return c
+			}
+		}
+		return nil
+	}
+
 	for {
 		select {
 		case client := <-h.register:
@@ -104,6 +129,7 @@ func (h *wbHub) run() {
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
+				reg.remove(client.peerID)
 				close(client.send)
 				// Уведомляем оставшихся, чтобы они убрали этого пира из списка
 				// коллабораторов (иначе счётчик участников завышен). Best-effort:
@@ -133,9 +159,35 @@ func (h *wbHub) run() {
 				h.mgr.mu.Unlock()
 			}
 
+		case <-ticker.C:
+			for _, o := range reg.flush() {
+				if o.toAll {
+					for c := range h.clients {
+						if c.peerID == o.origin {
+							continue
+						}
+						send(o.data, c)
+					}
+					continue
+				}
+				for _, pid := range o.to {
+					if c := clientByPeer(pid); c != nil {
+						send(o.data, c)
+					}
+				}
+			}
+
 		case msg := <-h.broadcast:
 			var parsed WbMsg
 			if err := json.Unmarshal(msg.data, &parsed); err != nil {
+				continue
+			}
+
+			// cursor/viewport/follow разыменовывают msg.sender. Серверные пуши
+			// (sender=nil) такие типы не шлют, но гардим — иначе будущий такой
+			// пуш уронил бы паникой всю run()-горутину хаба без recover.
+			if msg.sender == nil &&
+				(parsed.Type == "cursor" || parsed.Type == "viewport" || parsed.Type == "follow") {
 				continue
 			}
 
@@ -147,12 +199,33 @@ func (h *wbHub) run() {
 				h.saveDebounce(func() { h.saveSnapshot(snap) })
 				continue
 
-			case "cursor", "viewport":
-				// Attach sender's peerId, then relay. Follow-mode matches the
-				// viewport sender against the follower's userToFollow.socketId,
-				// which equals this same peerId (learned via cursor messages).
+			case "cursor":
+				// Штампуем peerId и кладём в presence; рассылку делает тикер.
 				parsed.PeerID = msg.sender.peerID
-				msg.data, _ = json.Marshal(parsed)
+				stamped, _ := json.Marshal(parsed)
+				reg.setCursor(msg.sender.peerID, stamped)
+				continue
+
+			case "viewport":
+				parsed.PeerID = msg.sender.peerID
+				stamped, _ := json.Marshal(parsed)
+				reg.setViewport(msg.sender.peerID, stamped)
+				continue
+
+			case "follow":
+				// Подписка/отписка. При FOLLOW сразу юникастим текущий вьюпорт
+				// цели — камера ведомого снапится, не дожидаясь движения ведущего.
+				var f struct {
+					Target string `json:"target"`
+					Action string `json:"action"`
+				}
+				_ = json.Unmarshal(parsed.Payload, &f)
+				if f.Action == "UNFOLLOW" {
+					reg.unfollow(msg.sender.peerID)
+				} else if snap := reg.follow(msg.sender.peerID, f.Target); snap != nil {
+					send(snap, msg.sender)
+				}
+				continue
 
 			case "update":
 				// Incremental diff: relay verbatim, never store or persist.
@@ -300,8 +373,8 @@ func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbH
 // PushToPage вбрасывает серверное сообщение в хаб страницы. Если хаба нет —
 // никто не подключён, и слать некому: молча выходим (клиент увидит контент из
 // снапшота/S3 при следующем подключении). sender=nil ⇒ run() раздаст всем.
-// ВАЖНО: только для типов, которые run() ретранслирует вербатим (default-ветка);
-// cursor/viewport разыменовывают sender и с nil упадут.
+// Предназначено для типов, которые run() ретранслирует вербатим (default-ветка);
+// эфемерные cursor/viewport/follow с sender=nil run() безопасно отбрасывает.
 func (m *WbHubManager) PushToPage(pageID string, data []byte) {
 	m.mu.Lock()
 	hub, ok := m.hubs[pageID]

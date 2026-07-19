@@ -136,6 +136,7 @@ export function ExcalidrawCanvas({
     onChange,
     sendCursor,
     broadcastViewport,
+    syncFollowTarget,
     registerFile,
     sendMedia,
   } = useExcalidrawSync(page, token, identity, onMedia, onPdfFile, onPdfFailed)
@@ -506,8 +507,11 @@ export function ExcalidrawCanvas({
             onApiReady(api)
             onApi?.(api)
           }}
-          onChange={(elements) => {
+          onChange={(elements, appState) => {
             keepAspect(elements)
+            // Не onUserFollow: тот молчит, когда follow включают программно из
+            // панели участников звонка. appState ловит оба входа одинаково.
+            syncFollowTarget(appState.userToFollow?.socketId ?? null)
             onChange()
           }}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
