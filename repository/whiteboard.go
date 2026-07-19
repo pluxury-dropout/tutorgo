@@ -1,8 +1,11 @@
 package repository
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"io"
 	"tutorgo/models"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -97,7 +100,7 @@ func (r *whiteboardRepository) GetBoardByInvite(ctx context.Context, inviteID st
 
 func (r *whiteboardRepository) GetPagesByBoard(ctx context.Context, boardID string) ([]models.BoardPage, error) {
 	rows, err := r.conn.Query(ctx,
-		`SELECT id, board_id, title, snapshot, position, created_at, updated_at
+		`SELECT id, board_id, title, position, created_at, updated_at
          FROM board_pages WHERE board_id = $1 ORDER BY position ASC, created_at ASC`,
 		boardID,
 	)
@@ -108,7 +111,7 @@ func (r *whiteboardRepository) GetPagesByBoard(ctx context.Context, boardID stri
 	var pages []models.BoardPage
 	for rows.Next() {
 		var p models.BoardPage
-		if err := rows.Scan(&p.ID, &p.BoardID, &p.Title, &p.Snapshot, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.BoardID, &p.Title, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		pages = append(pages, p)
@@ -119,10 +122,10 @@ func (r *whiteboardRepository) GetPagesByBoard(ctx context.Context, boardID stri
 func (r *whiteboardRepository) GetPageByID(ctx context.Context, pageID string) (models.BoardPage, error) {
 	var p models.BoardPage
 	err := r.conn.QueryRow(ctx,
-		`SELECT id, board_id, title, snapshot, position, created_at, updated_at
+		`SELECT id, board_id, title, position, created_at, updated_at
          FROM board_pages WHERE id = $1`,
 		pageID,
-	).Scan(&p.ID, &p.BoardID, &p.Title, &p.Snapshot, &p.Position, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.BoardID, &p.Title, &p.Position, &p.CreatedAt, &p.UpdatedAt)
 	return p, err
 }
 
@@ -131,9 +134,9 @@ func (r *whiteboardRepository) CreatePage(ctx context.Context, boardID, title st
 	err := r.conn.QueryRow(ctx,
 		`INSERT INTO board_pages (board_id, title, position)
          VALUES ($1, $2, $3)
-         RETURNING id, board_id, title, snapshot, position, created_at, updated_at`,
+         RETURNING id, board_id, title, position, created_at, updated_at`,
 		boardID, title, position,
-	).Scan(&p.ID, &p.BoardID, &p.Title, &p.Snapshot, &p.Position, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.BoardID, &p.Title, &p.Position, &p.CreatedAt, &p.UpdatedAt)
 	return p, err
 }
 
@@ -145,16 +148,20 @@ func (r *whiteboardRepository) UpdatePage(ctx context.Context, pageID string, re
              position = COALESCE($3, position),
              updated_at = now()
          WHERE id = $1
-         RETURNING id, board_id, title, snapshot, position, created_at, updated_at`,
+         RETURNING id, board_id, title, position, created_at, updated_at`,
 		pageID, req.Title, req.Position,
-	).Scan(&p.ID, &p.BoardID, &p.Title, &p.Snapshot, &p.Position, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.BoardID, &p.Title, &p.Position, &p.CreatedAt, &p.UpdatedAt)
 	return p, err
 }
 
 func (r *whiteboardRepository) SaveSnapshot(ctx context.Context, pageID string, snapshot json.RawMessage) error {
-	_, err := r.conn.Exec(ctx,
+	compressed, err := gzipSnapshot(snapshot)
+	if err != nil {
+		return err
+	}
+	_, err = r.conn.Exec(ctx,
 		`UPDATE board_pages SET snapshot = $2, updated_at = now() WHERE id = $1`,
-		pageID, snapshot,
+		pageID, compressed,
 	)
 	return err
 }
@@ -218,9 +225,49 @@ func (r *whiteboardRepository) GetAsset(ctx context.Context, assetID string) (mo
 }
 
 func (r *whiteboardRepository) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
-	var snap json.RawMessage
+	var stored []byte
 	err := r.conn.QueryRow(ctx,
 		`SELECT snapshot FROM board_pages WHERE id = $1`, pageID,
-	).Scan(&snap)
-	return snap, err
+	).Scan(&stored)
+	if err != nil {
+		return nil, err
+	}
+	return gunzipSnapshot(stored)
+}
+
+// Снапшоты хранятся gzip-ом в bytea (миграция 028). Записи, оставшиеся от jsonb,
+// лежат сырым JSON — различаем по gzip-magic, чтобы доски, которые с миграции
+// никто не открывал, продолжали читаться.
+func isGzip(b []byte) bool {
+	return len(b) >= 2 && b[0] == 0x1f && b[1] == 0x8b
+}
+
+func gzipSnapshot(snapshot json.RawMessage) ([]byte, error) {
+	var buf bytes.Buffer
+	// BestSpeed, а не BestCompression: снапшот пишется раз в несколько секунд на
+	// каждой активной доске, и на этих данных (JSON с повторяющимися ключами)
+	// быстрый уровень отстаёт от максимального на считанные проценты.
+	zw, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := zw.Write(snapshot); err != nil {
+		return nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func gunzipSnapshot(stored []byte) (json.RawMessage, error) {
+	if !isGzip(stored) {
+		return stored, nil // NULL или досжатая запись — отдаём как есть
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(stored))
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	return io.ReadAll(zr)
 }

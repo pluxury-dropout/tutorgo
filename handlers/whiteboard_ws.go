@@ -11,7 +11,6 @@ import (
 
 	"tutorgo/service"
 
-	"github.com/bep/debounce"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -44,19 +43,19 @@ type wbClient struct {
 	peerID string
 }
 
-// wbHub — coordinator for one board page
+// wbHub — coordinator for one board page.
+// Хаб — чистый ретранслятор: состояния доски он не хранит и не персистит.
+// Снапшот читается из БД в ServeWS (сидинг нового клиента) и пишется туда
+// HTTP-роутом SaveSnapshot — WS в пути сохранения не участвует.
 type wbHub struct {
-	pageID       string
-	clients      map[*wbClient]bool
-	broadcast    chan wbBroadcast
-	register     chan *wbClient
-	unregister   chan *wbClient
-	done         chan struct{}
-	snapshot     json.RawMessage
-	saveDebounce func(f func())
-	svc          service.WhiteboardService
-	mgr          *WbHubManager
-	log          *slog.Logger
+	pageID     string
+	clients    map[*wbClient]bool
+	broadcast  chan wbBroadcast
+	register   chan *wbClient
+	unregister chan *wbClient
+	done       chan struct{}
+	mgr        *WbHubManager
+	log        *slog.Logger
 }
 
 type wbBroadcast struct {
@@ -64,29 +63,16 @@ type wbBroadcast struct {
 	data   []byte
 }
 
-func newWbHub(pageID string, snapshot json.RawMessage, mgr *WbHubManager) *wbHub {
-	h := &wbHub{
+func newWbHub(pageID string, mgr *WbHubManager) *wbHub {
+	return &wbHub{
 		pageID:     pageID,
 		clients:    make(map[*wbClient]bool),
 		broadcast:  make(chan wbBroadcast, 64),
 		register:   make(chan *wbClient),
 		unregister: make(chan *wbClient),
 		done:       make(chan struct{}),
-		snapshot:   snapshot,
-		svc:        mgr.svc,
 		mgr:        mgr,
 		log:        mgr.log,
-	}
-	h.saveDebounce = debounce.New(2 * time.Second)
-	return h
-}
-
-func (h *wbHub) saveSnapshot(snap json.RawMessage) {
-	if snap == nil {
-		return
-	}
-	if err := h.svc.SaveSnapshot(context.Background(), h.pageID, snap); err != nil {
-		h.log.Error("save snapshot", slog.String("error", err.Error()))
 	}
 }
 
@@ -120,11 +106,8 @@ func (h *wbHub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			// Send the current full document snapshot to the new client.
-			if h.snapshot != nil {
-				msg, _ := json.Marshal(WbMsg{Type: "snapshot", Payload: h.snapshot})
-				client.send <- msg
-			}
+			// Сидинг делает ServeWS: он читает снапшот из БД до апгрейда и
+			// кладёт его в client.send сам. Хабу состояние знать не нужно.
 
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
@@ -151,9 +134,6 @@ func (h *wbHub) run() {
 					delete(h.mgr.hubs, h.pageID)
 					close(h.done)
 					h.mgr.mu.Unlock()
-					// Capture snapshot value to avoid a data race with run().
-					snap := h.snapshot
-					h.saveSnapshot(snap)
 					return
 				}
 				h.mgr.mu.Unlock()
@@ -192,13 +172,6 @@ func (h *wbHub) run() {
 			}
 
 			switch parsed.Type {
-			case "snapshot":
-				// Full document snapshot: store and debounce-save, do NOT relay.
-				h.snapshot = parsed.Payload
-				snap := h.snapshot
-				h.saveDebounce(func() { h.saveSnapshot(snap) })
-				continue
-
 			case "cursor":
 				// Штампуем peerId и кладём в presence; рассылку делает тикер.
 				parsed.PeerID = msg.sender.peerID
@@ -358,13 +331,13 @@ func normalizeOrigin(o string) string {
 	return strings.TrimRight(strings.ToLower(strings.TrimSpace(o)), "/")
 }
 
-func (m *WbHubManager) getOrCreate(pageID string, snapshot json.RawMessage) *wbHub {
+func (m *WbHubManager) getOrCreate(pageID string) *wbHub {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if hub, ok := m.hubs[pageID]; ok {
 		return hub
 	}
-	hub := newWbHub(pageID, snapshot, m)
+	hub := newWbHub(pageID, m)
 	m.hubs[pageID] = hub
 	go hub.run()
 	return hub
@@ -390,12 +363,12 @@ func (m *WbHubManager) PushToPage(pageID string, data []byte) {
 	}
 }
 
-// authorizeWS validates the ?token= query param. It first tries to parse it as a
+// Authorize validates the ?token= query param. It first tries to parse it as a
 // tutor access JWT (same scheme as middleware.Auth); on success it requires that
 // pageID's board belongs to the tutor. Otherwise it treats the token as an invite
 // UUID and requires that pageID belongs to the invite's board. Returns true iff
 // the client may access the page.
-func (m *WbHubManager) authorizeWS(ctx context.Context, svc service.WhiteboardService, pageID, token string) bool {
+func (m *WbHubManager) Authorize(ctx context.Context, svc service.WhiteboardService, pageID, token string) bool {
 	if token == "" {
 		return false
 	}
@@ -465,7 +438,7 @@ func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 		pageID := c.Param("pageId")
 		token := c.Query("token")
 
-		if !m.authorizeWS(c.Request.Context(), svc, pageID, token) {
+		if !m.Authorize(c.Request.Context(), svc, pageID, token) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
@@ -484,10 +457,17 @@ func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 			peerID: uuid.New().String(),
 		}
 
+		// Сидинг ДО регистрации: снапшот лежит первым в буфере send, поэтому
+		// клиент гарантированно получит его раньше любого чужого update.
+		if snapshot != nil {
+			msg, _ := json.Marshal(WbMsg{Type: "snapshot", Payload: snapshot})
+			client.send <- msg
+		}
+
 		// Register with the hub, retrying with a fresh hub if the one we got is
 		// in the middle of shutting down (avoids the register-after-close race).
 		for {
-			hub := m.getOrCreate(pageID, snapshot)
+			hub := m.getOrCreate(pageID)
 			client.hub = hub
 			select {
 			case hub.register <- client:

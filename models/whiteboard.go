@@ -1,7 +1,6 @@
 package models
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -13,13 +12,14 @@ type Board struct {
 }
 
 type BoardPage struct {
-	ID        string          `json:"id"`
-	BoardID   string          `json:"board_id"`
-	Title     string          `json:"title"`
-	Snapshot  json.RawMessage `json:"snapshot,omitempty"`
-	Position  int             `json:"position"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	ID      string `json:"id"`
+	BoardID string `json:"board_id"`
+	Title   string `json:"title"`
+	// Снапшот сюда не кладётся: клиент получает его по WS при подключении к
+	// странице, а в списке страниц он раздувал ответ на сотни килобайт.
+	Position  int       `json:"position"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type BoardAsset struct {

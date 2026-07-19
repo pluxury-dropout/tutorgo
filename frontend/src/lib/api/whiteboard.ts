@@ -89,4 +89,44 @@ export function getWsUrl(pageId: string, token?: string): string {
   return `${base}/ws/board/${pageId}${params}`
 }
 
+// Персист доски идёт мимо axios: тело — уже готовая строка (см. serializeSnapshot),
+// а токен — в query, как у WS, чтобы тот же роут работал и для гостя по invite.
+function snapshotUrl(pageId: string, token?: string): string {
+  const base = BASE_URL.replace(/\/+$/, '')
+  const params = token ? `?token=${encodeURIComponent(token)}` : ''
+  return `${base}/public/board/pages/${pageId}/snapshot${params}`
+}
+
+// Бросает на любой не-2xx: вызывающий обязан показать, что доска не сохранилась.
+export async function saveSnapshot(
+  pageId: string,
+  body: string,
+  token?: string
+): Promise<void> {
+  const resp = await fetch(snapshotUrl(pageId, token), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  })
+  if (!resp.ok) {
+    throw new Error(`snapshot save failed: ${resp.status}`)
+  }
+}
+
+// Финальный снапшот при уходе со страницы. fetch на unload браузер отменяет,
+// sendBeacon — единственный способ дослать; он же синхронный, поэтому токен
+// берётся готовым, без refresh-а. Возвращает false, если браузер отказал
+// (обычно превышен beacon-лимит ~64 КБ) — тогда вызывающий шлёт обычным fetch.
+export function beaconSnapshot(
+  pageId: string,
+  body: string,
+  token?: string
+): boolean {
+  if (typeof navigator === 'undefined' || !navigator.sendBeacon) return false
+  return navigator.sendBeacon(
+    snapshotUrl(pageId, token),
+    new Blob([body], { type: 'application/json' })
+  )
+}
+
 export { BASE_URL }

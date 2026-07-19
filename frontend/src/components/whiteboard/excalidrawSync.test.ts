@@ -7,7 +7,8 @@ import {
   utf8ByteSize,
   mergeCollaborators,
   imageFromClipboard,
-  SNAPSHOT_MAX_BYTES,
+  serializeSnapshot,
+  compactTombstones,
 } from './excalidrawSync.ts'
 
 test('imageFromClipboard: возвращает первый image-файл', () => {
@@ -78,11 +79,81 @@ test('utf8ByteSize: ASCII — байт на символ, многобайтов
   assert.equal(utf8ByteSize('да'), 4)
 })
 
-test('size-cap: снапшот под лимитом проходит, сверх — режется', () => {
-  const under = 'x'.repeat(SNAPSHOT_MAX_BYTES - 1)
-  const over = 'x'.repeat(SNAPSHOT_MAX_BYTES + 1)
-  assert.ok(utf8ByteSize(under) <= SNAPSHOT_MAX_BYTES)
-  assert.ok(utf8ByteSize(over) > SNAPSHOT_MAX_BYTES)
+test('compactTombstones: выбрасывает только протухшие удалённые', () => {
+  const now = 1_700_000_000_000
+  const day = 24 * 60 * 60 * 1000
+  const got = compactTombstones(
+    [
+      { id: 'живой', updated: now - 10 * day },
+      { id: 'живой-без-updated' },
+      { id: 'свежий-труп', isDeleted: true, updated: now - day / 2 },
+      { id: 'старый-труп', isDeleted: true, updated: now - 2 * day },
+      // Возраст неизвестен — не наша забота его хоронить.
+      { id: 'труп-без-updated', isDeleted: true },
+    ],
+    now
+  )
+  assert.deepEqual(
+    got.map((el) => el.id),
+    ['живой', 'живой-без-updated', 'свежий-труп', 'труп-без-updated']
+  )
+})
+
+test('serializeSnapshot: компактит протухшие tombstones', () => {
+  const now = Date.now()
+  const json = serializeSnapshot(
+    [
+      { id: 'a', updated: now },
+      { id: 'b', isDeleted: true, updated: now - 48 * 60 * 60 * 1000 },
+    ],
+    {}
+  )
+  const back = JSON.parse(json) as { elements: { id: string }[] }
+  assert.deepEqual(
+    back.elements.map((el) => el.id),
+    ['a']
+  )
+})
+
+test('serializeSnapshot: режет точность координат, но не ломает данные', () => {
+  // Настоящий штрих из БД: каждая точка весила ~40 байт на 15 знаков.
+  const points = Array.from({ length: 200 }, (_, i) => [
+    i * 0.41971259276760975,
+    i * -0.41967416810530267,
+  ])
+  const el = {
+    id: 'vdeKTFM8OrFzA9xCKCnnk',
+    type: 'freedraw',
+    x: 6567.954082645468,
+    y: 1991.2004047360947,
+    seed: 1847884469,
+    version: 42,
+    angle: 1.5707963267948966,
+    isDeleted: false,
+    points,
+  }
+  const json = serializeSnapshot([el], {})
+  const back = JSON.parse(json) as { elements: (typeof el)[] }
+  const got = back.elements[0]
+
+  // Идентичность элемента и версионирование не тронуты — на них держится reconcile.
+  assert.equal(got.id, el.id)
+  assert.equal(got.seed, el.seed)
+  assert.equal(got.version, el.version)
+  // Геометрия округлена до сотой доли пикселя.
+  assert.equal(got.x, 6567.95)
+  assert.equal(got.points.length, 200)
+  assert.equal(got.points[1][0], 0.42)
+  // angle округляется мягче — двух знаков хватило бы на перекос в 0.3°.
+  assert.equal(got.angle, 1.5708)
+
+  // Ради чего всё: тот же штрих раньше не влезал в лимит хаба. На реальных
+  // досках выигрыш выше (~3.5×) — тут координаты короче настоящих.
+  const naive = JSON.stringify({ elements: [el], files: {} })
+  assert.ok(
+    utf8ByteSize(json) * 2 < utf8ByteSize(naive),
+    `ожидали сжатие вдвое, вышло ${utf8ByteSize(naive)} → ${utf8ByteSize(json)}`
+  )
 })
 
 test('mergeCollaborators: своё второе соединение не становится вторым участником', () => {

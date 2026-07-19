@@ -111,6 +111,11 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
 			limit = 50 << 20
 		}
+		// Снапшот доски — единственное легитимно крупное JSON-тело: сцена с
+		// импортированным PDF и рукописными пометками не влезает в 1 МБ.
+		if c.FullPath() == "/public/board/pages/:pageId/snapshot" {
+			limit = 16 << 20
+		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
@@ -152,6 +157,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	guestAssetLimiter := middleware.RateLimit(rate.Every(3*time.Second), 5)
 	r.POST("/public/board/:token/assets", guestAssetLimiter, whiteboardHandler.UploadAssetByInvite)
 	r.GET("/ws/board/:pageId", wbHubManager.ServeWS(whiteboardService))
+	// Персист доски: публичен как и WS (гость-ученик правит доску по invite),
+	// авторизуется тем же ?token=. См. WhiteboardHandler.SaveSnapshot.
+	r.POST("/public/board/pages/:pageId/snapshot", whiteboardHandler.SaveSnapshot)
 
 	// open — авторизовано, но доступно даже при истёкшей подписке (чтобы заплатить)
 	open := r.Group("/")
