@@ -144,7 +144,6 @@ export interface BoardPage {
   id: string
   board_id: string
   title: string
-  snapshot: unknown | null
   position: number
   created_at: string
   updated_at: string

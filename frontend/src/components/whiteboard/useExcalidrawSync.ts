@@ -22,7 +22,12 @@ import type {
   FileId,
 } from '@excalidraw/excalidraw/element/types'
 import type { RemoteExcalidrawElement } from '@excalidraw/excalidraw/data/reconcile'
-import { getWsUrl, BASE_URL } from '@/lib/api/whiteboard'
+import {
+  getWsUrl,
+  BASE_URL,
+  saveSnapshot,
+  beaconSnapshot,
+} from '@/lib/api/whiteboard'
 import { getTokenAsync } from '@/lib/api/client'
 import {
   diffChangedElements,
@@ -30,8 +35,7 @@ import {
   parseSnapshot,
   blobToDataURL,
   mergeCollaborators,
-  utf8ByteSize,
-  SNAPSHOT_MAX_BYTES,
+  serializeSnapshot,
   type SnapshotFiles,
 } from './excalidrawSync'
 import { lerpCamera, camerasClose, type Camera } from './viewportInterp'
@@ -42,7 +46,10 @@ import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 type ConnStatus = 'connecting' | 'connected' | 'disconnected'
 
 const UPDATE_THROTTLE_MS = 100
-const SNAPSHOT_DEBOUNCE_MS = 1000
+// Каждый снапшот — полная перезапись строки в Postgres, а значит и WAL на весь
+// её объём. Секунда давала до 3600 перезаписей за час активного урока; три
+// режут это втрое. Потерять больше нельзя: teardown и pagehide дошлют сцену.
+const SNAPSHOT_DEBOUNCE_MS = 3000
 const FOLLOW_LERP = 0.3 // доля пути к цели за кадр — компромисс плавность/лаг
 const CURSOR_THROTTLE_MS = 50
 
@@ -57,6 +64,10 @@ const SELF_ID = 'self' as SocketId
 
 export interface ExcalidrawSyncResult {
   status: ConnStatus
+  // Последнее сохранение доски провалилось. Показывать обязательно: рисование
+  // идёт по WS и выглядит рабочим, даже когда персист лежит — именно так
+  // молчаливый отказ сохранения однажды уже съел содержимое уроков.
+  saveFailed: boolean
   onApiReady: (api: ExcalidrawImperativeAPI) => void
   onChange: () => void
   sendCursor: (x: number, y: number) => void
@@ -89,8 +100,16 @@ export function useExcalidrawSync(
     onImportFailedRef.current = onImportFailed
   }, [onFile, onImportFailed])
   const [status, setStatus] = useState<ConnStatus>('connecting')
+  const [saveFailed, setSaveFailed] = useState(false)
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  // Токен для персиста — тот же, что ушёл в WS. Держим в ref: sendBeacon на
+  // выгрузке страницы синхронный, ждать getTokenAsync там уже негде.
+  const httpTokenRef = useRef<string | undefined>(token)
+  // Сохранения не должны идти внахлёст: ответы могут прийти не в том порядке,
+  // и старая сцена затрёт новую. Пока запрос в полёте, копим последнее тело.
+  const savingRef = useRef(false)
+  const pendingBodyRef = useRef<string | null>(null)
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -178,30 +197,47 @@ export function useExcalidrawSync(
     }
   }, [])
 
-  // Сериализует снапшот и шлёт с проверкой размера. Единый путь и для
-  // дебаунс-снапшота (live api), и для финального при teardown (кэш сцены).
-  const sendSnapshotElements = useCallback(
-    (elements: readonly ExcalidrawElement[]) => {
-      if (wsRef.current?.readyState !== WebSocket.OPEN) return
-      // Персистим ВКЛЮЧАЯ tombstones (isDeleted): иначе пир, пропустивший
-      // удаление офлайн, при реконнекте воскресит элемент через reconcile.
-      const json = JSON.stringify({
-        type: 'snapshot',
-        payload: { elements, files: filesRef.current },
-      })
-      const size = utf8ByteSize(json)
-      if (size > SNAPSHOT_MAX_BYTES) {
-        // ponytail: tombstones копятся за жизнь доски и растят снапшот
-        // монотонно; потолок — ReadLimit 512 КБ Go-хаба, апгрейд — компакция
-        // tombstones, когда упрёмся в лимит.
-        console.warn(
-          `Снапшот доски ${size} байт превышает лимит ${SNAPSHOT_MAX_BYTES} байт — отправка пропущена`
-        )
-        return
+  // Отправка снапшота на сервер. Persist идёт по HTTP, а не по WS: у хаба
+  // ReadLimit 512 КБ, и снапшот, переросший его, раньше молча не сохранялся —
+  // при живом WS и работающем рисовании доска просто переставала переживать
+  // перезагрузку. У HTTP лимит наш, и провал виден по коду ответа.
+  const postSnapshot = useCallback(async (pid: string, body: string) => {
+    if (savingRef.current) {
+      // Запрос уже в полёте — он же дошлёт это тело, когда освободится.
+      pendingBodyRef.current = body
+      return
+    }
+    savingRef.current = true
+    try {
+      let next: string | null = body
+      while (next) {
+        try {
+          await saveSnapshot(pid, next, httpTokenRef.current)
+          if (!closedRef.current) setSaveFailed(false)
+        } catch (err) {
+          console.warn('Снапшот доски не сохранён', err)
+          if (!closedRef.current) setSaveFailed(true)
+        }
+        // Дренаж накопленного за время запроса: без этого последняя правка
+        // осталась бы только в памяти вкладки.
+        next = pendingBodyRef.current
+        pendingBodyRef.current = null
       }
-      wsRef.current.send(json)
+    } finally {
+      savingRef.current = false
+    }
+  }, [])
+
+  // Единый путь и для дебаунс-снапшота (live api), и для финального при
+  // teardown (кэш сцены). beacon — для выгрузки страницы, см. вызывающих.
+  const sendSnapshotElements = useCallback(
+    (elements: readonly ExcalidrawElement[], beacon = false) => {
+      if (!pageId) return
+      const body = serializeSnapshot(elements, filesRef.current)
+      if (beacon && beaconSnapshot(pageId, body, httpTokenRef.current)) return
+      void postSnapshot(pageId, body)
     },
-    []
+    [pageId, postSnapshot]
   )
 
   const sendSnapshot = useCallback(() => {
@@ -272,6 +308,9 @@ export function useExcalidrawSync(
     // обновляет его асинхронно; WS этот путь минует).
     const wsToken = await getTokenAsync(token)
     if (closedRef.current) return
+    // Тот же токен обслуживает и HTTP-персист — роут снапшота авторизуется
+    // ровно как WS (tutor JWT или invite гостя).
+    httpTokenRef.current = wsToken
     const ws = new WebSocket(getWsUrl(pageId, wsToken))
     wsRef.current = ws
 
@@ -454,6 +493,7 @@ export function useExcalidrawSync(
     // устаревшим 'connected' с прошлой страницы, пока открывается новый сокет.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus('connecting')
+    setSaveFailed(false)
     // Смена страницы = новая сцена: локальные карты обнуляем.
     versionsRef.current = new Map()
     filesRef.current = {}
@@ -462,7 +502,21 @@ export function useExcalidrawSync(
     lastSceneRef.current = null
     void connect()
     rafRef.current = requestAnimationFrame(tick)
+
+    // Закрытие вкладки и F5 не дают React отработать cleanup, а последняя
+    // секунда рисования живёт только в дебаунсе. pagehide (в отличие от
+    // beforeunload) срабатывает и на мобильных, а sendBeacon переживает
+    // выгрузку — обычный fetch браузер бы отменил.
+    const onPageHide = () => {
+      const cached = lastSceneRef.current
+      if (cached && cached.pageId === pageId) {
+        sendSnapshotElements(cached.elements, true)
+      }
+    }
+    window.addEventListener('pagehide', onPageHide)
+
     return () => {
+      window.removeEventListener('pagehide', onPageHide)
       closedRef.current = true
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       followTargetRef.current = null
@@ -513,7 +567,7 @@ export function useExcalidrawSync(
     pushCollaborators()
   }, [pageId, pushCollaborators])
 
-  // Локальная правка: троттлим update (100мс), дебаунсим снапшот (1с).
+  // Локальная правка: троттлим update (100мс), дебаунсим снапшот (3с).
   const onChange = useCallback(() => {
     // Кэшируем сцену уходящей страницы для teardown-снапшота (тег pageId —
     // чтобы initial onChange нового Excalidraw не подменил кэш пустой сценой).
@@ -616,6 +670,7 @@ export function useExcalidrawSync(
 
   return {
     status,
+    saveFailed,
     onApiReady,
     onChange,
     sendCursor,

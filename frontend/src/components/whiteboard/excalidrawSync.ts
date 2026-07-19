@@ -11,15 +11,65 @@ export interface VersionedElement {
 // Base64 в снапшоты класть нельзя — у Go-хаба ReadLimit 512 КБ на сообщение.
 export type SnapshotFiles = Record<string, { url: string; mimeType: string }>
 
-// Потолок снапшота под ReadLimit 512 КБ Go-хаба, с запасом: сообщение больше
-// лимита сервер режет → сокет рвётся → реконнект → повторная отправка того же
-// снапшота = вечная петля. Лучше пропустить отправку, чем убить сокет.
-export const SNAPSHOT_MAX_BYTES = 500 * 1024
-
 // Размер строки в байтах UTF-8. TextEncoder есть и в браузере, и в node:test
 // (Blob не берём — в старых node его не было).
 export function utf8ByteSize(s: string): number {
   return new TextEncoder().encode(s).length
+}
+
+// Excalidraw держит координаты как полные float64, и в JSON они уезжают со всеми
+// знаками: одна точка пера — «[0.41971259276760975, -0.41967416810530267]», 40
+// байт, из которых значимы четыре. Штрих на 400 точек весит 17 КБ вместо трёх.
+// Режем точность на сериализации; сама сцена не трогается, так что undo, курсоры
+// и reconcile работают на полных значениях.
+// Два знака — сотая доля пикселя, на порядки ниже порога видимости.
+const COORD_PRECISION = 2
+// angle — радианы, весь диапазон это 0..2π: два знака дали бы перекос до 0.3°.
+// Округляем мягче, элементов с ненулевым angle на доске единицы.
+const ANGLE_PRECISION = 4
+
+// Целые (seed, version, versionNonce) округление не меняет — отдельный список
+// исключений им не нужен.
+function roundFloats(key: string, value: unknown): unknown {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return value
+  const factor = 10 ** (key === 'angle' ? ANGLE_PRECISION : COORD_PRECISION)
+  return Math.round(value * factor) / factor
+}
+
+// Свежие tombstones (isDeleted) персистить обязательно: без них пир,
+// пропустивший удаление офлайн, воскресит элемент через reconcile. Но копятся
+// они вечно — на боевых досках занимали от 34% до 100% веса снапшота. Через
+// сутки воскрешать уже некому: вкладка, которая столько провисела с устаревшей
+// локальной сценой, до реконнекта не доживает.
+const TOMBSTONE_TTL_MS = 24 * 60 * 60 * 1000
+
+interface Perishable {
+  isDeleted?: boolean
+  updated?: number
+}
+
+// now — параметр ради тестируемости, в проде всегда Date.now().
+export function compactTombstones<T extends Perishable>(
+  elements: readonly T[],
+  now: number = Date.now()
+): readonly T[] {
+  return elements.filter((el) => {
+    if (!el.isDeleted) return true
+    // Excalidraw бампает `updated` и на удалении, так что для tombstone это
+    // момент смерти. Нет поля — возраст неизвестен, такой не трогаем.
+    return el.updated === undefined || now - el.updated < TOMBSTONE_TTL_MS
+  })
+}
+
+// Тело запроса персиста.
+export function serializeSnapshot<T extends Perishable>(
+  elements: readonly T[],
+  files: SnapshotFiles
+): string {
+  return JSON.stringify(
+    { elements: compactTombstones(elements), files },
+    roundFloats
+  )
 }
 
 // Возвращает элементы, чья версия изменилась или которых не было в prev,

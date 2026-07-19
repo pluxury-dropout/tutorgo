@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -221,6 +223,49 @@ func (h *WhiteboardHandler) StudentCourseBoardToken(c *gin.Context) {
 		pageID = board.Pages[0].ID
 	}
 	c.JSON(http.StatusOK, gin.H{"invite_token": invite.ID, "page_id": pageID})
+}
+
+// SaveSnapshot — POST /public/board/pages/:pageId/snapshot?token=...
+//
+// Персист доски намеренно идёт по HTTP, а не по WS: у WS-хаба ReadLimit 512 КБ,
+// и переросший его снапшот молча не сохранялся, пока рисование по `update`
+// продолжало выглядеть рабочим. HTTP даёт лимит тела под нашим контролем и,
+// главное, код ответа — клиент видит провал сохранения и может показать это.
+//
+// Роут публичный по той же причине, что и /ws/board: доску правит и гость по
+// invite-ссылке, JWT у него нет. Авторизация — тем же токеном, что у WS.
+func (h *WhiteboardHandler) SaveSnapshot(c *gin.Context) {
+	pageID := c.Param("pageId")
+	if !h.wsHub.Authorize(c.Request.Context(), h.svc, pageID, c.Query("token")) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		// MaxBytesReader из глобального middleware — единственный ожидаемый
+		// источник ошибки: снапшот перерос лимит роута.
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "snapshot too large"})
+		return
+	}
+
+	// Проверяем ровно тот контракт, который читает клиентский parseSnapshot:
+	// объект с массивом elements. Мусор сюда пускать нельзя — он затрёт доску
+	// состоянием, которое фронт распарсить не сможет, и урок окажется пустым.
+	var snap struct {
+		Elements []json.RawMessage `json:"elements"`
+	}
+	if err := json.Unmarshal(body, &snap); err != nil || snap.Elements == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "snapshot must be an object with an elements array"})
+		return
+	}
+
+	if err := h.svc.SaveSnapshot(c.Request.Context(), pageID, body); err != nil {
+		h.log.Error("save board snapshot", "err", err, "page_id", pageID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save snapshot"})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (h *WhiteboardHandler) UploadAsset(c *gin.Context) {

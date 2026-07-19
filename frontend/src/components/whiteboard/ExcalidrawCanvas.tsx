@@ -126,6 +126,7 @@ export function ExcalidrawCanvas({
 
   const {
     status,
+    saveFailed,
     onApiReady,
     onChange,
     sendCursor,
@@ -460,6 +461,13 @@ export function ExcalidrawCanvas({
         {status === 'disconnected' && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm px-3 py-1 rounded-full">
             Переподключение...
+          </div>
+        )}
+        {/* Провал персиста рисование не останавливает, поэтому без баннера он
+            незаметен — а именно так доска однажды и переставала сохраняться. */}
+        {saveFailed && status !== 'disconnected' && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-red-100 border border-red-300 text-red-800 text-sm px-3 py-1 rounded-full">
+            Доска не сохраняется — не закрывайте страницу
           </div>
         )}
         <Excalidraw
