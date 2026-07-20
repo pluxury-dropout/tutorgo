@@ -123,6 +123,12 @@ export function useExcalidrawSync(
   const filesRef = useRef<SnapshotFiles>({})
   // Снапшот пришёл раньше, чем Excalidraw отдал api — буферизуем.
   const pendingSeedRef = useRef<unknown>(null)
+  // Право сохранять: открывается только сидом от сервера. Excalidraw монтируется
+  // пустым, а onChange стартует и без рисования (updateScene коллабораторов), так
+  // что до прихода сида дебаунс успевал запостить пустую сцену поверх целой доски
+  // — на HTTP-персисте это стёрло боевую доску. У WS такой гонки не было: до
+  // открытия сокета отправить было физически нечего куда.
+  const seededRef = useRef(false)
   // Курсоры пиров для нативного рендера Excalidraw.
   const collaboratorsRef = useRef<Map<SocketId, Collaborator>>(new Map())
   // Follow: за кем следим (peerId) и куда ведём камеру.
@@ -232,7 +238,7 @@ export function useExcalidrawSync(
   // teardown (кэш сцены). beacon — для выгрузки страницы, см. вызывающих.
   const sendSnapshotElements = useCallback(
     (elements: readonly ExcalidrawElement[], beacon = false) => {
-      if (!pageId) return
+      if (!pageId || !seededRef.current) return
       const body = serializeSnapshot(elements, filesRef.current)
       if (beacon && beaconSnapshot(pageId, body, httpTokenRef.current)) return
       void postSnapshot(pageId, body)
@@ -344,6 +350,10 @@ export function useExcalidrawSync(
       if (msg.type === 'snapshot') {
         if (apiRef.current) applySnapshot(msg.payload)
         else pendingSeedRef.current = msg.payload
+        // Флаг ставим по факту получения, а не применения: пока api нет,
+        // отправлять всё равно нечего (sendSnapshot требует api, teardown —
+        // кэш из onChange), а onApiReady применит буфер до первого onChange.
+        seededRef.current = true
         return
       }
 
@@ -499,6 +509,7 @@ export function useExcalidrawSync(
     filesRef.current = {}
     collaboratorsRef.current = new Map()
     pendingSeedRef.current = null
+    seededRef.current = false
     lastSceneRef.current = null
     void connect()
     rafRef.current = requestAnimationFrame(tick)

@@ -430,6 +430,16 @@ func (m *WbHubManager) parseTutorJWT(tokenStr string) (string, bool) {
 	return tutorID, true
 }
 
+// seedMessage собирает сообщение сида. Пустая страница (NULL в БД) тоже получает
+// сообщение — с пустым списком элементов: клиент открывает себе право сохранять
+// именно по сиду, и молчание тут заперло бы персист новой доски навсегда.
+func seedMessage(snapshot json.RawMessage) ([]byte, error) {
+	if len(snapshot) == 0 {
+		snapshot = json.RawMessage(`{"elements":[]}`)
+	}
+	return json.Marshal(WbMsg{Type: "snapshot", Payload: snapshot})
+}
+
 // ServeWS — handler GET /ws/board/:pageId?token=...
 // The route is public (browsers cannot set headers on a WebSocket handshake),
 // so authorization is performed here from the ?token= query param.
@@ -444,7 +454,13 @@ func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 		}
 
 		// Load current snapshot from DB (full document).
-		snapshot, _ := svc.GetPageSnapshot(c.Request.Context(), pageID)
+		// Ошибку чтения глотать нельзя: клиент сохраняет доску только после
+		// сида, и молчание здесь — единственное, что удерживает его от записи
+		// пустой сцены поверх целой (см. комментарий у отправки ниже).
+		snapshot, snapErr := svc.GetPageSnapshot(c.Request.Context(), pageID)
+		if snapErr != nil {
+			m.log.Error("read board snapshot for seed", slog.String("error", snapErr.Error()), slog.String("page_id", pageID))
+		}
 
 		conn, err := m.upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -459,9 +475,20 @@ func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 
 		// Сидинг ДО регистрации: снапшот лежит первым в буфере send, поэтому
 		// клиент гарантированно получит его раньше любого чужого update.
-		if snapshot != nil {
-			msg, _ := json.Marshal(WbMsg{Type: "snapshot", Payload: snapshot})
-			client.send <- msg
+		//
+		// Сообщение шлётся ВСЕГДА, когда чтение удалось, — в том числе для
+		// страницы без снапшота (пустой payload). Клиент по нему открывает себе
+		// право сохранять: до сида он постит пустую сцену смонтированного
+		// Excalidraw и затирает доску. Провалилось чтение — молчим, и клиент
+		// не сохранит ничего: лучше потерять урок, чем содержимое доски.
+		if snapErr == nil {
+			msg, err := seedMessage(snapshot)
+			if err != nil {
+				// Битая запись в БД: не JSON. Тот же выбор, что и выше.
+				m.log.Error("marshal board seed", slog.String("error", err.Error()), slog.String("page_id", pageID))
+			} else {
+				client.send <- msg
+			}
 		}
 
 		// Register with the hub, retrying with a fresh hub if the one we got is
