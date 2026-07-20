@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -20,9 +21,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivermigrate"
 )
+
+// Миграции вкомпилированы в бинарник: образу не нужны ни каталог migrations/,
+// ни бинарник goose, и SQL физически не может разъехаться с кодом.
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 func runIntervalLoop(ctx context.Context, interval time.Duration, name string, job func(context.Context) (int64, error), log *slog.Logger) {
 	runJob := func() {
@@ -53,6 +62,16 @@ func main() {
 	pool := database.Connect(cfg.DBUrl, log)
 	defer pool.Close()
 
+	role := os.Getenv("ROLE")
+
+	// Схема приложения — goose. Воркер её не накатывает: схему ведёт API-инстанс.
+	if role != "worker" {
+		if err := runMigrations(pool); err != nil {
+			log.Error("goose migrate", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	}
+
 	// Схема River (river_job и служебные таблицы) — программной миграцией,
 	// не через goose: у River свои версии. Идемпотентно, гоняется обеими ролями.
 	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
@@ -64,8 +83,6 @@ func main() {
 		log.Error("river migrate", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-
-	role := os.Getenv("ROLE")
 	if role == "worker" {
 		runWorker(pool, &cfg, log) // только воркер — выделенный ROLE=worker инстанс
 		return
@@ -139,6 +156,19 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("Server exited cleanly")
+}
+
+// runMigrations накатывает вкомпилированные goose-миграции поверх пула.
+// ponytail: без advisory lock — сейчас схему накатывает единственный API-инстанс.
+// При втором ROLE=api понадобится goose.WithLock, иначе два старта гонятся.
+func runMigrations(pool *pgxpool.Pool) error {
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	return goose.Up(db, "migrations")
 }
 
 // runWorker — роль worker: River-воркер PDF-импортов.

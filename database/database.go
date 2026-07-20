@@ -28,11 +28,34 @@ func Connect(dbURL string, log *slog.Logger) *pgxpool.Pool {
 		os.Exit(1)
 	}
 
-	if err := pool.Ping(context.Background()); err != nil {
+	// База может быть ещё не готова: локально Postgres стартует параллельно с
+	// приложением, в проде — переживает рестарт. Раньше этого ждал nc-луп в
+	// entrypoint.sh, но он проверял открытый порт, а Postgres открывает его
+	// до конца recovery. Ping — честная проверка.
+	if err := waitReady(pool, log); err != nil {
 		log.Error("Failed to ping db", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	log.Info("Connected to database successfully")
 	return pool
+}
+
+// waitReady пингует базу, пока та не ответит. Возвращает последнюю ошибку,
+// если база так и не поднялась.
+// ponytail: фиксированный интервал, не backoff — ждём максимум полминуты,
+// экспоненте тут негде разогнаться. Сдаёмся, а не ждём вечно: упавший
+// контейнер платформа перезапустит, зависший — примет за живой.
+func waitReady(pool *pgxpool.Pool, log *slog.Logger) error {
+	var err error
+	for i := range 30 {
+		if err = pool.Ping(context.Background()); err == nil {
+			return nil
+		}
+		if i == 0 {
+			log.Info("Waiting for database...")
+		}
+		time.Sleep(time.Second)
+	}
+	return err
 }
