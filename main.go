@@ -129,12 +129,30 @@ func main() {
 		})
 	}
 
+	bgWg.Go(func() {
+		watchPoolStarvation(bgCtx, pool, log)
+	})
+
 	r.GET("/health", func(c *gin.Context) {
 		if err := pool.Ping(c.Request.Context()); err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database unavailable"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		// Статистика пула — чтобы «тормозит» можно было отличить от «не хватает
+		// соединений» не гадая. waits — сколько раз запрос пришёл к пустому пулу
+		// и ждал; растёт → MaxConns мал для текущей нагрузки.
+		s := pool.Stat()
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"pool": gin.H{
+				"max":      s.MaxConns(),
+				"total":    s.TotalConns(),
+				"idle":     s.IdleConns(),
+				"acquired": s.AcquiredConns(),
+				"waits":    s.EmptyAcquireCount(),
+				"wait_ms":  s.AcquireDuration().Milliseconds(),
+			},
+		})
 	})
 
 	srv := &http.Server{
@@ -165,6 +183,43 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("Server exited cleanly")
+}
+
+// watchPoolStarvation раз в минуту сообщает, сколько раз за неё запросы пришли
+// к пустому пулу и ждали освобождения соединения.
+//
+// Голодание пула не даёт ошибок — оно даёт латентность: запрос молча стоит в
+// очереди, пользователь видит «тормозит», а логи чисты. Единственный способ
+// отличить это от медленной БД — считать ожидания.
+//
+// Бюджет соединений тесный по вине потолка НАД нами: Supabase-пулер в session
+// mode отдаёт проекту 15 соединений на всех, а MaxConns здесь 7. Один инстанс
+// укладывается, два (rolling deploy) уже впритык, а локальный `make run` или
+// integration-тесты в тот же проект добивают остаток — в этом и была причина
+// EMAXCONNSESSION, полученной при прогоне тестов 2026-07-21.
+//
+// ponytail: без метрик и алертов — Warn в логах ровно там, где эту проблему
+// начнут искать. Появится Sentry/Prometheus — отдавать отсюда же.
+func watchPoolStarvation(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) {
+	var prevWaits int64
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s := pool.Stat()
+			if waits := s.EmptyAcquireCount() - prevWaits; waits > 0 {
+				log.Warn("db pool starvation",
+					slog.Int64("waits_last_minute", waits),
+					slog.Int64("total_wait_ms", s.AcquireDuration().Milliseconds()),
+					slog.Int("acquired", int(s.AcquiredConns())),
+					slog.Int("max", int(s.MaxConns())))
+			}
+			prevWaits = s.EmptyAcquireCount()
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // runMigrations накатывает вкомпилированные goose-миграции поверх пула.
