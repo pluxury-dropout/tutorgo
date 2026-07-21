@@ -8,6 +8,12 @@ type Payment struct {
 	Amount       float64   `json:"amount"`
 	LessonsCount int       `json:"lessons_count"`
 	PaidAt       time.Time `json:"paid_at"`
+
+	// Заполняются только списочными выборками по репетитору (GetAllByTutor,
+	// GetAllByTutorPaged) — там, где платёж показывают вне контекста курса и
+	// нужно понимать, кто заплатил. StudentName пуст у групповых курсов.
+	Subject     string  `json:"subject,omitempty"`
+	StudentName *string `json:"student_name,omitempty"`
 }
 
 type CreatePaymentRequest struct {

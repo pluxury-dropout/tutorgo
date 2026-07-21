@@ -93,15 +93,20 @@ export default function DashboardPage() {
     [todayLessons],
   )
 
+  // monthlyIncome — уже пришедшие деньги, monthlyExpected — ещё ожидаемые в этом
+  // месяце. Множества непересекающиеся, поэтому прогноз кассы — их сумма, а не
+  // одно «из» другого.
+  const monthlyForecast = monthlyIncome + monthlyExpected
+
   const kpis = [
     { color: 'var(--muted-foreground)', value: todayLessons.length,     label: 'уроков сегодня' },
-    { color: 'var(--warning)',          value: fmtAmt(monthlyExpected), label: 'доход'          },
+    { color: 'var(--warning)',          value: fmtAmt(monthlyForecast), label: 'доход'          },
     { color: 'var(--purple)',           value: studentCount,            label: 'учеников'       },
     { color: 'var(--success)',          value: courseCount,             label: 'курсов'         },
   ]
 
-  const incomePct = monthlyExpected > 0
-    ? Math.min(100, Math.round((monthlyIncome / monthlyExpected) * 100))
+  const incomePct = monthlyForecast > 0
+    ? Math.min(100, Math.round((monthlyIncome / monthlyForecast) * 100))
     : 0
 
   return (
@@ -141,7 +146,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>получено за месяц</span>
             <span style={{ fontSize: 12, color: 'var(--foreground)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-              {fmtAmt(monthlyIncome)} <span style={{ color: 'var(--muted-foreground)', fontWeight: 400 }}>из {fmtAmt(monthlyExpected)}</span>
+              {fmtAmt(monthlyIncome)} <span style={{ color: 'var(--muted-foreground)', fontWeight: 400 }}>из {fmtAmt(monthlyForecast)}</span>
             </span>
           </div>
           <div style={{ width: '100%', height: 5, background: 'var(--muted)', borderRadius: 3, overflow: 'hidden' }}>
@@ -202,19 +207,29 @@ export default function DashboardPage() {
             ? <p style={EMPTY}>Платежей пока нет</p>
             : (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 44px 52px', gap: 8, padding: '8px 18px 6px' }}>
-                  <span style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Сумма</span>
-                  <span style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Ур.</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 52px', gap: 8, padding: '8px 18px 6px' }}>
+                  <span style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Курс</span>
+                  <span style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Сумма</span>
                   <span style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>Дата</span>
                 </div>
                 {recentPayments.map((p, i) => (
-                  <SectionRow key={p.id} isFirst={i === 0} style={{ display: 'grid', gridTemplateColumns: '1fr 44px 52px', gap: 8, alignItems: 'center', padding: '9px 18px' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                      {fmtAmt(p.amount)}
-                    </span>
-                    <span style={{ fontSize: 11.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                      {p.lessons_count} ур.
-                    </span>
+                  <SectionRow key={p.id} isFirst={i === 0} style={{ display: 'grid', gridTemplateColumns: '1fr auto 52px', gap: 8, alignItems: 'center', padding: '9px 18px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.subject ?? '—'}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--muted-foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.student_name ?? 'Группа'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {fmtAmt(p.amount)}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
+                        {p.lessons_count} ур.
+                      </div>
+                    </div>
                     <span style={{ fontSize: 11.5, color: 'var(--muted-foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtDate(p.paid_at)}
                     </span>

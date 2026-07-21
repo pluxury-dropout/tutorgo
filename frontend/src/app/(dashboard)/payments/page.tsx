@@ -54,7 +54,9 @@ function PaymentsPageInner() {
     if (!isLoading && total > 0 && page > totalPages) handlePageChange(totalPages)
   }, [isLoading, total, page, totalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const courseMap      = Object.fromEntries(courses.map((c) => [c.id, c.subject]))
+  // Название курса приходит с платежом: useCourses отдаёт только активные курсы
+  // и только первую страницу, поэтому маппингом по нему платежи по архивным
+  // курсам показывались как «—». Курсы остались нужны лишь ради цены урока.
   const coursePriceMap = Object.fromEntries(courses.map((c) => [c.id, c.price_per_cycle / c.lessons_per_cycle]))
 
   function openEdit(p: Payment) {
@@ -125,7 +127,7 @@ function PaymentsPageInner() {
           padding: '10px 18px 8px',
           borderBottom: '1px solid var(--border)',
         }}>
-          {(['Дата', 'Курс', 'Сумма', 'Уроков', ''] as const).map((label, i) => (
+          {(['Дата', 'Курс и ученик', 'Сумма', 'Уроков', ''] as const).map((label, i) => (
             <span key={i} style={{
               fontSize: 11.5, fontWeight: 500,
               color: 'var(--muted-foreground)',
@@ -168,9 +170,14 @@ function PaymentsPageInner() {
               <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
                 {new Date(p.paid_at).toLocaleDateString('ru-RU')}
               </span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {courseMap[p.course_id] ?? '—'}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.subject ?? '—'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.student_name ?? 'Группа'}
+                </div>
+              </div>
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                 {p.amount.toLocaleString()} ₸
               </span>

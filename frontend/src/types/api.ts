@@ -79,6 +79,10 @@ export interface Payment {
   amount: number
   lessons_count: number
   paid_at: string
+  /** Только в списках по репетитору (/payments, /payments/recent). */
+  subject?: string
+  /** Там же; отсутствует у групповых курсов. */
+  student_name?: string | null
 }
 
 export interface PaymentBalance {

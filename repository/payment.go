@@ -128,11 +128,20 @@ func (r *paymentRepository) GetPaymentsForCalendar(ctx context.Context, tutorID 
 	return result, rows.Err()
 }
 
+// studentNameExpr — имя ученика курса для списков платежей; NULL у групповых
+// курсов (student_id IS NULL). TRIM с COALESCE, а не конкатенация напрямую:
+// last_name в схеме nullable, и `first_name || ' ' || NULL` даёт NULL — имя
+// пропало бы целиком.
+const studentNameExpr = `CASE WHEN c.student_id IS NULL THEN NULL
+                              ELSE TRIM(s.first_name || ' ' || COALESCE(s.last_name, ''))
+                         END`
+
 func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
 	rows, err := r.conn.Query(ctx,
-		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at
+		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at, c.subject, `+studentNameExpr+`
 		 FROM payments p
 		 JOIN courses c ON c.id = p.course_id
+		 LEFT JOIN students s ON s.id = c.student_id
 		 WHERE c.tutor_id = $1
 		 ORDER BY p.paid_at DESC
 		 LIMIT $2`, tutorID, limit)
@@ -144,7 +153,7 @@ func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, l
 	var payments []models.Payment
 	for rows.Next() {
 		var p models.Payment
-		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt, &p.Subject, &p.StudentName); err != nil {
 			return nil, err
 		}
 		payments = append(payments, p)
@@ -163,9 +172,10 @@ func (r *paymentRepository) GetAllByTutorPaged(ctx context.Context, tutorID stri
 	}
 
 	rows, err := r.conn.Query(ctx,
-		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at
+		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at, c.subject, `+studentNameExpr+`
 		 FROM payments p
 		 JOIN courses c ON c.id = p.course_id
+		 LEFT JOIN students s ON s.id = c.student_id
 		 WHERE c.tutor_id = $1
 		 ORDER BY p.paid_at DESC
 		 LIMIT $2 OFFSET $3`,
@@ -178,7 +188,7 @@ func (r *paymentRepository) GetAllByTutorPaged(ctx context.Context, tutorID stri
 	payments := []models.Payment{}
 	for rows.Next() {
 		var payment models.Payment
-		if err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt); err != nil {
+		if err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt, &payment.Subject, &payment.StudentName); err != nil {
 			return nil, 0, err
 		}
 		payments = append(payments, payment)
@@ -250,20 +260,47 @@ func (r *paymentRepository) Delete(ctx context.Context, id string, tutorID strin
 	return nil
 }
 
+// GetMonthlyExpected — сумма платежей, ожидаемых к поступлению в текущем месяце.
+//
+// Ученик платит за цикл на его первом уроке, поэтому ожидаемое поступление
+// привязано к дате первого урока каждого ещё не оплаченного цикла. Циклы
+// нарезаются так же, как в computeCyclePositions: уроки курса ранжируются по
+// scheduled_at, платежи покрывают ранги нарастающим итогом по lessons_count.
+// Урок с rank = paid_through+1 открывает первый неоплаченный цикл, дальше
+// старты идут с шагом lessons_per_cycle.
+//
+// Просроченные ожидания (урок цикла уже прошёл, а платежа нет) остаются в сумме:
+// деньги ждали в этом месяце и не пришли — долг не должен исчезать из метрики.
+//
+// ponytail: будущие циклы нарезаются по плановому lessons_per_cycle, тогда как
+// прошлые — по фактическим lessons_count платежей. Если ученик регулярно платит
+// нестандартными пачками, даты прогноза поплывут. Апгрейд — медиана lessons_count
+// последних платежей курса; делать, только если реально разъедется.
 func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
 	var total float64
 	err := r.conn.QueryRow(ctx,
-		`SELECT ROUND(COALESCE(SUM((c.price_per_cycle::float / c.lessons_per_cycle) * lc.cnt), 0))
-		 FROM courses c
-		 JOIN (
-		     SELECT course_id, COUNT(*) AS cnt
-		     FROM lessons
-		     WHERE status IN ('scheduled', 'completed', 'missed')
-		       AND scheduled_at >= date_trunc('month', NOW())
-		       AND scheduled_at <  date_trunc('month', NOW()) + interval '1 month'
-		     GROUP BY course_id
-		 ) lc ON lc.course_id = c.id
-		 WHERE c.tutor_id = $1`,
+		`WITH course_paid AS (
+		     SELECT c.id, c.price_per_cycle, c.lessons_per_cycle,
+		            COALESCE(SUM(p.lessons_count), 0) AS paid_through
+		     FROM courses c
+		     LEFT JOIN payments p ON p.course_id = c.id
+		     WHERE c.tutor_id = $1 AND c.is_active
+		     GROUP BY c.id
+		 ),
+		 ranked AS (
+		     SELECT l.course_id, l.scheduled_at,
+		            ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at) AS rank
+		     FROM lessons l
+		     JOIN course_paid cp ON cp.id = l.course_id
+		     WHERE l.status != 'cancelled'
+		 )
+		 SELECT COALESCE(SUM(cp.price_per_cycle), 0)
+		 FROM ranked r
+		 JOIN course_paid cp ON cp.id = r.course_id
+		 WHERE r.rank > cp.paid_through
+		   AND (r.rank - cp.paid_through - 1) % cp.lessons_per_cycle = 0
+		   AND r.scheduled_at >= date_trunc('month', NOW())
+		   AND r.scheduled_at <  date_trunc('month', NOW()) + interval '1 month'`,
 		tutorID,
 	).Scan(&total)
 	return total, err
