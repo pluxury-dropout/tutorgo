@@ -5,7 +5,6 @@ package repository_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -18,17 +17,11 @@ import (
 )
 
 // Требует применённой migration 019 и репетитора-фикстуры.
-// Запуск: go test -tags=integration ./repository/ -run TestClaim
-func connect(t *testing.T) *pgxpool.Pool {
-	url := os.Getenv("DB_URL")
-	if url == "" {
-		t.Skip("DB_URL не задан — пропускаем integration-тест")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	require.NoError(t, err)
-	t.Cleanup(pool.Close)
-	return pool
-}
+// Запуск: make test-integration (или TEST_DB_URL=... go test -tags=integration ./repository/)
+//
+// Пул берётся из testPool: раньше здесь читался DB_URL, а он в .env смотрит в
+// прод — и `make test-integration` увёл эти тесты в боевую базу, выев ей
+// коннекты. Тестовая база задаётся только через TEST_DB_URL.
 
 // seedTutorWithSubscription создаёт минимально валидного репетитора и его
 // подписку (план monthly, period_end = now), регистрирует cleanup, возвращает UUID.
@@ -57,7 +50,7 @@ func seedTutorWithSubscription(t *testing.T, pool *pgxpool.Pool) string {
 }
 
 func TestClaim_InsertPending_OnlyOneWinsConcurrently(t *testing.T) {
-	pool := connect(t)
+	pool := testPool(t)
 	repo := repository.NewSubscriptionRepository(pool)
 	ctx := context.Background()
 	tutorID := seedTutorWithSubscription(t, pool) // helper: INSERT tutor + subscription, вернуть id
@@ -88,7 +81,7 @@ func TestClaim_InsertPending_OnlyOneWinsConcurrently(t *testing.T) {
 }
 
 func TestListDueAutopay_ExcludesPastGraceWindow(t *testing.T) {
-	pool := connect(t)
+	pool := testPool(t)
 	repo := repository.NewSubscriptionRepository(pool)
 	ctx := context.Background()
 
@@ -115,7 +108,7 @@ func TestListDueAutopay_ExcludesPastGraceWindow(t *testing.T) {
 }
 
 func TestClaim_MarkSuccess_OnlyOneActivatesConcurrently(t *testing.T) {
-	pool := connect(t)
+	pool := testPool(t)
 	repo := repository.NewSubscriptionRepository(pool)
 	ctx := context.Background()
 	tutorID := seedTutorWithSubscription(t, pool)

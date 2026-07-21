@@ -15,8 +15,8 @@ func TestSeedMessage(t *testing.T) {
 		want     string
 		wantErr  bool
 	}{
-		{"пустая страница", nil, `{"type":"snapshot","payload":{"elements":[]}}`, false},
-		{"нулевая длина", json.RawMessage{}, `{"type":"snapshot","payload":{"elements":[]}}`, false},
+		{"пустая страница", nil, `{"type":"snapshot","payload":{"elements":[],"files":{}}}`, false},
+		{"нулевая длина", json.RawMessage{}, `{"type":"snapshot","payload":{"elements":[],"files":{}}}`, false},
 		{"есть снапшот", json.RawMessage(`{"elements":[{"id":"a"}]}`), `{"type":"snapshot","payload":{"elements":[{"id":"a"}]}}`, false},
 		{"битая запись", json.RawMessage("not json"), "", true},
 	}

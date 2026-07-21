@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"time"
 	"tutorgo/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -28,7 +30,13 @@ type WhiteboardRepository interface {
 	GetInviteByBoard(ctx context.Context, boardID string) (models.BoardInvite, error)
 	CreateAsset(ctx context.Context, boardID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error)
 	GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error)
-	GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error)
+
+	// Поэлементная модель (миграция 029).
+	MergeElements(ctx context.Context, pageID string, els []models.BoardElement) error
+	MergeFiles(ctx context.Context, pageID string, files json.RawMessage) error
+	GetPageState(ctx context.Context, pageID string) (state json.RawMessage, migrated bool, err error)
+	ImportSnapshotToElements(ctx context.Context, pageID string) error
+	DeleteOldTombstones(ctx context.Context) (int64, error)
 }
 
 type whiteboardRepository struct {
@@ -224,15 +232,156 @@ func (r *whiteboardRepository) GetAsset(ctx context.Context, assetID string) (mo
 	return a, err
 }
 
-func (r *whiteboardRepository) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
-	var stored []byte
-	err := r.conn.QueryRow(ctx,
-		`SELECT snapshot FROM board_pages WHERE id = $1`, pageID,
-	).Scan(&stored)
-	if err != nil {
-		return nil, err
+// mergeElementSQL — авторитетное правило слияния Excalidraw, выраженное в
+// WHERE-клаузе UPSERT'а: без блокировок и без чтения перед записью. Побеждает
+// больший version; при равных версиях — МЕНЬШИЙ nonce (см. BoardElement.Beats,
+// там же обоснование контринтуитивного знака).
+//
+// Два инстанса могут писать один элемент одновременно — результат детерминирован
+// средствами Postgres. Проигравшая запись просто не выполняется.
+const mergeElementSQL = `
+INSERT INTO board_elements (page_id, element_id, version, nonce, data)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (page_id, element_id) DO UPDATE
+   SET version    = EXCLUDED.version,
+       nonce      = EXCLUDED.nonce,
+       data       = EXCLUDED.data,
+       updated_at = now()
+ WHERE board_elements.version < EXCLUDED.version
+    OR (board_elements.version = EXCLUDED.version
+        AND board_elements.nonce > EXCLUDED.nonce)`
+
+func (r *whiteboardRepository) MergeElements(ctx context.Context, pageID string, els []models.BoardElement) error {
+	if len(els) == 0 {
+		return nil
 	}
-	return gunzipSnapshot(stored)
+	batch := &pgx.Batch{}
+	for _, e := range els {
+		batch.Queue(mergeElementSQL, pageID, e.ID, e.Version, e.Nonce, e.Data)
+	}
+	// Close возвращает первую ошибку пачки и дочитывает остальные результаты —
+	// разбирать их поштучно незачем: сбой тут означает недоступную БД, а не
+	// проблему конкретного элемента.
+	return r.conn.SendBatch(ctx, batch).Close()
+}
+
+// MergeFiles дописывает указатели на файлы. Записи иммутабельны (новая картинка
+// получает новый fileId), поэтому конфликта нет и слияние — это `||`.
+func (r *whiteboardRepository) MergeFiles(ctx context.Context, pageID string, files json.RawMessage) error {
+	if len(files) == 0 {
+		return nil
+	}
+	_, err := r.conn.Exec(ctx,
+		`UPDATE board_pages SET files = files || $2 WHERE id = $1`,
+		pageID, files,
+	)
+	return err
+}
+
+// pageStateSQL собирает сид целиком силами Postgres: на выходе готовое
+// {"elements":[…],"files":{…}}, сборки на стороне Go нет.
+//
+// Порядок элементов — по фракционному индексу Excalidraw (`index`,
+// лексикографически сортируемая строка): это и есть z-order сцены. Элементы без
+// индекса (Excalidraw допускает null) идут первыми и получат индекс при загрузке;
+// element_id вторым ключом делает порядок детерминированным.
+const pageStateSQL = `
+SELECT jsonb_build_object(
+           'elements', COALESCE(
+               jsonb_agg(e.data ORDER BY e.data->>'index' ASC NULLS FIRST, e.element_id)
+                   FILTER (WHERE e.element_id IS NOT NULL),
+               '[]'::jsonb),
+           'files', p.files),
+       p.elements_migrated_at IS NOT NULL
+  FROM board_pages p
+  LEFT JOIN board_elements e ON e.page_id = p.id
+ WHERE p.id = $1
+ GROUP BY p.id`
+
+func (r *whiteboardRepository) GetPageState(ctx context.Context, pageID string) (json.RawMessage, bool, error) {
+	var state []byte
+	var migrated bool
+	if err := r.conn.QueryRow(ctx, pageStateSQL, pageID).Scan(&state, &migrated); err != nil {
+		return nil, false, err
+	}
+	return state, migrated, nil
+}
+
+// ImportSnapshotToElements переносит страницу со старой модели (один BLOB) на
+// поэлементную. Идемпотентна: FOR UPDATE сериализует два одновременных
+// подключения к одной странице, и второе увидит выставленный флаг.
+//
+// Признак «уже мигрировали» — именно флаг, а не наличие строк: через сутки
+// чистка tombstones обнулит полностью очищенную доску, и импорт по признаку
+// «нет строк» воскресил бы старый снапшот.
+func (r *whiteboardRepository) ImportSnapshotToElements(ctx context.Context, pageID string) error {
+	tx, err := r.conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // после Commit — no-op
+
+	var stored []byte
+	var migratedAt *time.Time
+	err = tx.QueryRow(ctx,
+		`SELECT snapshot, elements_migrated_at FROM board_pages WHERE id = $1 FOR UPDATE`,
+		pageID,
+	).Scan(&stored, &migratedAt)
+	if err != nil {
+		return err
+	}
+	if migratedAt != nil {
+		return nil // успели параллельно
+	}
+
+	snapshot, err := gunzipSnapshot(stored)
+	if err != nil {
+		// Битый BLOB не должен запирать доску навсегда: помечаем мигрированной
+		// и открываем пустой. Содержимое всё равно нечитаемо.
+		snapshot = nil
+	}
+	var snap struct {
+		Elements []json.RawMessage `json:"elements"`
+		Files    json.RawMessage   `json:"files"`
+	}
+	if len(snapshot) > 0 {
+		_ = json.Unmarshal(snapshot, &snap) // мусор/старый tldraw-формат → пустая доска
+	}
+
+	els, _ := models.ParseBoardElements(snap.Elements)
+	if len(els) > 0 {
+		batch := &pgx.Batch{}
+		for _, e := range els {
+			batch.Queue(
+				`INSERT INTO board_elements (page_id, element_id, version, nonce, data)
+                 VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+				pageID, e.ID, e.Version, e.Nonce, e.Data)
+		}
+		if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+			return err
+		}
+	}
+	if len(snap.Files) == 0 {
+		snap.Files = json.RawMessage(`{}`)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE board_pages SET files = files || $2, elements_migrated_at = now() WHERE id = $1`,
+		pageID, snap.Files,
+	); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// DeleteOldTombstones убирает удалённые элементы старше суток. Свежие держим:
+// без них пир, пропустивший удаление офлайн, воскресит элемент через reconcile.
+// За сутки такой вкладке не дожить до реконнекта — воскрешать некому.
+func (r *whiteboardRepository) DeleteOldTombstones(ctx context.Context) (int64, error) {
+	tag, err := r.conn.Exec(ctx,
+		`DELETE FROM board_elements
+          WHERE updated_at < now() - interval '24 hours'
+            AND data->>'isDeleted' = 'true'`)
+	return tag.RowsAffected(), err
 }
 
 // Снапшоты хранятся gzip-ом в bytea (миграция 028). Записи, оставшиеся от jsonb,

@@ -227,10 +227,13 @@ func (h *WhiteboardHandler) StudentCourseBoardToken(c *gin.Context) {
 
 // SaveSnapshot — POST /public/board/pages/:pageId/snapshot?token=...
 //
-// Персист доски намеренно идёт по HTTP, а не по WS: у WS-хаба ReadLimit 512 КБ,
-// и переросший его снапшот молча не сохранялся, пока рисование по `update`
-// продолжало выглядеть рабочим. HTTP даёт лимит тела под нашим контролем и,
-// главное, код ответа — клиент видит провал сохранения и может показать это.
+// Семантика — MERGE, а не «перезаписать»: присланная сцена сливается поэлементно
+// тем же правилом, что и правки по WS. Клиент, успевший запостить пустую сцену
+// смонтированного Excalidraw до прихода сида, больше не стирает доску — merge не
+// удаляет то, чего нет во входящем сообщении (инцидент 2026-07-20).
+//
+// Роут остаётся ради вкладок со старым JS и снимается через неделю после выката
+// фронта; тогда же уйдёт и SaveSnapshot из сервиса.
 //
 // Роут публичный по той же причине, что и /ws/board: доску правит и гость по
 // invite-ссылке, JWT у него нет. Авторизация — тем же токеном, что у WS.
@@ -249,21 +252,32 @@ func (h *WhiteboardHandler) SaveSnapshot(c *gin.Context) {
 		return
 	}
 
-	// Проверяем ровно тот контракт, который читает клиентский parseSnapshot:
-	// объект с массивом elements. Мусор сюда пускать нельзя — он затрёт доску
-	// состоянием, которое фронт распарсить не сможет, и урок окажется пустым.
+	// Проверяем контракт: объект с массивом elements и картой files.
 	var snap struct {
 		Elements []json.RawMessage `json:"elements"`
+		Files    json.RawMessage   `json:"files"`
 	}
 	if err := json.Unmarshal(body, &snap); err != nil || snap.Elements == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "snapshot must be an object with an elements array"})
 		return
 	}
 
-	if err := h.svc.SaveSnapshot(c.Request.Context(), pageID, body); err != nil {
-		h.log.Error("save board snapshot", "err", err, "page_id", pageID)
+	if err := h.svc.MergeSnapshot(c.Request.Context(), pageID, snap.Elements, snap.Files); err != nil {
+		h.log.Error("merge board snapshot", "err", err, "page_id", pageID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save snapshot"})
 		return
+	}
+
+	// Дублируем в старую колонку board_pages.snapshot. Источником истины она
+	// быть перестала, но пока фронт шлёт сцену целиком — это бесплатный
+	// актуальный бэкап и единственное, что делает откат на прежний сервер
+	// безопасным не только в первые минуты. Ошибку только логируем:
+	// авторитетная запись уже прошла, ронять из-за бэкапа ответ незачем.
+	//
+	// Уйдёт вместе с роутом; к тому моменту бэкап переедет на периодический
+	// дамп (см. «История и чистка» в спеке).
+	if err := h.svc.SaveSnapshot(c.Request.Context(), pageID, body); err != nil {
+		h.log.Warn("backup board snapshot", "err", err, "page_id", pageID)
 	}
 	c.Status(http.StatusNoContent)
 }

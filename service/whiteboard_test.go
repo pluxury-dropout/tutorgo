@@ -74,12 +74,25 @@ func (m *mockWhiteboardRepo) GetAsset(ctx context.Context, assetID string) (mode
 	args := m.Called(ctx, assetID)
 	return args.Get(0).(models.BoardAsset), args.Error(1)
 }
-func (m *mockWhiteboardRepo) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
+func (m *mockWhiteboardRepo) MergeElements(ctx context.Context, pageID string, els []models.BoardElement) error {
+	return m.Called(ctx, pageID, els).Error(0)
+}
+func (m *mockWhiteboardRepo) MergeFiles(ctx context.Context, pageID string, files json.RawMessage) error {
+	return m.Called(ctx, pageID, files).Error(0)
+}
+func (m *mockWhiteboardRepo) GetPageState(ctx context.Context, pageID string) (json.RawMessage, bool, error) {
 	args := m.Called(ctx, pageID)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, args.Bool(1), args.Error(2)
 	}
-	return args.Get(0).(json.RawMessage), args.Error(1)
+	return args.Get(0).(json.RawMessage), args.Bool(1), args.Error(2)
+}
+func (m *mockWhiteboardRepo) ImportSnapshotToElements(ctx context.Context, pageID string) error {
+	return m.Called(ctx, pageID).Error(0)
+}
+func (m *mockWhiteboardRepo) DeleteOldTombstones(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return int64(args.Int(0)), args.Error(1)
 }
 
 func TestWhiteboardService_GetOrCreateBoard_CreatesFirstPage(t *testing.T) {

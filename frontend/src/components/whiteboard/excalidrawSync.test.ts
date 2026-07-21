@@ -8,6 +8,7 @@ import {
   mergeCollaborators,
   imageFromClipboard,
   serializeSnapshot,
+  serializeUpdate,
   compactTombstones,
 } from './excalidrawSync.ts'
 
@@ -154,6 +155,100 @@ test('serializeSnapshot: режет точность координат, но н
     utf8ByteSize(json) * 2 < utf8ByteSize(naive),
     `ожидали сжатие вдвое, вышло ${utf8ByteSize(naive)} → ${utf8ByteSize(json)}`
   )
+})
+
+test('serializeUpdate: готовое тело WS-сообщения с округлёнными координатами', () => {
+  // Тот же штрих, что и в тесте serializeSnapshot: flushUpdate раньше слал
+  // его голым JSON.stringify — координаты уезжали полными float64.
+  const points = Array.from({ length: 200 }, (_, i) => [
+    i * 0.41971259276760975,
+    i * -0.41967416810530267,
+  ])
+  const el = {
+    id: 'vdeKTFM8OrFzA9xCKCnnk',
+    type: 'freedraw',
+    x: 6567.954082645468,
+    y: 1991.2004047360947,
+    seed: 1847884469,
+    version: 42,
+    versionNonce: 918273645,
+    angle: 1.5707963267948966,
+    isDeleted: false,
+    points,
+  }
+  const json = serializeUpdate([el])
+  const parsed = JSON.parse(json) as {
+    type: string
+    payload: { elements: (typeof el)[] }
+  }
+
+  // Валидный конверт WS-сообщения — формат протокола не меняется.
+  assert.equal(parsed.type, 'update')
+  assert.ok(Array.isArray(parsed.payload.elements))
+  const got = parsed.payload.elements[0]
+
+  // Координаты (x/y и точки freedraw) округлены до COORD_PRECISION.
+  assert.equal(got.x, 6567.95)
+  assert.equal(got.points[1][0], 0.42)
+  assert.equal(got.points[1][1], -0.42)
+  // angle — до ANGLE_PRECISION.
+  assert.equal(got.angle, 1.5708)
+
+  // Ради чего всё: тот же штрих раньше не влезал в округление вовсе — этот
+  // путь сериализации был голым JSON.stringify.
+  const naive = JSON.stringify({ type: 'update', payload: { elements: [el] } })
+  assert.ok(
+    utf8ByteSize(json) * 2 < utf8ByteSize(naive),
+    `ожидали сжатие вдвое, вышло ${utf8ByteSize(naive)} → ${utf8ByteSize(json)}`
+  )
+})
+
+// Ключевой тест: правило слияния Excalidraw держится на version/versionNonce/
+// seed/id. Это целые числа — округление их не меняет по конструкции
+// roundFloats (Math.round на целом — тот же целый), но именно этот факт и
+// нужно зафиксировать явно: искажение любого из них ломает reconcile на
+// клиенте и UPSERT на сервере молча, доска у двоих разъезжается без единой
+// ошибки в логах.
+test('serializeUpdate: version/versionNonce/seed/id проходят без изменений', () => {
+  const el = {
+    id: 'vdeKTFM8OrFzA9xCKCnnk',
+    type: 'freedraw',
+    x: 1.23456,
+    y: -9.87654,
+    seed: 1847884469,
+    version: 42,
+    versionNonce: 918273645,
+    angle: 0.12345678,
+    points: [[0.123456, 0.654321]],
+  }
+  const json = serializeUpdate([el])
+  const got = (
+    JSON.parse(json) as { payload: { elements: (typeof el)[] } }
+  ).payload.elements[0]
+
+  assert.equal(got.id, el.id)
+  assert.equal(got.version, el.version)
+  assert.equal(got.versionNonce, el.versionNonce)
+  assert.equal(got.seed, el.seed)
+  // Геометрия при этом реально округлена — не совпадает с исходной.
+  assert.notEqual(got.x, el.x)
+  assert.notEqual(got.angle, el.angle)
+})
+
+test('serializeUpdate: tombstone (isDeleted) не выбрасывается, в отличие от serializeSnapshot', () => {
+  const tombstone = {
+    id: 'dead-el',
+    version: 5,
+    isDeleted: true,
+    updated: Date.now() - 48 * 60 * 60 * 1000, // протух бы в compactTombstones
+    x: 1,
+    y: 1,
+  }
+  const json = serializeUpdate([tombstone])
+  const got = (
+    JSON.parse(json) as { payload: { elements: { id: string }[] } }
+  ).payload.elements
+  assert.deepEqual(got.map((el) => el.id), ['dead-el'])
 })
 
 test('mergeCollaborators: своё второе соединение не становится вторым участником', () => {

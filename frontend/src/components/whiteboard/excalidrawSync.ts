@@ -72,6 +72,21 @@ export function serializeSnapshot<T extends Perishable>(
   )
 }
 
+// Тело WS-сообщения flushUpdate. Тот же roundFloats, что и у снапшота — иначе
+// два пути сериализации разъедутся по точности. compactTombstones здесь НЕ
+// нужен: flushUpdate шлёт дифф уже изменившихся элементов, а не всю сцену, и
+// isDeleted-элемент в дифф — это легитимное удаление, которое должно доехать
+// до пира, а не протухший мусор для компакции.
+// Возвращает готовое тело сообщения целиком, а не только elements: округление
+// живёт в replacer'е JSON.stringify, а не в самих данных, поэтому оно
+// применяется только тем, кто вызывает stringify с этим replacer'ом. Отдай
+// функция массив — вызывающий сериализовал бы его сам, забыл про replacer, и
+// округление тихо перестало бы работать. Единственная сериализация здесь
+// делает эту ошибку невозможной.
+export function serializeUpdate<T>(elements: readonly T[]): string {
+  return JSON.stringify({ type: 'update', payload: { elements } }, roundFloats)
+}
+
 // Возвращает элементы, чья версия изменилась или которых не было в prev,
 // и новую карту версий. Excalidraw бампает version на каждую правку, включая
 // удаление (isDeleted: true — tombstone едет как обычный update).

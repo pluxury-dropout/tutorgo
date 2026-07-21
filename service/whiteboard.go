@@ -20,9 +20,17 @@ type WhiteboardService interface {
 	SaveAsset(ctx context.Context, boardID, tutorID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error)
 	SaveAssetByInvite(ctx context.Context, inviteID, filePath, mimeType string, sizeBytes int) (models.BoardAsset, error)
 	GetAsset(ctx context.Context, assetID string) (models.BoardAsset, error)
-	GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error)
 	// PageBelongsToTutor reports whether pageID's board is owned by tutorID.
 	PageBelongsToTutor(ctx context.Context, pageID, tutorID string) (bool, error)
+
+	// MergeElements сливает правки в поэлементное хранилище.
+	MergeElements(ctx context.Context, pageID string, els []models.BoardElement) error
+	// MergeSnapshot сливает полную сцену: тем же правилом, поэлементно.
+	MergeSnapshot(ctx context.Context, pageID string, elements []json.RawMessage, files json.RawMessage) error
+	// GetPageState отдаёт сид клиента, при необходимости переведя страницу на
+	// поэлементную модель.
+	GetPageState(ctx context.Context, pageID string) (json.RawMessage, error)
+	DeleteOldTombstones(ctx context.Context) (int64, error)
 }
 
 type whiteboardService struct {
@@ -198,6 +206,43 @@ func (s *whiteboardService) GetAsset(ctx context.Context, assetID string) (model
 	return s.repo.GetAsset(ctx, assetID)
 }
 
-func (s *whiteboardService) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
-	return s.repo.GetPageSnapshot(ctx, pageID)
+func (s *whiteboardService) MergeElements(ctx context.Context, pageID string, els []models.BoardElement) error {
+	return s.repo.MergeElements(ctx, pageID, els)
+}
+
+// MergeSnapshot — точка входа для клиента, который шлёт сцену целиком.
+// Семантика именно merge, а не «перезаписать»: пустой список элементов теперь
+// ничего не удаляет, поэтому клиент физически не может стереть доску, успев
+// запостить пустую сцену до прихода сида (инцидент 2026-07-20).
+func (s *whiteboardService) MergeSnapshot(ctx context.Context, pageID string, elements []json.RawMessage, files json.RawMessage) error {
+	els, err := models.ParseBoardElements(elements)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.MergeElements(ctx, pageID, els); err != nil {
+		return err
+	}
+	return s.repo.MergeFiles(ctx, pageID, files)
+}
+
+// GetPageState собирает сид. Страница, не переведённая на поэлементную модель,
+// переезжает здесь же — ленивый импорт вместо разового скрипта: страниц дюжина,
+// и первое же открытие каждой из них делает работу.
+func (s *whiteboardService) GetPageState(ctx context.Context, pageID string) (json.RawMessage, error) {
+	state, migrated, err := s.repo.GetPageState(ctx, pageID)
+	if err != nil {
+		return nil, err
+	}
+	if migrated {
+		return state, nil
+	}
+	if err := s.repo.ImportSnapshotToElements(ctx, pageID); err != nil {
+		return nil, err
+	}
+	state, _, err = s.repo.GetPageState(ctx, pageID)
+	return state, err
+}
+
+func (s *whiteboardService) DeleteOldTombstones(ctx context.Context) (int64, error) {
+	return s.repo.DeleteOldTombstones(ctx)
 }

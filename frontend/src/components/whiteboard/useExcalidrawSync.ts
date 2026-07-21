@@ -36,6 +36,7 @@ import {
   blobToDataURL,
   mergeCollaborators,
   serializeSnapshot,
+  serializeUpdate,
   type SnapshotFiles,
 } from './excalidrawSync'
 import { lerpCamera, camerasClose, type Camera } from './viewportInterp'
@@ -259,9 +260,10 @@ export function useExcalidrawSync(
     const { changed, next } = diffChangedElements(versionsRef.current, elements)
     versionsRef.current = next
     if (changed.length === 0) return
-    wsRef.current.send(
-      JSON.stringify({ type: 'update', payload: { elements: changed } })
-    )
+    // roundFloats режет координаты до COORD_PRECISION — тот же путь, что у
+    // снапшота. Голый JSON.stringify гнал полные float64 (40 байт на точку
+    // пера вместо 14): штрих на 400-500 точек уходил ~300 КБ вместо ~105 КБ.
+    wsRef.current.send(serializeUpdate(changed))
   }, [])
 
   // Вливает удалённые элементы через reconcileElements (слияние по

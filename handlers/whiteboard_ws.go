@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -15,6 +16,83 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
+)
+
+// wbMaxMessageBytes — предел на одно входящее WS-сообщение от клиента.
+// Используется дважды: в SetReadLimit (байты на проводе) и как cap для
+// io.LimitReader поверх распакованного потока в readPump.
+//
+// Раньше одного SetReadLimit хватало: без сжатия "на проводе" и "в памяти
+// после чтения" — одно и то же число. С permessage-deflate это перестало быть
+// так: SetReadLimit по-прежнему считает только сжатые байты кадра (gorilla
+// сравнивает readLimit с длиной, заявленной в заголовке фрейма, — это
+// проверяется ДО распаковки), а сам разжатый поток отдаётся через
+// io.ReadAll(NextReader()) без какой-либо верхней границы. При коэффициенте
+// сжатия raw-deflate до ~1000:1 на сильно повторяющихся данных (тот же класс
+// проблемы, что decompression bomb, CWE-409) фрейм в 512 КБ на проводе может
+// распаковаться в сотни МБ в процессе, который держит в памяти хабы ВСЕХ
+// досок разом — не только текущей. Поэтому предел применяется вручную ещё
+// раз, уже к распакованным байтам (см. readPump). Не убирать этот второй
+// лимит при рефакторинге: без него защита от SetReadLimit — иллюзия.
+const wbMaxMessageBytes = 512 * 1024
+
+// wbCloseWriteWait — дедлайн на отправку close-фрейма при принудительном
+// разрыве. Равен writeWait, который сама gorilla использует для ровно той же
+// ситуации (conn.go:935, превышение SetReadLimit) — не выдумываем свой
+// таймаут для симметричного случая. На пути атаки (гость шлёт мусор, ждать
+// его нечего) держать горутину дольше секунды нет смысла.
+const wbCloseWriteWait = 1 * time.Second
+
+// wbUpdateThrottleMs зеркалит UPDATE_THROTTLE_MS из
+// frontend/src/components/whiteboard/useExcalidrawSync.ts:49 — клиент шлёт
+// update (и viewport — тот же троттл) не чаще, чем раз в это число
+// миллисекунд (`if (!updateTimerRef.current)` в flushUpdate ограничивает
+// именно частоту флашей, не их размер). Го-константа НЕ импортируется из
+// фронта — единственное место, где связь может тихо порваться при будущей
+// правке троттла. Поменяли одно — проверьте другое.
+const wbUpdateThrottleMs = 100
+
+// wbByteRateLimit/wbByteRateBurst — потолок на РАСПАКОВАННЫЙ поток ОДНОГО
+// соединения, байт/сек (token bucket, golang.org/x/time/rate — как в
+// middleware/rate_limit.go). wbMaxMessageBytes закрывает бомбу в одном
+// сообщении, но сжатие обрушило именно СТОИМОСТЬ ПОТОКА бомб: на канале
+// 10 Мбит/с (~1.25 МБ/с сырых байт) кадр в ~600 Б на проводе (тот же
+// коэффициент ~1000:1, что и в комментарии у wbMaxMessageBytes) даёт
+// ~2000 кадров/с, и каждый распаковывается в 512 КБ — порядка 1 ГБ/с
+// аллокаций (io.ReadAll + json.Unmarshal + фан-аут по пирам + buf.addPayload)
+// в процессе, который держит хабы ВСЕХ досок. Лимит по числу сообщений тут не
+// годится: сообщения разного размера, счётчик либо душит рисование, либо не
+// остановит поток мелких бомб — лимитировать нужно именно байты.
+//
+// Лимит ОБЯЗАН считаться от wbMaxMessageBytes, а не от типичного размера
+// кадра. Первая версия была выведена из "типичного" freedraw-штриха
+// (~100 КБ) и разошлась с тем, что на самом деле разрешает гард размера:
+// система уже сегодня допускает wbMaxMessageBytes КАЖДЫЕ wbUpdateThrottleMs
+// мс — например, драг крупного выделения гоняет flushUpdate с диффом ВСЕХ
+// выделенных элементов разом, и 4-5 штрихов в выделении легко подводят кадр
+// к 512 КБ. Гард размера такой кадр пропускает; лимитер, посчитанный от
+// "типичного" случая, рвал ровно такое соединение посреди жеста (эмпирически
+// подтверждено: 500 КБ раз в 100 мс убивало соединение за ~0.91с при
+// лимите 4 МБ/с). Формула ниже делает такое расхождение невозможным: правка
+// wbMaxMessageBytes или wbUpdateThrottleMs тянет лимит за собой.
+//
+//	wbByteRateLimit = wbMaxMessageBytes × (1000 / wbUpdateThrottleMs) × запас
+//
+// (1000 / wbUpdateThrottleMs) — максимум флашей в секунду, которые троттл
+// физически допускает. Запас ×2 — не защита от легитимного пика (потолок
+// точный, не оценка), а буфер на джиттер сети/шедулера, из-за которого два
+// кадра-максимума могут прийти теснее номинального троттла. Итог — порядка
+// 10 МБ/с: атака всё ещё падает на два порядка (с ~1 ГБ/с до ~10 МБ/с,
+// стократное сокращение) — это меньше, чем дал бы атакующему гигабитный
+// аплинк вообще без сжатия. Burst — 2×wbMaxMessageBytes: гарантирует, что
+// одно сообщение на пределе wbMaxMessageBytes всегда проходит (AllowN(n) с
+// n > burst не проходит никогда — это не запас, а необходимое условие
+// корректности), и оставляет место ещё под одно такое же следом (update и
+// viewport в одном тике).
+const (
+	wbByteRateLimit = wbMaxMessageBytes * (1000 / wbUpdateThrottleMs) * 2
+	wbByteRateBurst = 2 * wbMaxMessageBytes
 )
 
 // WbMsg — message between client and hub
@@ -41,12 +119,17 @@ type wbClient struct {
 	conn   *websocket.Conn
 	send   chan []byte
 	peerID string
+	// limiter — токен-бакет на распакованные байты входящего потока этого
+	// соединения. См. wbByteRateLimit/wbByteRateBurst: закрывает DoS через
+	// поток мелких сжатых кадров, который wbMaxMessageBytes (лимит на ОДНО
+	// сообщение) не видит.
+	limiter *rate.Limiter
 }
 
 // wbHub — coordinator for one board page.
-// Хаб — чистый ретранслятор: состояния доски он не хранит и не персистит.
-// Снапшот читается из БД в ServeWS (сидинг нового клиента) и пишется туда
-// HTTP-роутом SaveSnapshot — WS в пути сохранения не участвует.
+// Состояния доски хаб в памяти не держит: правки он рассылает пирам и отдаёт в
+// elementBuffer, который пишет их в board_elements пачками. Сид нового клиента
+// собирает ServeWS из той же таблицы.
 type wbHub struct {
 	pageID     string
 	clients    map[*wbClient]bool
@@ -201,7 +284,9 @@ func (h *wbHub) run() {
 				continue
 
 			case "update":
-				// Incremental diff: relay verbatim, never store or persist.
+				// Ретранслируем как раньше — но теперь ещё и пишем: сервер стал
+				// источником истины. Сама запись отложена до конца цикла (см.
+				// ниже): разбор JSON не должен стоять между пиром и его штрихом.
 
 			default:
 				// Unknown message type: relay verbatim.
@@ -219,6 +304,15 @@ func (h *wbHub) run() {
 					close(client.send)
 				}
 			}
+
+			// Персист — строго после рассылки: рисование не ждёт ни разбора
+			// JSON, ни тем более Supabase (буфер пишет в БД своей горутиной).
+			//
+			// Пишем и серверные пуши (sender == nil): элементы, которые
+			// сгенерировал воркер импорта PDF, — такое же содержимое доски.
+			if parsed.Type == "update" {
+				h.mgr.buf.addPayload(h.pageID, parsed.Payload)
+			}
 		}
 	}
 }
@@ -228,15 +322,50 @@ func (c *wbClient) readPump() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
-	c.conn.SetReadLimit(512 * 1024)
+	c.conn.SetReadLimit(wbMaxMessageBytes)
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
 	for {
-		_, data, err := c.conn.ReadMessage()
+		_, r, err := c.conn.NextReader()
 		if err != nil {
+			break
+		}
+		// ReadMessage() внутри и есть NextReader()+io.ReadAll() (conn.go:1102-
+		// 1110) — разворачиваем его руками, чтобы вставить LimitReader между
+		// ними. См. wbMaxMessageBytes: при включённом сжатии SetReadLimit выше
+		// бьёт только по проводу, а без этого LimitReader распакованный поток
+		// ничем не ограничен. +1, чтобы отличить "ровно лимит" от "больше
+		// лимита" одним чтением.
+		data, err := io.ReadAll(io.LimitReader(r, wbMaxMessageBytes+1))
+		if err != nil {
+			break
+		}
+		if len(data) > wbMaxMessageBytes {
+			// Не молчим: обрыв без следа неотличим от обычного дисконнекта, а
+			// это как раз тот случай, который стоит увидеть в логах — либо
+			// баг клиента, либо decompression bomb (CWE-409).
+			c.hub.log.Warn("board ws: decompressed message over limit, closing",
+				slog.String("pageId", c.hub.pageID), slog.String("peerId", c.peerID))
+			_ = c.conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseMessageTooBig, ""),
+				time.Now().Add(wbCloseWriteWait))
+			break
+		}
+		// Гард выше ловит бомбу в ОДНОМ сообщении; этот — поток из МНОГИХ
+		// небольших сообщений, каждое честного размера, но суммарно
+		// разжимающих на сервере на порядки больше, чем клиент реально отправил
+		// на проводе. См. wbByteRateLimit — легитимное рисование в этот
+		// бюджет укладывается с многократным запасом, упор в лимит — сигнал,
+		// не штатная ситуация.
+		if !c.limiter.AllowN(time.Now(), len(data)) {
+			c.hub.log.Warn("board ws: byte-rate limit exceeded, closing",
+				slog.String("pageId", c.hub.pageID), slog.String("peerId", c.peerID))
+			_ = c.conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, ""),
+				time.Now().Add(wbCloseWriteWait))
 			break
 		}
 		c.hub.broadcast <- wbBroadcast{sender: c, data: data}
@@ -285,6 +414,7 @@ type WbHubManager struct {
 	jwtSecret string
 	origins   map[string]bool
 	upgrader  websocket.Upgrader
+	buf       *elementBuffer
 }
 
 func NewWbHubManager(svc service.WhiteboardService, subs subState, log *slog.Logger, jwtSecret string, allowedOrigins []string) *WbHubManager {
@@ -304,11 +434,33 @@ func NewWbHubManager(svc service.WhiteboardService, subs subState, log *slog.Log
 		log:       log,
 		jwtSecret: jwtSecret,
 		origins:   origins,
+		buf:       newElementBuffer(svc, log),
 	}
 	m.upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin:     m.checkOrigin,
+		// Штрихи — это массивы из сотен близких float64-координат: жмутся в
+		// разы даже без общего словаря между сообщениями (permessage-deflate
+		// в gorilla поддерживает только no_context_takeover, RFC 7692).
+		// Уровень сжатия не задаём: дефолт gorilla — flate.BestSpeed (1), то
+		// же обоснование, что у gzip.BestSpeed в repository/whiteboard.go —
+		// данные сжимаются десятки раз в секунду, максимальный уровень даёт
+		// проценты ценой CPU. Опасность decompression bomb и DoS потоком
+		// бомб, которую даёт сжатие без ограничений, закрыта отдельно в
+		// readPump — см. wbMaxMessageBytes и wbByteRateLimit.
+		//
+		// Побочный эффект шире, чем только штрихи: как только сжатие
+		// негоциировано, WriteMessage теряет zero-alloc fast path на ВСЕХ
+		// исходящих кадрах этого соединения, а не только текстовых с
+		// данными доски. Fast path в gorilla включён, пока
+		// c.newCompressionWriter == nil (conn.go:769); после негоциации он
+		// не nil на весь срок жизни соединения — даже 30-секундный ping из
+		// writePump идёт через общий (аллоцирующий) NextWriter-путь, хотя
+		// сам ping не сжимается (isData(Ping) == false, conn.go:533,747).
+		// Корректность не страдает, но профиль аллокаций меняется для
+		// соединения целиком, а не только для payload'ов доски.
+		EnableCompression: true,
 	}
 	return m
 }
@@ -430,14 +582,23 @@ func (m *WbHubManager) parseTutorJWT(tokenStr string) (string, bool) {
 	return tutorID, true
 }
 
-// seedMessage собирает сообщение сида. Пустая страница (NULL в БД) тоже получает
-// сообщение — с пустым списком элементов: клиент открывает себе право сохранять
-// именно по сиду, и молчание тут заперло бы персист новой доски навсегда.
-func seedMessage(snapshot json.RawMessage) ([]byte, error) {
-	if len(snapshot) == 0 {
-		snapshot = json.RawMessage(`{"elements":[]}`)
+// seedMessage собирает сообщение сида. Пустая страница тоже получает сообщение —
+// с пустым списком элементов: клиент открывает себе право сохранять именно по
+// сиду, и молчание тут заперло бы персист новой доски навсегда.
+func seedMessage(state json.RawMessage) ([]byte, error) {
+	if len(state) == 0 {
+		state = json.RawMessage(`{"elements":[],"files":{}}`)
 	}
-	return json.Marshal(WbMsg{Type: "snapshot", Payload: snapshot})
+	return json.Marshal(WbMsg{Type: "snapshot", Payload: state})
+}
+
+// Run гоняет фоновую запись элементов. Вызывается из main.go; на отмену
+// контекста дописывает буфер и выходит.
+func (m *WbHubManager) Run(ctx context.Context) { m.buf.Run(ctx) }
+
+// CleanupTombstones — сигнатура под runIntervalLoop в main.go.
+func (m *WbHubManager) CleanupTombstones(ctx context.Context) (int64, error) {
+	return m.svc.DeleteOldTombstones(ctx)
 }
 
 // ServeWS — handler GET /ws/board/:pageId?token=...
@@ -453,13 +614,15 @@ func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 			return
 		}
 
-		// Load current snapshot from DB (full document).
+		// Сид собирается из board_elements (+ карта files). Страница, ещё не
+		// переведённую на поэлементную модель, переезжает здесь же.
+		//
 		// Ошибку чтения глотать нельзя: клиент сохраняет доску только после
-		// сида, и молчание здесь — единственное, что удерживает его от записи
-		// пустой сцены поверх целой (см. комментарий у отправки ниже).
-		snapshot, snapErr := svc.GetPageSnapshot(c.Request.Context(), pageID)
+		// сида, и молчание здесь — последний рубеж, удерживающий его от записи
+		// пустой сцены (см. комментарий у отправки ниже).
+		state, snapErr := svc.GetPageState(c.Request.Context(), pageID)
 		if snapErr != nil {
-			m.log.Error("read board snapshot for seed", slog.String("error", snapErr.Error()), slog.String("page_id", pageID))
+			m.log.Error("read board state for seed", slog.String("error", snapErr.Error()), slog.String("page_id", pageID))
 		}
 
 		conn, err := m.upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -468,21 +631,22 @@ func (m *WbHubManager) ServeWS(svc service.WhiteboardService) gin.HandlerFunc {
 		}
 
 		client := &wbClient{
-			conn:   conn,
-			send:   make(chan []byte, 256),
-			peerID: uuid.New().String(),
+			conn:    conn,
+			send:    make(chan []byte, 256),
+			peerID:  uuid.New().String(),
+			limiter: rate.NewLimiter(rate.Limit(wbByteRateLimit), wbByteRateBurst),
 		}
 
 		// Сидинг ДО регистрации: снапшот лежит первым в буфере send, поэтому
 		// клиент гарантированно получит его раньше любого чужого update.
 		//
 		// Сообщение шлётся ВСЕГДА, когда чтение удалось, — в том числе для
-		// страницы без снапшота (пустой payload). Клиент по нему открывает себе
-		// право сохранять: до сида он постит пустую сцену смонтированного
-		// Excalidraw и затирает доску. Провалилось чтение — молчим, и клиент
-		// не сохранит ничего: лучше потерять урок, чем содержимое доски.
+		// пустой страницы. Клиент по нему открывает себе право сохранять: до
+		// сида он постит пустую сцену смонтированного Excalidraw. Стереть доску
+		// этим он больше не может (персист стал merge), но лишний холостой
+		// раунд-трип не нужен и тут.
 		if snapErr == nil {
-			msg, err := seedMessage(snapshot)
+			msg, err := seedMessage(state)
 			if err != nil {
 				// Битая запись в БД: не JSON. Тот же выбор, что и выше.
 				m.log.Error("marshal board seed", slog.String("error", err.Error()), slog.String("page_id", pageID))

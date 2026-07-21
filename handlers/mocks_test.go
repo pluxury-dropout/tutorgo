@@ -230,13 +230,26 @@ func (m *mockWhiteboardService) GetAsset(ctx context.Context, assetID string) (m
 	args := m.Called(ctx, assetID)
 	return args.Get(0).(models.BoardAsset), args.Error(1)
 }
-func (m *mockWhiteboardService) GetPageSnapshot(ctx context.Context, pageID string) (json.RawMessage, error) {
-	args := m.Called(ctx, pageID)
-	return args.Get(0).(json.RawMessage), args.Error(1)
-}
 func (m *mockWhiteboardService) PageBelongsToTutor(ctx context.Context, pageID, tutorID string) (bool, error) {
 	args := m.Called(ctx, pageID, tutorID)
 	return args.Bool(0), args.Error(1)
+}
+func (m *mockWhiteboardService) MergeElements(ctx context.Context, pageID string, els []models.BoardElement) error {
+	return m.Called(ctx, pageID, els).Error(0)
+}
+func (m *mockWhiteboardService) MergeSnapshot(ctx context.Context, pageID string, elements []json.RawMessage, files json.RawMessage) error {
+	return m.Called(ctx, pageID, elements, files).Error(0)
+}
+func (m *mockWhiteboardService) GetPageState(ctx context.Context, pageID string) (json.RawMessage, error) {
+	args := m.Called(ctx, pageID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(json.RawMessage), args.Error(1)
+}
+func (m *mockWhiteboardService) DeleteOldTombstones(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return int64(args.Int(0)), args.Error(1)
 }
 
 // --- Mock: RegistrationService ---

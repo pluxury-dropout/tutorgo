@@ -107,6 +107,15 @@ func main() {
 	bgWg.Go(func() {
 		handlers.ListenBoardEvents(bgCtx, pool, wbHubManager, log)
 	})
+	// Запись доски: буфер уходит в БД раз в секунду, а на bgCancel дописывает
+	// остаток. Поэтому bgWg.Wait() стоит ДО srv.Shutdown — иначе последняя
+	// секунда рисования терялась бы на каждом деплое.
+	bgWg.Go(func() {
+		wbHubManager.Run(bgCtx)
+	})
+	bgWg.Go(func() {
+		runIntervalLoop(bgCtx, 10*time.Minute, "board tombstone cleanup", wbHubManager.CleanupTombstones, log)
+	})
 	// ponytail: воркер PDF-импорта в том же процессе, что и API — одному
 	// Railway-сервису отдельный процесс не нужен. Очередь River живёт в
 	// Postgres, поэтому этот воркер безопасно сосуществует с любыми выделёнными
