@@ -185,37 +185,56 @@ func main() {
 	log.Info("Server exited cleanly")
 }
 
-// watchPoolStarvation раз в минуту сообщает, сколько раз за неё запросы пришли
-// к пустому пулу и ждали освобождения соединения.
+// watchPoolStarvation раз в минуту сообщает, что происходило с пулом.
 //
-// Голодание пула не даёт ошибок — оно даёт латентность: запрос молча стоит в
-// очереди, пользователь видит «тормозит», а логи чисты. Единственный способ
-// отличить это от медленной БД — считать ожидания.
+// Ожидание соединения не даёт ошибок — оно даёт латентность: запрос молча
+// стоит в очереди, пользователь видит «тормозит», а логи чисты.
 //
-// Бюджет соединений тесный по вине потолка НАД нами: Supabase-пулер в session
-// mode отдаёт проекту 15 соединений на всех, а MaxConns здесь 7. Один инстанс
-// укладывается, два (rolling deploy) уже впритык, а локальный `make run` или
-// integration-тесты в тот же проект добивают остаток — в этом и была причина
-// EMAXCONNSESSION, полученной при прогоне тестов 2026-07-21.
+// Читать вывод так. `EmptyAcquireCount` в pgx считает два РАЗНЫХ события:
+// запрос ждал, пока соединение освободят, и запрос ждал, пока соединение
+// СОЗДАДУТ. Второе — не нехватка, а цена установки TLS до Supabase; на
+// схлопнувшемся от простоя пуле это норма. Отличить одно от другого можно
+// только по `new`: если waits ≈ new и acquired мал — пул просто пересоздаёт
+// соединения, лечится MinConns/MaxConnIdleTime. Если waits велик, new мал, а
+// acquired упирается в max — вот тогда это настоящее голодание и мал MaxConns.
+//
+// Потолок стоит НАД нами: Supabase-пулер в session mode отдаёт проекту 15
+// соединений на всех, а MaxConns здесь 7. Один инстанс укладывается, два
+// (rolling deploy) уже впритык, а локальный `make run` или integration-тесты
+// в тот же проект добивают остаток — в этом и была причина EMAXCONNSESSION,
+// полученной при прогоне тестов 2026-07-21.
 //
 // ponytail: без метрик и алертов — Warn в логах ровно там, где эту проблему
 // начнут искать. Появится Sentry/Prometheus — отдавать отсюда же.
 func watchPoolStarvation(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) {
-	var prevWaits int64
+	var prev *pgxpool.Stat
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			s := pool.Stat()
-			if waits := s.EmptyAcquireCount() - prevWaits; waits > 0 {
-				log.Warn("db pool starvation",
-					slog.Int64("waits_last_minute", waits),
-					slog.Int64("total_wait_ms", s.AcquireDuration().Milliseconds()),
+			if prev == nil {
+				prev = s
+				continue
+			}
+			// Все счётчики pgx кумулятивны с момента старта пула — сравниваем
+			// с прошлым тиком, иначе цифра растёт вечно и ничего не значит.
+			waits := s.EmptyAcquireCount() - prev.EmptyAcquireCount()
+			if waits > 0 {
+				acquires := s.AcquireCount() - prev.AcquireCount()
+				waitMs := (s.AcquireDuration() - prev.AcquireDuration()).Milliseconds()
+				log.Warn("db pool: acquires waited",
+					slog.Int64("waits", waits),
+					slog.Int64("acquires", acquires),
+					slog.Int64("new_conns", s.NewConnsCount()-prev.NewConnsCount()),
+					slog.Int64("idle_destroyed", s.MaxIdleDestroyCount()-prev.MaxIdleDestroyCount()),
+					slog.Int64("wait_ms", waitMs),
 					slog.Int("acquired", int(s.AcquiredConns())),
+					slog.Int("idle", int(s.IdleConns())),
 					slog.Int("max", int(s.MaxConns())))
 			}
-			prevWaits = s.EmptyAcquireCount()
+			prev = s
 		case <-ctx.Done():
 			return
 		}
