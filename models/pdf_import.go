@@ -60,8 +60,8 @@ type StartPdfImportRequest struct {
 	To   int `json:"to" validate:"required,min=1"`
 }
 
-// BoardEvent — конверт события для pg_notify('board_events'): адрес (страница
-// доски) + готовое WS-сообщение, которое API-слушатель ретранслирует вербатим.
+// BoardEvent — конверт события шины board_events: адрес (страница доски) +
+// готовое WS-сообщение, которое API-подписчик ретранслирует вербатим.
 type BoardEvent struct {
 	PageID string          `json:"page_id"`
 	Msg    json.RawMessage `json:"msg"`

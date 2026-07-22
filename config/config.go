@@ -3,6 +3,7 @@ package config
 import (
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -23,6 +24,25 @@ type Config struct {
 	S3Bucket         string
 	ResendAPIKey     string
 	EmailFrom        string
+	RedisURL         string
+	DBMaxConns       int32
+}
+
+// envInt32 читает положительное целое из env. Мусор и неположительные значения
+// не роняют старт: сервис поднимется на дефолте, но скажет об этом в лог —
+// опечатка в переменной не повод не пустить людей на урок.
+func envInt32(key string, def int32, log *slog.Logger) int32 {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		log.Warn("invalid env value, using default",
+			slog.String("key", key), slog.String("value", raw), slog.Int("default", int(def)))
+		return def
+	}
+	return int32(v)
 }
 
 func Load(log *slog.Logger) Config {
@@ -49,6 +69,12 @@ func Load(log *slog.Logger) Config {
 		S3Bucket:         os.Getenv("S3_BUCKET"),
 		ResendAPIKey:     os.Getenv("RESEND_API_KEY"),
 		EmailFrom:        os.Getenv("EMAIL_FROM"),
+		// Пустой RedisURL — валидный однопроцессный режим, не ошибка. См. pubsub.New.
+		RedisURL: os.Getenv("REDIS_URL"),
+		// Размер пула — env, а не константа: у ролей разный профиль (API держит
+		// много коротких транзакций, воркер — несколько долгих соединений), образ
+		// один, а крутить значение приходится по показаниям /health.
+		DBMaxConns: envInt32("DB_MAX_CONNS", 7, log),
 	}
 
 	if cfg.EmailFrom == "" {

@@ -9,7 +9,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func Connect(dbURL string, log *slog.Logger) *pgxpool.Pool {
+// Connect поднимает пул. Режим пулера Supabase выбирается ПОРТОМ в DB_URL, а не
+// настройкой в дашборде — один и тот же Supavisor слушает оба:
+//
+//	:5432 — session mode. Реальное соединение к Postgres закреплено за клиентом
+//	        до отключения. Работает всё, включая LISTEN/NOTIFY и advisory locks,
+//	        но лимит соединений на проект низкий. Нужен ROLE=worker: River ловит
+//	        задачи через LISTEN.
+//	:6543 — transaction mode. Соединение выдаётся на время транзакции и сразу
+//	        возвращается, поэтому клиентов помещается кратно больше. Session-level
+//	        состояние (LISTEN, advisory locks, SET) не переживает границу
+//	        транзакции. Годится ROLE=api: там таких потребителей не осталось —
+//	        board-events уехали в Redis (см. pubsub), River-клиент insert-only.
+//
+// К :6543 строка подключения обязана нести ?default_query_exec_mode=exec, иначе
+// pgx кеширует prepared statements на соединении, которое под ним меняется, и
+// сыплет "prepared statement already exists". Параметр разбирает pgx.ParseConfig.
+func Connect(dbURL string, maxConns int32, log *slog.Logger) *pgxpool.Pool {
 	cfg, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		log.Error("Failed to parse db config", slog.String("error", err.Error()))
@@ -17,7 +33,7 @@ func Connect(dbURL string, log *slog.Logger) *pgxpool.Pool {
 	}
 
 	cfg.MinConns = 2
-	cfg.MaxConns = 7
+	cfg.MaxConns = maxConns
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.HealthCheckPeriod = 1 * time.Minute

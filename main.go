@@ -14,7 +14,8 @@ import (
 
 	"tutorgo/config"
 	"tutorgo/database"
-	"tutorgo/handlers"
+	"tutorgo/models"
+	"tutorgo/pubsub"
 	"tutorgo/repository"
 	"tutorgo/router"
 	"tutorgo/worker"
@@ -59,10 +60,17 @@ func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg := config.Load(log)
 
-	pool := database.Connect(cfg.DBUrl, log)
+	pool := database.Connect(cfg.DBUrl, cfg.DBMaxConns, log)
 	defer pool.Close()
 
+	// Роль печатаем как есть, в кавычках: значение приезжает из панели хостинга,
+	// и лишний пробел или кавычка внутри — это молча не та роль. Пустая строка
+	// (всё в одном процессе) от опечатки иначе неотличима.
 	role := os.Getenv("ROLE")
+	log.Info("starting",
+		slog.String("role", role),
+		slog.Int("db_max_conns", int(cfg.DBMaxConns)),
+		slog.Bool("redis", cfg.RedisURL != ""))
 
 	// Схема приложения — goose. Воркер её не накатывает: схему ведёт API-инстанс.
 	if role != "worker" {
@@ -83,8 +91,18 @@ func main() {
 		log.Error("river migrate", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	// Шина событий доски. Одна на процесс: в dev-режиме (REDIS_URL пуст) воркер
+	// и API живут в общем процессе и общаются через неё напрямую, поэтому
+	// создаётся она до развилки по ролям.
+	bus, err := pubsub.New(cfg.RedisURL, log)
+	if err != nil {
+		log.Error("board event bus", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer bus.Close()
+
 	if role == "worker" {
-		runWorker(pool, &cfg, log) // только воркер — выделенный ROLE=worker инстанс
+		runWorker(pool, &cfg, log, bus) // только воркер — выделенный ROLE=worker инстанс
 		return
 	}
 
@@ -105,7 +123,9 @@ func main() {
 		runIntervalLoop(bgCtx, 10*time.Minute, "cleanup pending registrations", pendingRepo.DeleteExpired, log)
 	})
 	bgWg.Go(func() {
-		handlers.ListenBoardEvents(bgCtx, pool, wbHubManager, log)
+		bus.Subscribe(bgCtx, func(ev models.BoardEvent) {
+			wbHubManager.PushToPage(ev.PageID, ev.Msg)
+		})
 	})
 	// Запись доски: буфер уходит в БД раз в секунду, а на bgCancel дописывает
 	// остаток. Поэтому bgWg.Wait() стоит ДО srv.Shutdown — иначе последняя
@@ -123,7 +143,7 @@ func main() {
 	// API-боксов.
 	if role != "api" {
 		bgWg.Go(func() {
-			if err := worker.Run(bgCtx, pool, &cfg, log); err != nil {
+			if err := worker.Run(bgCtx, pool, &cfg, log, bus); err != nil {
 				log.Error("embedded worker", slog.String("error", err.Error()))
 			}
 		})
@@ -199,10 +219,12 @@ func main() {
 // acquired упирается в max — вот тогда это настоящее голодание и мал MaxConns.
 //
 // Потолок стоит НАД нами: Supabase-пулер в session mode отдаёт проекту 15
-// соединений на всех, а MaxConns здесь 7. Один инстанс укладывается, два
-// (rolling deploy) уже впритык, а локальный `make run` или integration-тесты
-// в тот же проект добивают остаток — в этом и была причина EMAXCONNSESSION,
-// полученной при прогоне тестов 2026-07-21.
+// соединений на всех, а MaxConns здесь 7 по умолчанию (DB_MAX_CONNS). Один
+// инстанс укладывается, два (rolling deploy) уже впритык, а локальный `make run`
+// или integration-тесты в тот же проект добивают остаток — в этом и была причина
+// EMAXCONNSESSION, полученной при прогоне тестов 2026-07-21. Через transaction
+// mode (:6543) этот потолок перестаёт упираться: соединение занято на время
+// транзакции, а не сессии, и DB_MAX_CONNS можно поднимать.
 //
 // ponytail: без метрик и алертов — Warn в логах ровно там, где эту проблему
 // начнут искать. Появится Sentry/Prometheus — отдавать отсюда же.
@@ -244,6 +266,8 @@ func watchPoolStarvation(ctx context.Context, pool *pgxpool.Pool, log *slog.Logg
 // runMigrations накатывает вкомпилированные goose-миграции поверх пула.
 // ponytail: без advisory lock — сейчас схему накатывает единственный API-инстанс.
 // При втором ROLE=api понадобится goose.WithLock, иначе два старта гонятся.
+// Учесть тогда же: advisory lock — session-level, через transaction-mode пулер
+// (:6543) он не держится. Мигрировать придётся отдельным session-соединением.
 func runMigrations(pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
@@ -255,10 +279,10 @@ func runMigrations(pool *pgxpool.Pool) error {
 }
 
 // runWorker — роль worker: River-воркер PDF-импортов.
-func runWorker(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger) {
+func runWorker(pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger, bus *pubsub.BoardBus) {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-	if err := worker.Run(ctx, pool, cfg, log); err != nil {
+	if err := worker.Run(ctx, pool, cfg, log, bus); err != nil {
 		log.Error("worker", slog.String("error", err.Error()))
 		os.Exit(1)
 	}

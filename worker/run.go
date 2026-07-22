@@ -14,8 +14,8 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"tutorgo/config"
-	"tutorgo/models"
 	"tutorgo/pdftool"
+	"tutorgo/pubsub"
 	"tutorgo/repository"
 	"tutorgo/storage"
 )
@@ -23,7 +23,7 @@ import (
 const renderDPI = 200
 
 // Run поднимает River-воркер и блокируется до отмены ctx.
-func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger) error {
+func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger, bus *pubsub.BoardBus) error {
 	store, err := storage.New(ctx, *cfg)
 	if err != nil {
 		return err
@@ -82,9 +82,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.
 			}
 			return store.Put(ctx, s3Key, f, st.Size(), "image/jpeg")
 		},
-		Notify: func(ctx context.Context, ev models.BoardEvent) error {
-			return repository.NotifyBoardEvent(ctx, pool, ev)
-		},
+		Notify: bus.Publish,
 		Log: log,
 	}
 
