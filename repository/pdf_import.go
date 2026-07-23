@@ -53,7 +53,7 @@ func (r *pdfImportRepository) Create(ctx context.Context, boardID, pageID, tutor
 	err = r.conn.QueryRow(ctx,
 		`INSERT INTO board_pdf_imports (board_id, page_id, tutor_id, s3_key, pages)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		boardID, pageID, tutorID, s3Key, pagesJSON,
+		boardID, pageID, tutorID, s3Key, string(pagesJSON),
 	).Scan(&id)
 	return id, err
 }
@@ -121,7 +121,7 @@ func (r *pdfImportRepository) Start(ctx context.Context, id string, from, to int
 	// больше не принадлежат, а воркер работает ровно по этому списку.
 	if _, err = tx.Exec(ctx,
 		`UPDATE board_pdf_imports SET pages = $2, status = 'rendering', updated_at = now() WHERE id = $1`,
-		id, newPages,
+		id, string(newPages),
 	); err != nil {
 		return nil, err
 	}
