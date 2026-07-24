@@ -9,8 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Connect поднимает пул. Режим пулера Supabase выбирается ПОРТОМ в DB_URL, а не
-// настройкой в дашборде — один и тот же Supavisor слушает оба:
+// Connect поднимает пул. Хост в DB_URL — всегда пулерный
+// (aws-0-<region>.pooler.supabase.com, логин postgres.<ref>), НЕ direct
+// db.<ref>.supabase.co: тот у Supabase IPv6-only и недоступен из Railway/WSL2.
+// Режим пулера выбирается ПОРТОМ в DB_URL, а не настройкой в дашборде — один и
+// тот же Supavisor слушает оба:
 //
 //	:5432 — session mode. Реальное соединение к Postgres закреплено за клиентом
 //	        до отключения. Работает всё, включая LISTEN/NOTIFY и advisory locks,
