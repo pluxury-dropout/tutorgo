@@ -148,7 +148,7 @@ func generateOTP() string {
 	return fmt.Sprintf("%06d", n.Int64())
 }
 
-const otpSubject = "Код подтверждения TutorHub"
+const otpSubject = "Код подтверждения Amida"
 
 func otpBody(code string) string {
 	return fmt.Sprintf(

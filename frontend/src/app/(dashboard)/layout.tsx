@@ -75,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="h-6 w-6 rounded-md bg-primary flex items-center justify-center shrink-0">
             <GraduationCap className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />
           </div>
-          <span className="font-heading text-sm font-bold tracking-tight">TutorHub</span>
+          <span className="font-heading text-sm font-bold tracking-tight">Amida</span>
         </header>
       )}
 

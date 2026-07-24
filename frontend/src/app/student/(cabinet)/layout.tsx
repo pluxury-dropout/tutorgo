@@ -27,7 +27,7 @@ export default function StudentCabinetLayout({ children }: { children: React.Rea
           <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
             <Link href="/student/lessons" className="flex items-center gap-2 font-semibold">
               <GraduationCap className="h-5 w-5 text-primary" />
-              TutorHub
+              Amida
             </Link>
             <div className="flex items-center gap-3">
               <Link

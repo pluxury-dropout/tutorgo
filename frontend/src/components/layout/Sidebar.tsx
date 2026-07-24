@@ -372,7 +372,7 @@ function SidebarInner() {
         <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
           <GraduationCap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
         </div>
-        <span className="font-heading text-[15px] font-bold tracking-tight">TutorHub</span>
+        <span className="font-heading text-[15px] font-bold tracking-tight">Amida</span>
       </div>
 
       <nav className="px-3 py-4 space-y-0.5 shrink-0">
