@@ -20,7 +20,7 @@ import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
 import { HomeworkViewDialog } from '@/components/homework/HomeworkViewDialog'
 import { CallChat } from './CallChat'
 import { useCallChat } from './useCallChat'
-import { CALL_THEME, FRAME_BG, FRAME_INSET } from './callTheme'
+import { CALL_THEME } from './callTheme'
 
 // Excalidraw трогает window при инициализации — только клиент, без SSR.
 const ExcalidrawCanvas = dynamic(
@@ -259,27 +259,14 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
   // Доска у препода вот-вот откроется — не мигаем сеткой камер по дороге.
   const boardPending = role === 'tutor' && hasBoard && !tutorBoard && !boardFailed
 
-  // Доска лежит «листом на столе»: тёмная рамка вокруг белой карточки. В режиме
-  // сетки камер сцена сама тёмная и во весь экран — рамка там не нужна.
-  const framed = mode === 'board'
-
+  // lesson-light висит всегда, а не только в режиме доски: иначе тулбар успевает
+  // мигнуть тёмным, пока грузится доска.
   return (
-    <div
-      style={{
-        position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
-        boxSizing: 'border-box',
-        background: framed ? FRAME_BG : undefined,
-        padding: framed ? FRAME_INSET : 0,
-      }}
-    >
-      {/* Карточка урока. lesson-light: доска белая всегда, значит и панели поверх
-          неё — светлые, даже когда приложение в тёмной теме. */}
       <div
-        className={framed ? 'lesson-light' : undefined}
+        className="lesson-light"
         style={{
           position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
-          borderRadius: framed ? 12 : 0,
-          background: framed ? 'var(--card)' : undefined,
+          background: 'var(--card)',
         }}
       >
         {/* Область сцены/доски ужимается при открытом чате */}
@@ -338,7 +325,6 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
           <HomeworkViewDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} />
         )}
       </div>
-    </div>
   )
 }
 
