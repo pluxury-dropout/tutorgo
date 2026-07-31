@@ -2,6 +2,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Send, X } from 'lucide-react'
 import type { CallTheme } from './callTheme'
 import type { ChatMessage } from './callChat'
 
@@ -51,9 +52,7 @@ export function CallChat({ theme, messages, onSend, onClose }: Props) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6L6 18" /><path d="M6 6l12 12" />
-          </svg>
+          <X size={16} />
         </button>
       </div>
 
@@ -78,7 +77,9 @@ export function CallChat({ theme, messages, onSend, onClose }: Props) {
           placeholder="Написать сообщение…"
           style={{
             flex: 1, border: `1px solid ${theme.border}`,
-            background: theme.panel === '#FFFFFF' ? '#F8F8F9' : '#1a1a1a',
+            // Поле ввода на тон ниже панели — токеном, а не сравнением цвета:
+            // panel теперь var(--card) и с литералом никогда не совпадёт.
+            background: 'var(--background)',
             color: theme.text, borderRadius: 8, padding: '8px 10px', fontSize: 13,
             fontFamily: 'inherit', outline: 'none',
           }}
@@ -92,9 +93,7 @@ export function CallChat({ theme, messages, onSend, onClose }: Props) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7Z" />
-          </svg>
+          <Send size={16} />
         </button>
       </div>
     </div>

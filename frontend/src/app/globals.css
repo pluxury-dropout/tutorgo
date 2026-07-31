@@ -209,6 +209,39 @@
   --cal-missed-text:       #e8b8a8;
 }
 
+/* Экран урока светлый при любой теме приложения: холст Excalidraw белый по
+   определению, и тёмные панели поверх него читаются как чужие. Возвращаем
+   ровно те токены, которыми пользуется UI урока (CALL_THEME + панели доски),
+   а не всю палитру. Селектор из двух классов — чтобы перебить .dark. */
+.dark .lesson-light {
+  --background:          #F8F8F9;
+  --card:                #FFFFFF;
+  --popover:             #FFFFFF;
+  --foreground:          #1B1C1F;
+  --muted:               #EFEFF1;
+  --muted-foreground:    #646670;
+  --border:              #E1E1E4;
+  --primary:             #222428;
+  --primary-light:       #ECECEE;
+  --primary-foreground:  #FFFFFF;
+  --destructive:         #C92A2A;
+  --success:             #077A4E;
+}
+
+/* Кнопки панелей урока (тулбар звонка, плеер, материалы). Фон приходит из JSX
+   инлайном — а inline-стиль бьёт любой CSS-селектор, поэтому :hover меняет не
+   background, а переменную, из которой тот собран. */
+.lesson-btn {
+  background: var(--btn-bg, transparent);
+  transition: background 0.15s, color 0.15s;
+}
+.lesson-btn:hover {
+  --btn-bg: #f1f1f3;
+}
+.lesson-btn--danger:hover {
+  --btn-bg: #b32424;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -12,13 +12,14 @@ import {
 import { Track } from 'livekit-client'
 import type { ExcalidrawImperativeAPI, SocketId } from '@excalidraw/excalidraw/types'
 import { uidOf, initialsOf, colorOf, peerNames, shallowEqual } from './callParticipants'
-import { ICONS } from './CallToolbar'
+import { MicOff } from 'lucide-react'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 
-// Доска всегда в светлой теме Excalidraw — панель поверх неё тоже светлая.
-const NAME = '#1B1C1F'
-const MUTED = '#646670'
 const SPEAK_RING = '0 0 0 3px rgba(59,165,93,0.95)'
+// Синего акцента в палитре приложения нет — бренд графитовый, а follow должен
+// читаться как «чужая камера ведёт мою», отдельно от активных кнопок.
+const FOLLOW = '#2F6FEB'
+const FOLLOW_BG = '#EFF4FF'
 
 interface CallParticipantsProps {
   /** null, пока Excalidraw не отдал api — тогда follow просто недоступен. */
@@ -99,14 +100,14 @@ export function CallParticipants({ excalidrawApi, identity }: CallParticipantsPr
   return (
     <div
       style={{
-        position: 'fixed',
-        left: 24,
-        bottom: 104, // над панелью зума Excalidraw
+        position: 'absolute',
+        left: 14,
+        bottom: 62, // над панелью зума Excalidraw (та сидит на 14 от низа)
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-start',
-        gap: 10,
+        gap: 8,
       }}
     >
       {[...byKey.values()].map((track) => {
@@ -117,6 +118,7 @@ export function CallParticipants({ excalidrawApi, identity }: CallParticipantsPr
             trackRef={track}
             name={nameOf(p.identity, p.name || p.identity, p.isLocal)}
             following={followingUid !== null && followingUid === uidOf(p.identity)}
+            ledByPeer={followingUid !== null}
             onToggleFollow={toggleFollow}
           />
         )
@@ -130,10 +132,12 @@ interface ParticipantRowProps {
   /** Имя из личности доски — не LiveKit-роль. */
   name: string
   following: boolean
+  /** Follow включён вообще (за кем угодно) — метка на своём чипе. */
+  ledByPeer: boolean
   onToggleFollow: (identity: string, name: string) => void
 }
 
-function ParticipantRow({ trackRef, name, following, onToggleFollow }: ParticipantRowProps) {
+function ParticipantRow({ trackRef, name, following, ledByPeer, onToggleFollow }: ParticipantRowProps) {
   const participant = trackRef.participant
   const isLocal = participant.isLocal
   const speaking = useIsSpeaking(participant)
@@ -196,12 +200,18 @@ function ParticipantRow({ trackRef, name, following, onToggleFollow }: Participa
             padding: '3px 8px 3px 7px',
           }}
         >
-          {isMuted && <MicOffIcon size={12} color="#E9898C" />}
+          {isMuted && (
+            <MicOff size={12} color="#E9898C" strokeWidth={1.8} style={{ flex: 'none' }} />
+          )}
           <span style={{ color: '#F1F1F0', fontSize: 12.5, fontWeight: 500 }}>{name}</span>
         </div>
       </div>
     )
   }
+
+  // Свой чип при активном follow помечаем кольцом на аватаре: камерой управляет
+  // не хозяин, и это должно быть видно тому, кого «везут».
+  const ledRing = isLocal && ledByPeer ? `0 0 0 2px ${FOLLOW}` : undefined
 
   return (
     <div
@@ -210,54 +220,52 @@ function ParticipantRow({ trackRef, name, following, onToggleFollow }: Participa
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 9,
-        borderRadius: 10,
-        padding: '7px 12px 7px 7px',
-        minWidth: 196,
+        gap: 8,
+        borderRadius: 14,
+        padding: '6px 12px 6px 6px',
+        background: following ? FOLLOW_BG : 'var(--card)',
+        border: `1px solid ${following ? FOLLOW : 'var(--border)'}`,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
         cursor: followable ? 'pointer' : 'default',
       }}
     >
       <div
         style={{
-          width: 34,
-          height: 34,
+          width: 32,
+          height: 32,
           borderRadius: '50%',
           background: colorOf(participant.identity),
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: '#FFFFFF',
-          fontWeight: 700,
-          fontSize: 13,
+          fontWeight: 600,
+          fontSize: 12,
           flex: 'none',
-          boxShadow: ring,
+          boxShadow: ring ?? ledRing,
           animation: pulse,
         }}
       >
         {initialsOf(name)}
       </div>
-      <span style={{ color: NAME, fontSize: 14, fontWeight: 600, flex: 1 }}>{name}</span>
-      {isMuted && <MicOffIcon size={14} color={MUTED} />}
+      <span
+        style={{
+          color: 'var(--foreground)',
+          fontSize: 13,
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {name}
+      </span>
+      {isMuted && (
+        <MicOff
+          size={15}
+          color="var(--muted-foreground)"
+          strokeWidth={1.9}
+          style={{ flex: 'none' }}
+        />
+      )}
     </div>
-  )
-}
-
-// Тот же перечёркнутый микрофон, что в тулбаре звонка — один жест не должен
-// выглядеть двумя разными иконками.
-function MicOffIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ flex: 'none' }}
-    >
-      {ICONS.micOff}
-    </svg>
   )
 }

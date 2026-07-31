@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCreateInvite } from '@/lib/hooks/useWhiteboard'
 import { useBoardContext } from './BoardContext'
@@ -31,7 +32,14 @@ export function InviteSharePanel() {
         className="tlui-button tlui-button__normal"
         style={{ minWidth: 140 }}
       >
-        {copying ? '✓ Скопировано!' : 'Пригласить ученика'}
+        {copying ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Check className="size-4" />
+            Скопировано!
+          </span>
+        ) : (
+          'Пригласить ученика'
+        )}
       </button>
     </div>
   )

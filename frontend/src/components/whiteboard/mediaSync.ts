@@ -10,6 +10,9 @@ export interface MediaPayload {
   name?: string
   /** Позиция в секундах. */
   position?: number
+  /** Скорость воспроизведения. Едет вместе с seek: замедленное аудирование
+   *  должно быть замедленным у обоих, иначе позиции разъедутся молча. */
+  rate?: number
 }
 
 export interface MediaState {

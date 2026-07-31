@@ -10,7 +10,8 @@ import {
   FONT_FAMILY,
 } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
-import './excalidraw-fonts.css'
+import './excalidraw-theme.css'
+import { AudioLines } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   ExcalidrawImperativeAPI,
@@ -49,10 +50,8 @@ const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 
-// Стартовый размер ролика на доске — 16:9, дальше препод тянет за угол.
-const YT_WIDTH = 560
-const YT_HEIGHT = 315
-const YT_RATIO = YT_HEIGHT / YT_WIDTH
+// Ролик на доске держим 16:9, как его ни тянули за угол.
+const YT_RATIO = 9 / 16
 // Меньше — считаем округлением, а не растяжкой: чинить каждый onChange незачем.
 const ASPECT_EPS = 0.5
 
@@ -149,7 +148,6 @@ export function ExcalidrawCanvas({
 
   // Паспорт preflight'а: PDF уже на сервере, ждём выбора диапазона.
   const pdfImportRef = useRef<{ importId: string; sizes: { w: number; h: number }[] } | null>(null)
-  const imageInputRef = useRef<HTMLInputElement | null>(null)
   const [materialsOpen, setMaterialsOpen] = useState(false)
   const [pdfDialog, setPdfDialog] = useState<{
     numPages: number
@@ -340,42 +338,6 @@ export function ExcalidrawCanvas({
     setMaterialsOpen(false)
   }
 
-  // Видео не храним: препод находит ролик по ходу урока и вставляет ссылкой.
-  // Байты идут от Google к ученику мимо нас — ни хранилища, ни трафика.
-  // Ролик кладётся на доску embeddable-элементом: возить его по WS и хранить в
-  // снапшоте не нужно — это обычный элемент сцены, синк у него общий с фигурами.
-  const handleOpenYouTube = () => {
-    // ponytail: нативный prompt. Заменить на диалог, когда дойдут руки до дизайна.
-    const link = window.prompt('Ссылка на YouTube')
-    if (!link) return
-    const id = parseYouTubeId(link)
-    if (!id) {
-      toast.error('Не похоже на ссылку YouTube')
-      return
-    }
-    const api = apiRef.current
-    if (!api) return
-    const c = viewportCenter()
-    // Скелет embeddable convertToExcalidrawElements не принимает (ждёт готовый
-    // элемент со всеми полями), а фабрики наружу не выведено. Но embeddable —
-    // это _ExcalidrawElementBase + type, ровно как rectangle: собираем из него.
-    const [base] = convertToExcalidrawElements([
-      {
-        type: 'rectangle',
-        link: `https://www.youtube.com/watch?v=${id}`,
-        x: c.x - YT_WIDTH / 2,
-        y: c.y - YT_HEIGHT / 2,
-        width: YT_WIDTH,
-        height: YT_HEIGHT,
-      },
-    ])
-    const el = { ...base, type: 'embeddable' } as ExcalidrawElement
-    api.updateScene({
-      elements: [...api.getSceneElementsIncludingDeleted(), el],
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-    })
-  }
-
   // Ролик тянут за угол — держим 16:9: растянутое видео теряет чёрные поля не
   // лучше, чем зритель — картинку. Excalidraw хранит пропорции только для image,
   // и включить это для embeddable из пропов нельзя — правим высоту сами, на каждом
@@ -500,104 +462,36 @@ export function ExcalidrawCanvas({
             if (!videoId) return null
             return <YouTubeEmbed id={el.id} videoId={videoId} sync={yt} />
           }}
-          renderTopRightUI={() => (
-            <div
-              data-board-ui
-              style={{ position: 'relative', display: 'flex', gap: 4 }}
-            >
-              {/* Вставка картинки через S3 (нативный image-инструмент
-                  Excalidraw отключён — он кладёт base64 в снапшот). */}
-              {!isGuest && (
-                <button
-                  title="Вставить картинку"
-                  onClick={() => imageInputRef.current?.click()}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: 'none',
-                    background: 'transparent',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    padding: '6px 8px',
-                  }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="3" />
-                    <circle cx="8.5" cy="9" r="1.6" />
-                    <path d="M21 16l-5-5L5 21" />
-                  </svg>
-                </button>
-              )}
-              {/* YouTube по ссылке: ничего не храним, ролик находят по ходу урока. */}
-              {!isGuest && (
-                <button
-                  title="Видео с YouTube"
-                  onClick={handleOpenYouTube}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: 'none',
-                    background: 'transparent',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    padding: '6px 8px',
-                  }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="2" y="5" width="20" height="14" rx="4" />
-                    <path d="M10 9.5l5 2.5-5 2.5z" />
-                  </svg>
-                </button>
-              )}
-              {/* Библиотека материалов препода: только аудио для аудирования. */}
-              {!isGuest && (
-                <button
-                  title="Материалы"
-                  onClick={() => setMaterialsOpen((v) => !v)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: 'none',
-                    background: materialsOpen ? 'var(--color-primary-light)' : 'transparent',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    padding: '6px 8px',
-                  }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          )}
+          // Картинки и ролики вставляются через Ctrl+V (см. onPasteCapture и
+          // validateEmbeddable) — кнопок под них не держим. Здесь остаётся
+          // единственное, чего буфером не сделать: библиотека аудио препода.
+          renderTopRightUI={() =>
+            isGuest ? null : (
+              <button
+                data-board-ui
+                title="Материалы урока"
+                onClick={() => setMaterialsOpen((v) => !v)}
+                style={{
+                  height: 40,
+                  padding: '0 14px 0 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: materialsOpen ? 'var(--primary-light)' : 'var(--card)',
+                  color: 'var(--foreground)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                }}
+              >
+                <AudioLines size={18} strokeWidth={1.75} />
+                Материалы
+              </button>
+            )
+          }
           UIOptions={{
             canvasActions: {
               // Экспорт/сохранение файлов скрываем: персист у нас свой (WS).
@@ -611,20 +505,6 @@ export function ExcalidrawCanvas({
             tools: { image: false },
           }}
         />
-        {/* Кнопка вставки картинки: скрытый file-input, гостю недоступна */}
-        {!isGuest && (
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void insertImageFile(f)
-              e.target.value = ''
-            }}
-          />
-        )}
         {!isGuest && materialsOpen && (
           <MaterialsPanel
             onClose={() => setMaterialsOpen(false)}

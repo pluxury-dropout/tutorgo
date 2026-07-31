@@ -13,7 +13,6 @@ import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@livekit/components-styles'
 import { toast } from 'sonner'
 
-import { useTheme } from 'next-themes'
 import { CallParticipants } from './CallParticipants'
 import { CallStage } from './CallStage'
 import { CallToolbar } from './CallToolbar'
@@ -21,7 +20,7 @@ import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
 import { HomeworkViewDialog } from '@/components/homework/HomeworkViewDialog'
 import { CallChat } from './CallChat'
 import { useCallChat } from './useCallChat'
-import { themeTokens } from './callTheme'
+import { CALL_THEME, FRAME_BG, FRAME_INSET } from './callTheme'
 
 // Excalidraw трогает window при инициализации — только клиент, без SSR.
 const ExcalidrawCanvas = dynamic(
@@ -54,8 +53,6 @@ interface CallRoomInnerProps {
 
 function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps) {
   const room = useRoomContext()
-  const { resolvedTheme } = useTheme()
-  const theme = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
 
   const identity = useBoardDisplayName(role)
   const [mode, setMode] = useState<Mode>('call')
@@ -262,63 +259,85 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
   // Доска у препода вот-вот откроется — не мигаем сеткой камер по дороге.
   const boardPending = role === 'tutor' && hasBoard && !tutorBoard && !boardFailed
 
+  // Доска лежит «листом на столе»: тёмная рамка вокруг белой карточки. В режиме
+  // сетки камер сцена сама тёмная и во весь экран — рамка там не нужна.
+  const framed = mode === 'board'
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-      {/* Область сцены/доски ужимается при открытом чате */}
+    <div
+      style={{
+        position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
+        boxSizing: 'border-box',
+        background: framed ? FRAME_BG : undefined,
+        padding: framed ? FRAME_INSET : 0,
+      }}
+    >
+      {/* Карточка урока. lesson-light: доска белая всегда, значит и панели поверх
+          неё — светлые, даже когда приложение в тёмной теме. */}
       <div
+        className={framed ? 'lesson-light' : undefined}
         style={{
-          position: 'absolute', top: 0, left: 0, bottom: 0,
-          right: chatOpen ? 280 : 0, transition: 'right .25s ease',
+          position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
+          borderRadius: framed ? 12 : 0,
+          background: framed ? 'var(--card)' : undefined,
         }}
       >
-        {mode === 'call' && (boardPending ? <BoardPlaceholder /> : <CallStage />)}
+        {/* Область сцены/доски ужимается при открытом чате */}
+        <div
+          style={{
+            position: 'absolute', top: 0, left: 0, bottom: 0,
+            right: chatOpen ? 280 : 0, transition: 'right .25s ease',
+          }}
+        >
+          {mode === 'call' && (boardPending ? <BoardPlaceholder /> : <CallStage />)}
 
-        {mode === 'board' && activeBoard && currentPage && (
-          <ExcalidrawCanvas
-            page={currentPage}
-            boardId={activeBoard.id}
-            token={activeBoardToken}
-            courseId={role === 'tutor' ? courseId ?? undefined : undefined}
-            isGuest={role === 'guest'}
-            identity={identity}
-            onApi={setBoardApi}
-            hideUserList
+          {mode === 'board' && activeBoard && currentPage && (
+            <ExcalidrawCanvas
+              page={currentPage}
+              boardId={activeBoard.id}
+              token={activeBoardToken}
+              courseId={role === 'tutor' ? courseId ?? undefined : undefined}
+              isGuest={role === 'guest'}
+              identity={identity}
+              onApi={setBoardApi}
+              hideUserList
+            />
+          )}
+
+          {mode === 'board' && (
+            <CallParticipants excalidrawApi={boardApi} identity={identity} />
+          )}
+        </div>
+
+        {chatOpen && (
+          <CallChat
+            theme={CALL_THEME}
+            messages={messages}
+            onSend={send}
+            onClose={() => setChatOpen(false)}
           />
         )}
 
-        {mode === 'board' && (
-          <CallParticipants excalidrawApi={boardApi} identity={identity} />
+        <CallToolbar
+          role={role}
+          inviteUrl={inviteUrl}
+          boardActive={mode === 'board'}
+          chatActive={chatOpen}
+          chatUnread={unread}
+          showHomework={!trial}
+          onToggleBoard={handleToggle}
+          onToggleChat={() => setChatOpen((v) => !v)}
+          onHomework={() => setHomeworkOpen(true)}
+          onLeave={() => room.disconnect()}
+        />
+
+        {role === 'tutor' && courseId && (
+          <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={courseId} />
+        )}
+        {role === 'guest' && !trial && (
+          <HomeworkViewDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} />
         )}
       </div>
-
-      {chatOpen && (
-        <CallChat
-          theme={theme}
-          messages={messages}
-          onSend={send}
-          onClose={() => setChatOpen(false)}
-        />
-      )}
-
-      <CallToolbar
-        role={role}
-        inviteUrl={inviteUrl}
-        boardActive={mode === 'board'}
-        chatActive={chatOpen}
-        chatUnread={unread}
-        showHomework={!trial}
-        onToggleBoard={handleToggle}
-        onToggleChat={() => setChatOpen((v) => !v)}
-        onHomework={() => setHomeworkOpen(true)}
-        onLeave={() => room.disconnect()}
-      />
-
-      {role === 'tutor' && courseId && (
-        <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={courseId} />
-      )}
-      {role === 'guest' && !trial && (
-        <HomeworkViewDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} />
-      )}
     </div>
   )
 }

@@ -1,7 +1,13 @@
 // Токены и раскладка окна звонка. Чистый модуль (без React/LiveKit) —
 // тестируется через node:test.
 
+// Сцена звонка — «кинозал»: тёмная всегда, независимо от темы приложения.
+// Поэтому здесь хардкод, а не var(--*).
 export const STAGE_BG = '#101113'
+// «Стол» вокруг доски: тёмная подложка, из которой белая доска выглядит листом.
+// Своего токена в палитре нет — это единственное место, где нужен этот цвет.
+export const FRAME_BG = '#2E2E31'
+export const FRAME_INSET = 14
 export const TILE_BG = '#232427'
 export const AVATAR = '#5b5d63'
 export const GLYPH = '#3f4046'
@@ -21,24 +27,23 @@ export interface CallTheme {
   successBg: string
 }
 
-const DARK: CallTheme = {
-  panel: '#222222', border: '#2e2e2e', borderSoft: 'rgba(255,255,255,0.1)',
-  text: '#E3E2E0', muted: '#979A9B', hover: '#3a3a3a',
-  accent: '#6CA6E0', accentBg: 'rgba(108,166,224,0.16)',
-  destructive: '#CD4945', destructiveBg: 'rgba(205,73,69,0.15)',
-  success: '#4F9768', successBg: 'rgba(79,151,104,0.18)',
-}
-
-const LIGHT: CallTheme = {
-  panel: '#FFFFFF', border: '#E1E1E4', borderSoft: 'rgba(27,28,31,0.1)',
-  text: '#1B1C1F', muted: '#646670', hover: '#ECECEE',
-  accent: '#1D4ED8', accentBg: 'rgba(29,78,216,0.08)',
-  destructive: '#C92A2A', destructiveBg: 'rgba(201,42,42,0.08)',
-  success: '#077A4E', successBg: 'rgba(7,122,78,0.1)',
-}
-
-export function themeTokens(resolved: 'dark' | 'light'): CallTheme {
-  return resolved === 'dark' ? DARK : LIGHT
+// Ссылки на общие токены globals.css, а не своя копия палитры: тему переключает
+// сам CSS по классу .dark, поэтому объект один и от resolvedTheme не зависит.
+// Полупрозрачные фоны — через color-mix от того же токена, чтобы оттенок не
+// разъезжался с базовым цветом при правке палитры.
+export const CALL_THEME: CallTheme = {
+  panel: 'var(--card)',
+  border: 'var(--border)',
+  borderSoft: 'color-mix(in srgb, var(--foreground) 10%, transparent)',
+  text: 'var(--foreground)',
+  muted: 'var(--muted-foreground)',
+  hover: 'var(--muted)',
+  accent: 'var(--primary)',
+  accentBg: 'var(--primary-light)',
+  destructive: 'var(--destructive)',
+  destructiveBg: 'color-mix(in srgb, var(--destructive) 15%, transparent)',
+  success: 'var(--success)',
+  successBg: 'color-mix(in srgb, var(--success) 18%, transparent)',
 }
 
 export interface StageLayout {

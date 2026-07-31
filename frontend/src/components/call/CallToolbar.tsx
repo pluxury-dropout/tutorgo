@@ -1,42 +1,25 @@
 // frontend/src/components/call/CallToolbar.tsx
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocalParticipant } from '@livekit/components-react'
-import { useTheme } from 'next-themes'
-import { themeTokens } from './callTheme'
+import {
+  BookOpen, Check, Link, LogOut, MessageCircle, Mic, MicOff, MoreHorizontal,
+  ScreenShare, SquarePen, Video, VideoOff,
+} from 'lucide-react'
+import { CALL_THEME as c } from './callTheme'
 import { DeviceSettings } from './DeviceSettings'
 
 const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'
 
-// Единица-множитель для флюид-масштаба тулбара: плавно растёт с шириной вьюпорта.
-// 1px до ~1440px (пол), до 1.5px к ~2200px+ (потолок). Все размеры = calc(N * var(--u)).
-const U = 'clamp(1px, 0.069vw, 1.5px)'
-const u = (n: number) => `calc(${n} * var(--u))`
+// Размеры взяты у тулбара Excalidraw (--lg-button-size 2.25rem, --lg-icon-size
+// 1rem): две панели стоят на одном экране, и любой свой масштаб здесь читается
+// как рассинхрон. Флюид-множитель по вьюпорту был именно этим — Excalidraw с
+// шириной экрана не растёт, а тулбар звонка уезжал в полтора раза.
+const BTN = 36
+const ICON = 16
 
-// Иконки 15×15, stroke=currentColor, strokeWidth 1.8.
-export const ICONS = {
-  linkChain: (<><path d="M9 15l6-6" /><path d="M8 11L6.5 12.5a3.5 3.5 0 0 0 5 5L13 16" /><path d="M16 13l1.5-1.5a3.5 3.5 0 0 0-5-5L11 8" /></>),
-  check: <path d="M20 6L9 17l-5-5" />,
-  micOn: (<><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><path d="M12 18v4" /><path d="M8 22h8" /></>),
-  micOff: (<><path d="M9 9v3a3 3 0 0 0 4.6 2.5" /><path d="M15 9.34V5a3 3 0 0 0-5.94-.6" /><path d="M19 10v1a7 7 0 0 1-.32 2.1" /><path d="M5 10v1a7 7 0 0 0 11.3 5.5" /><path d="M12 18v4" /><path d="M8 22h8" /><path d="M2 2l20 20" /></>),
-  camOn: (<><path d="M15 8l5-3v14l-5-3" /><rect x="2" y="6" width="13" height="12" rx="2" /></>),
-  camOff: (<><path d="M2 2l20 20" /><path d="M15 8l5-3v14l-2.2-1.32" /><path d="M2 8v10a2 2 0 0 0 2 2h9.5" /><path d="M2 6.5A2 2 0 0 1 4 5h9a2 2 0 0 1 2 2v2.5" /></>),
-  share: (<><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M12 16V8" /><path d="M9 11l3-3 3 3" /></>),
-  board: (<><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" /><path d="M18.4 3.6a2.1 2.1 0 1 1 3 3L12 15.5l-4 1 1-4Z" /></>),
-  chat: <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5h.5a8.4 8.4 0 0 1 8 8v.5Z" />,
-  homework: (<><path d="M4 4h9a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H4Z" /><path d="M20 4h-3a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H20Z" /></>),
-  more: (<><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></>),
-  leave: (<><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>),
-}
-
-function Icon({ children }: { children: ReactNode }) {
-  return (
-    <svg style={{ width: u(15), height: u(15) }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {children}
-    </svg>
-  )
-}
+const icon = { size: ICON, strokeWidth: 1.75 } as const
 
 interface Props {
   role: 'tutor' | 'guest'
@@ -56,8 +39,6 @@ export function CallToolbar({
   role, inviteUrl, boardActive, chatActive, chatUnread, showHomework = true,
   onToggleBoard, onToggleChat, onHomework, onLeave,
 }: Props) {
-  const { resolvedTheme } = useTheme()
-  const c = themeTokens(resolvedTheme === 'dark' ? 'dark' : 'light')
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } =
     useLocalParticipant()
 
@@ -87,33 +68,35 @@ export function CallToolbar({
     copyTimer.current = setTimeout(() => setCopied(false), 2200)
   }
 
+  // Фон отдаём через --btn-bg: hover живёт в CSS (.lesson-btn), иначе inline
+  // перебил бы его. Выход — единственная залитая кнопка, как в макете.
   const btnBase = (opts: { active?: boolean; danger?: boolean; copied?: boolean }): React.CSSProperties => {
     let bg = 'transparent'
-    let color = c.text
-    if (opts.danger) { bg = c.destructiveBg; color = c.destructive }
+    let color = c.muted
+    if (opts.danger) { bg = c.destructive; color = '#fff' }
     else if (opts.copied) { bg = c.successBg; color = c.success }
-    else if (opts.active) { bg = c.accentBg; color = c.accent }
+    else if (opts.active) { bg = c.accentBg; color = c.text }
     return {
-      position: 'relative', width: u(32), height: u(32), minWidth: u(32),
+      position: 'relative',
+      width: opts.danger ? 40 : BTN, height: BTN, minWidth: opts.danger ? 40 : BTN,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 0, border: 'none', borderRadius: u(8), background: bg, color,
-      cursor: 'pointer', flexShrink: 0, transition: 'background .15s,color .15s',
+      padding: 0, border: 'none', borderRadius: opts.danger ? 12 : 10,
+      ['--btn-bg' as string]: bg, color,
+      cursor: 'pointer', flexShrink: 0,
     }
   }
 
   return (
-    <div style={{ display: 'contents', '--u': U } as React.CSSProperties}>
+    <div style={{ display: 'contents' }}>
       {/* Тост копирования */}
       {copied && (
         <div style={{
           position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(20,20,21,0.9)', color: '#fff', padding: `${u(8)} ${u(14)}`,
-          borderRadius: u(10), display: 'flex', alignItems: 'center', gap: u(8),
-          fontSize: u(13), fontWeight: 500, zIndex: 60, fontFamily: FONT,
+          background: 'rgba(20,20,21,0.9)', color: '#fff', padding: '8px 14px',
+          borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 13, fontWeight: 500, zIndex: 60, fontFamily: FONT,
         }}>
-          <svg style={{ width: u(15), height: u(15) }} viewBox="0 0 24 24" fill="none" stroke="#4F9768" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
+          <Check size={ICON} color="#4F9768" strokeWidth={2.4} />
           Ссылка на звонок скопирована
         </div>
       )}
@@ -121,10 +104,10 @@ export function CallToolbar({
       {/* Меню «Ещё» (вверх) */}
       {moreOpen && (
         <div data-call-more style={{
-          position: 'absolute', right: 22, bottom: u(72), background: c.panel,
-          border: `1px solid ${c.border}`, borderRadius: 12, padding: 6,
+          position: 'absolute', right: 22, bottom: 62, background: c.panel,
+          border: `1px solid ${c.border}`, borderRadius: 14, padding: 6,
           display: 'flex', flexDirection: 'column', minWidth: 240,
-          boxShadow: '0 16px 34px rgba(0,0,0,0.3)', zIndex: 20, fontFamily: FONT,
+          boxShadow: '0 12px 32px rgba(0,0,0,0.18)', zIndex: 20, fontFamily: FONT,
         }}>
           <DeviceSettings theme={c} />
         </div>
@@ -150,59 +133,69 @@ export function CallToolbar({
 
       {/* Сам тулбар */}
       <div style={{
-        position: 'absolute', left: '50%', bottom: u(14), transform: 'translateX(-50%)',
-        display: 'flex', alignItems: 'center', gap: u(2), padding: `${u(5)} ${u(6)}`,
-        borderRadius: u(10), background: c.panel, border: `1px solid ${c.border}`,
-        boxShadow: '0 6px 18px rgba(0,0,0,0.22)', zIndex: 10, fontFamily: FONT,
+        position: 'absolute', left: '50%', bottom: 14, transform: 'translateX(-50%)',
+        display: 'flex', alignItems: 'center', gap: 2, padding: '4px 6px',
+        borderRadius: 14, background: c.panel, border: `1px solid ${c.border}`,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.10)', zIndex: 10, fontFamily: FONT,
       }}>
         {role === 'tutor' && inviteUrl && (
-          <button onClick={copyLink} title="Скопировать ссылку" style={btnBase({ copied })}>
-            <Icon>{copied ? ICONS.check : ICONS.linkChain}</Icon>
+          <button className="lesson-btn" onClick={copyLink} title="Скопировать ссылку" style={btnBase({ copied })}>
+            {copied ? <Check {...icon} /> : <Link {...icon} />}
           </button>
         )}
+        {/* Выключенные микрофон и камера подсвечены — это состояние, а не выбор
+            инструмента: молчащий человек должен видеть, что он молчит. */}
         <button
+          className="lesson-btn"
           onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
-          title="Микрофон" style={btnBase({})}
+          title="Микрофон" style={btnBase({ active: !isMicrophoneEnabled })}
         >
-          <Icon>{isMicrophoneEnabled ? ICONS.micOn : ICONS.micOff}</Icon>
+          {isMicrophoneEnabled ? <Mic {...icon} /> : <MicOff {...icon} />}
         </button>
         <button
+          className="lesson-btn"
           onClick={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-          title="Камера" style={btnBase({})}
+          title="Камера" style={btnBase({ active: !isCameraEnabled })}
         >
-          <Icon>{isCameraEnabled ? ICONS.camOn : ICONS.camOff}</Icon>
+          {isCameraEnabled ? <Video {...icon} /> : <VideoOff {...icon} />}
         </button>
         <button
+          className="lesson-btn"
           onClick={() => localParticipant.setScreenShareEnabled(!isScreenShareEnabled)}
           title="Демонстрация экрана" style={btnBase({ active: isScreenShareEnabled })}
         >
-          <Icon>{ICONS.share}</Icon>
+          <ScreenShare {...icon} />
         </button>
         {role === 'tutor' && (
-          <button onClick={() => { setMoreOpen(false); onToggleBoard() }} title="Доска" style={btnBase({ active: boardActive })}>
-            <Icon>{ICONS.board}</Icon>
+          <button className="lesson-btn" onClick={() => { setMoreOpen(false); onToggleBoard() }} title="Доска" style={btnBase({ active: boardActive })}>
+            <SquarePen {...icon} />
           </button>
         )}
         {showHomework && (
-          <button onClick={() => { setMoreOpen(false); onHomework() }} title="Домашнее задание" style={btnBase({})}>
-            <Icon>{ICONS.homework}</Icon>
+          <button className="lesson-btn" onClick={() => { setMoreOpen(false); onHomework() }} title="Домашнее задание" style={btnBase({})}>
+            <BookOpen {...icon} />
           </button>
         )}
-        <button onClick={() => { setMoreOpen(false); onToggleChat() }} title="Чат" style={btnBase({ active: chatActive })}>
-          <Icon>{ICONS.chat}</Icon>
+        <button className="lesson-btn" onClick={() => { setMoreOpen(false); onToggleChat() }} title="Чат" style={btnBase({ active: chatActive })}>
+          <MessageCircle {...icon} />
           {chatUnread > 0 && !chatActive && (
             <span style={{
-              position: 'absolute', top: u(-2), right: u(-2), minWidth: u(15), height: u(15),
-              padding: `0 ${u(4)}`, borderRadius: u(8), background: c.destructive, color: '#fff',
-              fontSize: u(9), fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15,
+              padding: '0 4px', borderRadius: 8, background: c.destructive, color: '#fff',
+              fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>{chatUnread}</span>
           )}
         </button>
-        <button data-call-more onClick={() => setMoreOpen((v) => !v)} title="Ещё" style={btnBase({ active: moreOpen })}>
-          <Icon>{ICONS.more}</Icon>
+        <button className="lesson-btn" data-call-more onClick={() => setMoreOpen((v) => !v)} title="Ещё" style={btnBase({ active: moreOpen })}>
+          <MoreHorizontal {...icon} />
         </button>
-        <button onClick={() => setConfirmLeave(true)} title="Покинуть звонок" style={btnBase({ danger: true })}>
-          <Icon>{ICONS.leave}</Icon>
+        <div style={{ width: 1, height: 22, background: c.border, margin: '0 4px' }} />
+        <button
+          className="lesson-btn lesson-btn--danger"
+          onClick={() => setConfirmLeave(true)}
+          title="Покинуть звонок" style={btnBase({ danger: true })}
+        >
+          <LogOut {...icon} />
         </button>
       </div>
     </div>

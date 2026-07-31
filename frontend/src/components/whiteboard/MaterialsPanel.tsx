@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft, Folder, Library, Music, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { materialsApi } from '@/lib/api/materials'
 import { isPlayable } from './mediaSync'
@@ -129,55 +130,71 @@ export function MaterialsPanel({ onClose, onPick }: Props) {
     }
   }
 
+  const uploadButton = (
+    <button
+      onClick={() => fileInputRef.current?.click()}
+      disabled={busy}
+      className="h-9 rounded-[10px] bg-primary px-4 text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+    >
+      Загрузить
+    </button>
+  )
+
+  const current = path.length > 0 ? path[path.length - 1] : null
+
   return (
     <div
       data-board-ui
-      className="absolute right-2 top-14 z-20 w-72 rounded-xl bg-white p-3 shadow-lg"
+      className="absolute right-3.5 top-[62px] z-20 max-h-[480px] w-[280px] overflow-auto rounded-2xl border border-border bg-card p-5 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
     >
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-900">Материалы</span>
-        <button
-          onClick={onClose}
-          className="px-1 text-sm text-gray-500 hover:text-gray-900"
-          title="Закрыть"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Хлебные крошки: клик поднимает на нужный уровень. */}
-      <div className="mb-2 flex flex-wrap items-center gap-1 text-xs text-gray-500">
-        <button onClick={() => setPath([])} className="hover:text-gray-900">
-          Все
-        </button>
-        {path.map((f, i) => (
-          <span key={f.id} className="flex items-center gap-1">
-            <span>/</span>
+      {current ? (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPath((p) => p.slice(0, -1))}
+            title="Назад"
+            className="flex size-[26px] items-center justify-center text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="truncate text-base font-semibold text-foreground">{current.name}</span>
+          <button
+            onClick={onClose}
+            title="Закрыть"
+            className="ml-auto flex size-6 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-[17px] font-semibold text-foreground">Материалы</span>
             <button
-              onClick={() => setPath((p) => p.slice(0, i + 1))}
-              className="max-w-[7rem] truncate hover:text-gray-900"
+              onClick={onClose}
+              title="Закрыть"
+              className="flex size-6 items-center justify-center text-muted-foreground hover:text-foreground"
             >
-              {f.name}
+              <X className="size-4" />
             </button>
-          </span>
-        ))}
-      </div>
+          </div>
+          <p className="mt-2.5 text-[13px] leading-[1.4] text-muted-foreground">
+            Аудио для аудирования: файлы и папки, которые вы открываете во время урока.
+          </p>
+          <div className="my-3.5 text-[13px] text-muted-foreground">Все</div>
+        </>
+      )}
 
-      <div className="mb-2 flex gap-2">
-        <button
-          onClick={handleCreateFolder}
-          disabled={busy}
-          className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          Новая папка
-        </button>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
-          className="flex-1 rounded-lg bg-gray-900 px-2 py-1.5 text-xs font-medium text-white hover:bg-black disabled:opacity-50"
-        >
-          Загрузить
-        </button>
+      <div className={`flex flex-col gap-2 ${current ? 'mt-4' : ''} mb-4`}>
+        {!current && (
+          <button
+            onClick={handleCreateFolder}
+            disabled={busy}
+            className="h-9 rounded-[10px] border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted disabled:opacity-50"
+          >
+            Новая папка
+          </button>
+        )}
+        {items.length > 0 && uploadButton}
         <input
           ref={fileInputRef}
           type="file"
@@ -193,39 +210,56 @@ export function MaterialsPanel({ onClose, onPick }: Props) {
         />
       </div>
 
-      <div className="max-h-72 overflow-y-auto">
-        {isLoading ? (
-          <p className="py-4 text-center text-xs text-gray-400">Загрузка…</p>
-        ) : items.length === 0 ? (
-          <p className="py-4 text-center text-xs text-gray-400">Пусто</p>
-        ) : (
-          <ul className="flex flex-col">
-            {items.map((m) => (
-              <li key={m.id} className="group flex items-center gap-1 rounded-lg hover:bg-gray-50">
-                <button
-                  onClick={() => void handleClick(m)}
-                  disabled={busy}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-sm text-gray-800 disabled:opacity-50"
-                  title={m.name}
-                >
-                  <span className="shrink-0 text-gray-400">
-                    {m.kind === 'folder' ? '📁' : '📄'}
+      {isLoading ? (
+        <p className="py-4 text-center text-xs text-muted-foreground">Загрузка…</p>
+      ) : items.length === 0 ? (
+        // Пустая папка — единственное место, где загрузка объясняется словами.
+        <div className="flex flex-col items-center px-2.5 pb-3 pt-4 text-center">
+          <div className="mb-3.5 flex size-14 items-center justify-center rounded-full bg-muted">
+            <Library className="size-6 text-muted-foreground" strokeWidth={1.5} />
+          </div>
+          <p className="mb-1 text-sm font-medium text-foreground">Нет файлов</p>
+          <p className="mb-4 text-xs text-muted-foreground">Добавьте аудио в эту папку</p>
+          {uploadButton}
+        </div>
+      ) : (
+        <ul className="flex flex-col">
+          {items.map((m) => (
+            <li key={m.id} className="group flex items-center rounded-[10px] hover:bg-muted">
+              <button
+                onClick={() => void handleClick(m)}
+                disabled={busy}
+                className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2.5 text-left text-sm text-foreground disabled:opacity-50"
+                title={m.name}
+              >
+                {m.kind === 'folder' ? (
+                  <Folder
+                    className="size-[18px] shrink-0"
+                    strokeWidth={1}
+                    style={{ fill: '#F0C36B', stroke: '#C99A3E' }}
+                  />
+                ) : (
+                  <Music className="size-[17px] shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                )}
+                <span className="truncate">{m.name}</span>
+                {m.kind === 'file' && (
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                    {formatMb(m.size_bytes)} МБ
                   </span>
-                  <span className="truncate">{m.name}</span>
-                </button>
-                <button
-                  onClick={() => void handleDelete(m)}
-                  disabled={busy}
-                  className="px-2 text-xs text-gray-300 hover:text-red-600 disabled:opacity-50 group-hover:text-gray-500"
-                  title="Удалить"
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                )}
+              </button>
+              <button
+                onClick={() => void handleDelete(m)}
+                disabled={busy}
+                className="px-2 text-transparent hover:text-destructive disabled:opacity-50 group-hover:text-muted-foreground"
+                title="Удалить"
+              >
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

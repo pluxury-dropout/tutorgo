@@ -18,6 +18,8 @@ const SEEK_TOLERANCE_SEC = 0.5
 export interface SyncTarget {
   currentTime: number
   readonly paused: boolean
+  /** Есть у <audio>/<video>; YouTube-адаптер скорость не поддерживает. */
+  playbackRate?: number
   play(): Promise<void>
   pause(): void
 }
@@ -27,6 +29,9 @@ export interface MediaPlayerApi {
   /** Плеер готов (элемент смонтирован / YT-адаптер создан). null — при размонтировании. */
   attach: (t: SyncTarget | null) => void
   needsGesture: boolean
+  /** Текущая скорость — общая для обеих сторон. */
+  rate: number
+  setRate: (rate: number) => void
   open: (p: { url: string; mimeType: string; name: string }) => void
   close: () => void
   onLocalPlay: () => void
@@ -41,11 +46,12 @@ export function useMediaPlayer(
 ): MediaPlayerApi {
   const [media, setMedia] = useState<MediaState | null>(null)
   const [needsGesture, setNeedsGesture] = useState(false)
+  const [rate, setRateState] = useState(1)
   const mediaRef = useRef<SyncTarget | null>(null)
   // Кадр, пришедший до готовности плеера: между `open` и монтированием <audio>
   // (а у YouTube — созданием iframe) проходит рендер, и без буфера позиция
   // подключившегося посреди трека ученика терялась бы.
-  const pendingRef = useRef<{ position: number; play: boolean } | null>(null)
+  const pendingRef = useRef<{ position: number; play: boolean; rate?: number } | null>(null)
   // Согласованное состояние плеера: играет или нет. Ставится и при приёме чужого
   // кадра, и при собственном действии пользователя. По нему отличаем эхо
   // применённой команды от живого клика — см. isEchoOfRemote. Таймер тут не
@@ -88,6 +94,7 @@ export function useMediaPlayer(
             mimeType: cur.mimeType,
             name: cur.name,
             position: el?.currentTime ?? 0,
+            rate: el?.playbackRate,
           })
           if (el && !el.paused) {
             sendMedia({ action: 'play', position: el.currentTime })
@@ -98,6 +105,10 @@ export function useMediaPlayer(
 
       setMedia((prev) => nextMediaState(prev, p))
 
+      // Скорость едет прицепом к любому кадру — и в подпись на кнопке, и в сам
+      // элемент: разъехавшийся playbackRate тихо разводит позиции сторон.
+      if (p.rate !== undefined) setRateState(p.rate)
+
       const el = mediaRef.current
       if (!el) {
         // Плеера ещё нет — копим кадр до attach. Закрытие копить незачем.
@@ -105,10 +116,12 @@ export function useMediaPlayer(
           pendingRef.current = {
             position: p.position ?? pendingRef.current?.position ?? 0,
             play: p.action === 'play',
+            rate: p.rate ?? pendingRef.current?.rate,
           }
         }
         return
       }
+      if (p.rate !== undefined && el.playbackRate !== undefined) el.playbackRate = p.rate
 
       // Согласуем состояние ДО применения: play/pause у элемента выстрелят
       // асинхронно, и localToggle сверится с уже обновлённым agreed.
@@ -137,6 +150,7 @@ export function useMediaPlayer(
     agreedRef.current = pend.play
     expectedSeekRef.current = pend.position
     t.currentTime = pend.position
+    if (pend.rate !== undefined && t.playbackRate !== undefined) t.playbackRate = pend.rate
     if (pend.play) {
       void t.play().catch(() => setNeedsGesture(true))
     }
@@ -146,8 +160,21 @@ export function useMediaPlayer(
     (p: { url: string; mimeType: string; name: string }) => {
       setMedia({ url: p.url, mimeType: p.mimeType, name: p.name })
       setNeedsGesture(false)
+      setRateState(1)
       agreedRef.current = false
-      sendMedia({ action: 'open', ...p, position: 0 })
+      sendMedia({ action: 'open', ...p, position: 0, rate: 1 })
+    },
+    [sendMedia]
+  )
+
+  /** Смена скорости. Отдельного action не заводим — она прицепляется к позиции,
+   *  и приёмнику достаточно обычного seek-кадра. */
+  const setRate = useCallback(
+    (next: number) => {
+      setRateState(next)
+      const el = mediaRef.current
+      if (el && el.playbackRate !== undefined) el.playbackRate = next
+      sendMedia({ action: 'seek', position: el?.currentTime ?? 0, rate: next })
     },
     [sendMedia]
   )
@@ -193,6 +220,8 @@ export function useMediaPlayer(
     media,
     attach,
     needsGesture,
+    rate,
+    setRate,
     open,
     close,
     onLocalPlay,

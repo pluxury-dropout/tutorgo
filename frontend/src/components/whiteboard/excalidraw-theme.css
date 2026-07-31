@@ -1,3 +1,33 @@
+/* Оверрайды нативного UI Excalidraw: шрифты, скрытие лишнего и палитра.
+
+   Половина экрана урока — это UI самого Excalidraw (тулбар инструментов,
+   гамбургер, зум, «?»). Перерисовать его в JSX нельзя, зато он читает
+   собственные CSS-переменные — их и переопределяем под палитру приложения.
+   Фиолетовый #6965db из коробки — единственный чужой цвет на экране урока. */
+.excalidraw {
+  /* Активный инструмент: серый ECECEE + графитовая иконка вместо сиреневой. */
+  --color-primary: #222428;
+  --color-primary-darker: #1b1c1f;
+  --color-primary-darkest: #141414;
+  --color-primary-light: #ececee;
+  --color-surface-primary-container: #ececee;
+  --color-on-surface: #1b1c1f;
+  --button-hover-bg: #f1f1f3;
+  --island-bg-color: #ffffff;
+  /* Один и тот же токен красит скругление и островов, и кнопок внутри них.
+     Держим его на кнопках (10px), островам радиус задаём правилом ниже. */
+  --border-radius-lg: 0.625rem;
+  /* Панели урока: волосяная рамка + мягкая тень вместо дефолтной «подушки». */
+  --shadow-island: 0 0 0 1px #e1e1e4, 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.excalidraw .Island,
+.excalidraw .zoom-actions,
+.excalidraw .undo-redo-buttons {
+  border-radius: 14px;
+  box-shadow: var(--shadow-island);
+}
+
 /* Пикер шрифтов Excalidraw не настраивается через UIOptions — прячем лишние
    кнопки по data-testid. Слоты остаются рабочими: старые доски с этими
    шрифтами продолжают рисоваться, просто выбрать их заново нельзя.

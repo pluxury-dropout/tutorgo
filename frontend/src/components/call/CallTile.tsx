@@ -6,6 +6,7 @@ import {
   isTrackReference,
   type TrackReferenceOrPlaceholder,
 } from '@livekit/components-react'
+import { User } from 'lucide-react'
 import { TILE_BG, AVATAR, GLYPH } from './callTheme'
 
 interface Props {
@@ -52,10 +53,7 @@ export function CallTile({ trackRef, variant }: Props) {
             justifyContent: 'center',
           }}
         >
-          <svg width={glyphSize} height={glyphSize} viewBox="0 0 24 24" fill={GLYPH}>
-            <circle cx="12" cy="8" r="4.1" />
-            <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8Z" />
-          </svg>
+          <User size={glyphSize} color={GLYPH} strokeWidth={1.5} />
         </div>
       )}
     </div>
