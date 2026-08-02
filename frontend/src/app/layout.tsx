@@ -23,13 +23,13 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'TutorHub',
+  title: 'Amida',
   description: 'CRM for private tutors',
   // ponytail: только apple-теги — iOS не читает manifest display:standalone. Manifest добавить, когда понадобится Android PWA.
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'TutorHub',
+    title: 'Amida',
   },
 }
 
