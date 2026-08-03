@@ -8,7 +8,8 @@ import { useAuthStore } from '@/stores/auth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 import { subscriptionApi, SubState } from '@/lib/api/subscription'
-import { decideAccess, PAYWALL_PATH } from '@/lib/subscriptionGuard'
+import { decideAccess, stateOnLoadError, PAYWALL_PATH } from '@/lib/subscriptionGuard'
+import { withRetry } from '@/lib/retry'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore()
@@ -18,6 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mounted, setMounted] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [subState, setSubState] = useState<SubState | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -26,15 +28,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (mounted && !isAuthenticated) router.replace('/login')
   }, [mounted, isAuthenticated, router])
 
-  // Guard подписки: грузим только когда аутентифицированы. Ошибка → blocked (fail-closed).
+  // Guard подписки: грузим только когда аутентифицированы. Разбор ошибки —
+  // в stateOnLoadError: обрыв связи оставляет null (спиннер), перезапрос ниже.
   useEffect(() => {
     if (!mounted || !isAuthenticated) return
     let alive = true
-    subscriptionApi.get()
+    withRetry(() => subscriptionApi.get())
       .then((s) => { if (alive) setSubState(s.state) })
-      .catch(() => { if (alive) setSubState('blocked') })
+      .catch((e: { status?: number }) => {
+        if (alive) setSubState(stateOnLoadError(e?.status))
+      })
     return () => { alive = false }
-  }, [mounted, isAuthenticated])
+  }, [mounted, isAuthenticated, reloadKey])
+
+  // Мобильный браузер морозит фоновую вкладку и рвёт соединение. При возврате
+  // компонент не перемонтируется — эффект выше сам не выстрелит, дёргаем руками.
+  useEffect(() => {
+    if (subState !== null) return
+    const retry = () => {
+      if (document.visibilityState === 'visible') setReloadKey((k) => k + 1)
+    }
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', retry)
+    return () => {
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', retry)
+    }
+  }, [subState])
 
   // Редирект на paywall — в эффекте, а не в теле рендера (иначе "Cannot update
   // Router while rendering"). Тот же паттерн, что у auth-редиректа выше.

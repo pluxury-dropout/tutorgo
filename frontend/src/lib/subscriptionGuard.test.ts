@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decideAccess, PAYWALL_PATH } from './subscriptionGuard.ts'
+import { decideAccess, stateOnLoadError, PAYWALL_PATH } from './subscriptionGuard.ts'
 
 test('active → render без баннера на любом пути', () => {
   assert.deepEqual(decideAccess('active', '/dashboard'), { action: 'render', banner: false })
@@ -22,4 +22,14 @@ test('blocked на самом paywall → render без цикла', () => {
 
 test('blocked на success-странице → render (дополлить активацию)', () => {
   assert.deepEqual(decideAccess('blocked', '/subscription/success'), { action: 'render', banner: false })
+})
+
+test('обрыв связи → null, а не ложный paywall', () => {
+  assert.equal(stateOnLoadError(0), null)
+})
+
+test('ответ сервера об ошибке → blocked (fail-closed)', () => {
+  assert.equal(stateOnLoadError(500), 'blocked')
+  assert.equal(stateOnLoadError(403), 'blocked')
+  assert.equal(stateOnLoadError(undefined), 'blocked')
 })

@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { subscriptionApi, Subscription, SubState, Plan } from '@/lib/api/subscription'
+import { withRetry } from '@/lib/retry'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/button'
 
@@ -30,7 +31,7 @@ export default function SubscriptionPage() {
   async function load() {
     setFailed(false)
     try {
-      setSub(await subscriptionApi.get())
+      setSub(await withRetry(() => subscriptionApi.get()))
     } catch {
       setFailed(true)
       toast.error('Не удалось загрузить статус подписки')

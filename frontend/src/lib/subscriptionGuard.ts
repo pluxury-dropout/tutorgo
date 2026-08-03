@@ -17,3 +17,11 @@ export function decideAccess(state: SubState, path: string): GuardDecision {
   if (state === 'blocked' && !inPaymentFunnel(path)) return { action: 'redirect' }
   return { action: 'render', banner: state === 'grace' }
 }
+
+// Статус не загрузился — чем это считать. Сервер ответил (403/500/…) → доверяем
+// ответу и закрываемся (fail-closed). Связи не было (status 0 после ретраев) →
+// null = «пока не знаем», спиннер вместо ложного paywall: иначе одно моргание
+// мобильной сети выкидывает на оплату до перезагрузки страницы.
+export function stateOnLoadError(status: number | undefined): SubState | null {
+  return status === 0 ? null : 'blocked'
+}

@@ -47,9 +47,11 @@ async function proactiveRefresh(): Promise<void> {
   const p = refreshToken().then(
     () => undefined,
     (err: AxiosError) => {
-      refreshFailed = true
-      // 401 = session genuinely dead → log out once. 429/network = transient,
-      // just stop hammering until reload.
+      // Сервер ответил (401/429/5xx) → перестаём долбить до перезагрузки.
+      // 401 = сессия мертва → разлогин. А вот обрыв связи (response нет) —
+      // транзиентен: залипнуть на нём навсегда значит требовать перезахода
+      // после каждого моргания мобильной сети.
+      if (err.response) refreshFailed = true
       if (err.response?.status === 401) forceLogout()
     },
   )
