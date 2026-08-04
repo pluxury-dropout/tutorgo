@@ -17,6 +17,7 @@ import type {
   ExcalidrawImperativeAPI,
   BinaryFileData,
   DataURL,
+  NormalizedZoomValue,
 } from '@excalidraw/excalidraw/types'
 import type {
   FileId,
@@ -49,6 +50,26 @@ if (typeof window !== 'undefined') {
 const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
+
+// Камера (scroll+zoom) — своя у каждого и в БД не едет (эфемерка, как курсоры),
+// поэтому запоминаем её на устройстве: вернулся на страницу — вернулся туда, где
+// был, а не в начало координат. Ключ на страницу доски.
+// ponytail: localStorage, не сервер. Серверное хранение — когда понадобится
+// подхватывать позицию с другого устройства.
+const camKey = (pageId: string) => `board-cam:${pageId}`
+const CAM_SAVE_MS = 300
+// Границы зума Excalidraw — мусор из storage не должен схлопнуть доску в точку.
+const clampZoom = (z: number) => Math.min(30, Math.max(0.1, z))
+
+function readCamera(pageId: string) {
+  try {
+    const cam = JSON.parse(localStorage.getItem(camKey(pageId)) ?? 'null')
+    if (!cam || ![cam.scrollX, cam.scrollY, cam.zoom].every(Number.isFinite)) return null
+    return cam as { scrollX: number; scrollY: number; zoom: number }
+  } catch {
+    return null
+  }
+}
 
 // Ролик на доске держим 16:9, как его ни тянули за угол.
 const YT_RATIO = 9 / 16
@@ -145,6 +166,59 @@ export function ExcalidrawCanvas({
   }, [status, sendMedia])
 
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+
+  // onScrollChange летит покадрово во время пана — пишем не чаще CAM_SAVE_MS,
+  // trailing'ом (нужна позиция ПОСЛЕ жеста, а не в его начале).
+  const camTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pageId = page?.id
+  const saveCamera = useCallback(() => {
+    if (camTimerRef.current || !pageId) return
+    camTimerRef.current = setTimeout(() => {
+      camTimerRef.current = null
+      const api = apiRef.current
+      if (!api) return
+      const s = api.getAppState()
+      try {
+        localStorage.setItem(
+          camKey(pageId),
+          JSON.stringify({ scrollX: s.scrollX, scrollY: s.scrollY, zoom: s.zoom.value })
+        )
+      } catch {
+        // приватный режим / квота — позиция камеры того не стоит
+      }
+    }, CAM_SAVE_MS)
+  }, [pageId])
+
+  // Первый визит на страницу (сохранённой камеры нет) — показываем содержимое
+  // целиком. Элементы приезжают по WS уже ПОСЛЕ монтирования, поэтому ловим
+  // момент их появления в onChange, а не при api-ready: там сцена ещё пуста.
+  const fitDoneRef = useRef<string | null>(null)
+  const fitOnFirstVisit = useCallback(
+    (elements: readonly ExcalidrawElement[]) => {
+      if (!pageId || fitDoneRef.current === pageId) return
+      if (readCamera(pageId)) {
+        fitDoneRef.current = pageId
+        return
+      }
+      const visible = elements.filter((el) => !el.isDeleted)
+      if (!visible.length) return // сид ещё не доехал — ждём следующего onChange
+      fitDoneRef.current = pageId
+      // fitToContent, а не fitToViewport: одинокий штрих не должен раздуться
+      // на весь экран, зум выше 100% тут не нужен.
+      apiRef.current?.scrollToContent(visible, { fitToContent: true, animate: false })
+    },
+    [pageId]
+  )
+
+  // Отложенная запись держит pageId в замыкании: при смене страницы её нужно
+  // отменить, иначе камера НОВОЙ страницы уедет в ключ старой.
+  useEffect(
+    () => () => {
+      if (camTimerRef.current) clearTimeout(camTimerRef.current)
+      camTimerRef.current = null
+    },
+    [pageId]
+  )
 
   // Паспорт preflight'а: PDF уже на сервере, ждём выбора диапазона.
   const pdfImportRef = useRef<{ importId: string; sizes: { w: number; h: number }[] } | null>(null)
@@ -442,16 +516,36 @@ export function ExcalidrawCanvas({
             apiRef.current = api
             onApiReady(api)
             onApi?.(api)
+            const cam = pageId && readCamera(pageId)
+            // Через setTimeout: api приходит из конструктора Excalidraw, где
+            // updateScene — setState на несмонтированном компоненте (тот же
+            // приём, что у pushCollaborators в useExcalidrawSync).
+            if (cam)
+              setTimeout(
+                () =>
+                  api.updateScene({
+                    appState: {
+                      scrollX: cam.scrollX,
+                      scrollY: cam.scrollY,
+                      zoom: { value: clampZoom(cam.zoom) as NormalizedZoomValue },
+                    },
+                  }),
+                0
+              )
           }}
           onChange={(elements, appState) => {
             keepAspect(elements)
+            fitOnFirstVisit(elements)
             // Не onUserFollow: тот молчит, когда follow включают программно из
             // панели участников звонка. appState ловит оба входа одинаково.
             syncFollowTarget(appState.userToFollow?.socketId ?? null)
             onChange()
           }}
           onPointerUpdate={(p) => sendCursor(p.pointer.x, p.pointer.y)}
-          onScrollChange={() => broadcastViewport()}
+          onScrollChange={() => {
+            broadcastViewport()
+            saveCamera()
+          }}
           // Встраиваем только YouTube: остальные ссылки — обычные, не iframe.
           // Заодно это фильтр для ссылок, вставленных Ctrl+V.
           validateEmbeddable={(link) => parseYouTubeId(link) !== null}
