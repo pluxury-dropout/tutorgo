@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react'
-import {
-  Plus, Search, ChevronLeft, ChevronRight,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
@@ -302,7 +300,6 @@ export function MobileWeekCalendar() {
           </div>
           <IconBtn onClick={prevWeek}><ChevronLeft size={16} /></IconBtn>
           <IconBtn onClick={nextWeek}><ChevronRight size={16} /></IconBtn>
-          <IconBtn><Search size={15} /></IconBtn>
         </header>
 
         {/* ── Day strip ── */}
@@ -459,22 +456,6 @@ export function MobileWeekCalendar() {
             })}
           </div>
         </div>
-
-        {/* ── FAB ── */}
-        <button
-          style={{
-            position: 'fixed', right: 16, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 66px)',
-            width: 52, height: 52, borderRadius: 999,
-            background: 'var(--foreground)', color: 'var(--background)',
-            border: 0, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 8px 24px -6px rgba(0,0,0,0.28)',
-            zIndex: 30,
-          }}
-          aria-label="Новое занятие"
-        >
-          <Plus size={22} strokeWidth={2} />
-        </button>
 
       </div>
     </>
