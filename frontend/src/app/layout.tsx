@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'Amida',
-  description: 'CRM for private tutors',
+  description: 'Платформа для преподавателей',
   // ponytail: только apple-теги — iOS не читает manifest display:standalone. Manifest добавить, когда понадобится Android PWA.
   appleWebApp: {
     capable: true,
