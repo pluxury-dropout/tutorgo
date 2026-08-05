@@ -2,7 +2,7 @@
 
 import { useState, Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { useCourses } from '@/lib/hooks/useCourses'
@@ -15,6 +15,7 @@ import {
 } from '@/lib/hooks/usePayments'
 import { Pagination } from '@/components/common/Pagination'
 import { SectionCard } from '@/components/common/SectionCard'
+import { EmptyState } from '@/components/common/EmptyState'
 import { PaymentForm } from '@/components/payments/PaymentForm'
 import { Button } from '@/components/ui/button'
 import type { Payment } from '@/types/api'
@@ -145,9 +146,12 @@ function PaymentsPageInner() {
             ))}
           </div>
         ) : payments.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', padding: '24px 18px' }}>
-            Нет оплат
-          </p>
+          <EmptyState
+            icon={Wallet}
+            title="Оплат пока нет"
+            description="Оплата отмечается на странице курса — приложение посчитает, на сколько уроков хватит баланса, и напомнит, когда пора брать следующую"
+            action={{ label: 'Перейти к курсам', href: '/courses' }}
+          />
         ) : (
           payments.map((p, i) => (
             <div

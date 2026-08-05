@@ -251,8 +251,10 @@ function CoursesPageInner() {
         ) : studentList.length === 0 ? (
           <EmptyState
             icon={Users}
-            title={studentSearch ? 'Ничего не найдено' : 'Нет учеников'}
-            description={studentSearch ? 'Попробуй другой запрос' : 'Добавь первого ученика'}
+            title={studentSearch ? 'Ничего не найдено' : 'Учеников пока нет'}
+            description={studentSearch
+              ? 'Попробуй другой запрос — поиск идёт по имени и контактам'
+              : 'Ученик — карточка с контактами. К ней привязываются курсы, уроки и оплаты, а сам ученик может получить доступ в личный кабинет'}
             action={!studentSearch ? { label: 'Добавить ученика', onClick: openCreateStudent } : undefined}
           />
         ) : (
@@ -279,8 +281,10 @@ function CoursesPageInner() {
         ) : courses.length === 0 ? (
           <EmptyState
             icon={BookOpen}
-            title={search ? 'Ничего не найдено' : 'Нет курсов'}
-            description={search ? 'Попробуй другой запрос' : 'Добавь первый курс'}
+            title={search ? 'Ничего не найдено' : 'Курсов пока нет'}
+            description={search
+              ? 'Попробуй другой запрос — поиск идёт по названию предмета'
+              : 'Курс — предмет и цена за урок для одного ученика или группы. С него начинаются расписание, оплаты и домашние задания'}
             action={!search ? { label: 'Добавить курс', onClick: openCreate } : undefined}
           />
         ) : (
@@ -361,7 +365,9 @@ function CoursesPageInner() {
           <EmptyState
             icon={BookOpen}
             title={search ? 'Ничего не найдено' : 'Архив пуст'}
-            description={search ? 'Попробуй другой запрос' : 'Архивированные курсы появятся здесь'}
+            description={search
+              ? 'Попробуй другой запрос — поиск идёт по названию предмета'
+              : 'Сюда переезжают завершённые курсы: они исчезают из расписания и списков, но история уроков и оплат сохраняется'}
           />
         ) : (
           <>

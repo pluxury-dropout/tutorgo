@@ -2,9 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Presentation } from 'lucide-react'
 
 import { studentApi } from '@/lib/api/student'
 import { SectionCard, SectionRow } from '@/components/common/SectionCard'
+import { EmptyState } from '@/components/common/EmptyState'
 import { Button } from '@/components/ui/button'
 import type { StudentCourse } from '@/types/api'
 
@@ -62,9 +64,12 @@ export default function StudentBoardPage() {
           </SectionRow>
         )}
         {courses && !isLoading && error == null && courses.length === 0 && (
-          <SectionRow isFirst>
-            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Курсов пока нет</span>
-          </SectionRow>
+          <EmptyState
+            size="sm"
+            icon={Presentation}
+            title="Курсов пока нет"
+            description="У каждого курса своя онлайн-доска: записи с урока, PDF и заметки остаются на ней после занятия. Доски появятся, когда преподаватель добавит тебя на курс"
+          />
         )}
         {courses?.map((c, i) => <CourseRow key={c.id} course={c} isFirst={i === 0} />)}
       </SectionCard>

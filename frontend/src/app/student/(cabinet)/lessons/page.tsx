@@ -4,9 +4,11 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { CalendarDays } from 'lucide-react'
 
 import { studentApi, LessonsFilter } from '@/lib/api/student'
 import { SectionCard, SectionRow } from '@/components/common/SectionCard'
+import { EmptyState } from '@/components/common/EmptyState'
 import { Markdown } from '@/components/common/Markdown'
 import { PeriodPicker } from '@/components/lessons/PeriodPicker'
 import { Badge } from '@/components/ui/badge'
@@ -188,15 +190,23 @@ function LessonsInner() {
           </SectionRow>
         )}
         {lessons && !isLoading && error == null && visible.length === 0 && (
-          <SectionRow isFirst>
-            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
-              {lessons.length === 0
-                ? tab === 'upcoming'
-                  ? 'Ближайших уроков нет'
-                  : 'Прошедших уроков нет'
-                : 'На выбранной неделе уроков нет'}
-            </span>
-          </SectionRow>
+          lessons.length === 0 ? (
+            <EmptyState
+              size="sm"
+              icon={CalendarDays}
+              title={tab === 'upcoming' ? 'Ближайших уроков нет' : 'Прошедших уроков нет'}
+              description={tab === 'upcoming'
+                ? 'Как только преподаватель поставит урок, он появится здесь — с датой, предметом и кнопкой входа в звонок'
+                : 'Здесь будет история проведённых уроков вместе с домашними заданиями к ним'}
+            />
+          ) : (
+            <EmptyState
+              size="sm"
+              icon={CalendarDays}
+              title="На выбранной неделе уроков нет"
+              description="Уроки есть в другие недели — пролистай период выше"
+            />
+          )
         )}
         {visible.map((l, i) => (
           <LessonRow key={l.id} lesson={l} isFirst={i === 0} upcoming={tab === 'upcoming'} />

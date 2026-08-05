@@ -283,7 +283,16 @@ export default function CalendarPage() {
         end={newTaskSlot?.end ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
-      <div className={`${isMobile ? 'hidden' : 'block'} h-full min-h-0 overflow-hidden`}>
+      <div className={`${isMobile ? 'hidden' : 'flex flex-col'} h-full min-h-0 overflow-hidden`}>
+        {/* Подсказка вместо пустой сетки: новичок не догадывается, что урок
+            ставится кликом по слоту. Исчезает, как только в периоде есть события. */}
+        {events.length === 0 && (
+          <div className="mb-2 shrink-0 rounded-lg border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
+            Уроков в этом периоде нет. Кликни по свободному слоту, чтобы поставить урок или задачу —
+            урок привязывается к курсу, так что сначала заведи курс с учеником.
+          </div>
+        )}
+        <div className="min-h-0 flex-1">
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -388,6 +397,7 @@ export default function CalendarPage() {
           slotMaxTime="23:00:00"
           buttonText={{ today: 'Сегодня', month: 'Месяц', week: 'Неделя', day: 'День' }}
         />
+        </div>
       </div>
     </>
   )

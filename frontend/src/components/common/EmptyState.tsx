@@ -1,28 +1,55 @@
+import Link from 'next/link'
 import { LucideIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+
+type Action =
+  | { label: string; onClick: () => void }
+  | { label: string; href: string }
 
 interface EmptyStateProps {
   icon: LucideIcon
   title: string
+  /** Зачем нужен раздел и что тут появится — новичок видит пустой экран впервые. */
   description?: string
-  action?: { label: string; onClick: () => void }
+  action?: Action
+  /** sm — для узких карточек дашборда, md — для полноразмерных страниц. */
+  size?: 'sm' | 'md'
 }
 
-export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, description, action, size = 'md' }: EmptyStateProps) {
+  const sm = size === 'sm'
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="h-16 w-16 rounded-full bg-primary/8 flex items-center justify-center mb-4">
-        <Icon className="h-8 w-8 text-primary/50" />
-      </div>
-      <p className="text-sm font-medium">{title}</p>
-      {description && (
-        <p className="text-xs text-muted-foreground mt-1">{description}</p>
-      )}
+    <Empty className={sm ? 'gap-3 px-4 py-8' : 'py-14'}>
+      <EmptyHeader className={sm ? 'gap-1.5' : undefined}>
+        <EmptyMedia variant="icon" className={sm ? 'size-9 rounded-full' : 'size-11 rounded-full'}>
+          <Icon className={sm ? 'size-4' : 'size-5'} />
+        </EmptyMedia>
+        <EmptyTitle>{title}</EmptyTitle>
+        {description && (
+          <EmptyDescription className={sm ? 'text-xs/relaxed' : undefined}>
+            {description}
+          </EmptyDescription>
+        )}
+      </EmptyHeader>
       {action && (
-        <Button size="sm" className="mt-4" onClick={action.onClick}>
-          {action.label}
-        </Button>
+        <EmptyContent>
+          {'href' in action ? (
+            <Link href={action.href} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              {action.label}
+            </Link>
+          ) : (
+            <Button size="sm" onClick={action.onClick}>{action.label}</Button>
+          )}
+        </EmptyContent>
       )}
-    </div>
+    </Empty>
   )
 }

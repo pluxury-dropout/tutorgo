@@ -8,9 +8,12 @@ import { useRecentPayments, useMonthlyIncome, useMonthlyExpected } from '@/lib/h
 import type { CalendarLesson } from '@/types/api'
 import { SectionCard, SectionLink, SectionRow } from '@/components/common/SectionCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { EmptyState } from '@/components/common/EmptyState'
+import { GettingStarted } from '@/components/common/GettingStarted'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import KanbanWidget from '@/components/tasks/KanbanWidget'
+import { CalendarDays, RefreshCw, Wallet } from 'lucide-react'
 
 function buildDateRanges() {
   const now = new Date()
@@ -44,9 +47,6 @@ function fmtDate(iso: string) {
 }
 
 const MONO = 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace'
-const EMPTY: React.CSSProperties = {
-  fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', padding: '20px 0',
-}
 
 function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boolean }) {
   const status = effectiveStatus(lesson)
@@ -120,6 +120,14 @@ export default function DashboardPage() {
         <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{dateLabel}</span>
       </div>
 
+      {/* Онбординг — сам исчезает, когда все четыре шага сделаны */}
+      <GettingStarted
+        hasStudents={studentCount > 0}
+        hasCourses={courseCount > 0}
+        hasLessons={monthLessons.length > 0}
+        hasPayments={recentPayments.length > 0}
+      />
+
       {/* KPI + доход */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <div style={{
@@ -163,14 +171,25 @@ export default function DashboardPage() {
 
         <SectionCard title="Уроки сегодня" action={<SectionLink href="/calendar">Расписание →</SectionLink>}>
           {sortedLessons.length === 0
-            ? <p style={EMPTY}>Уроков на сегодня нет</p>
+            ? <EmptyState
+                size="sm"
+                icon={CalendarDays}
+                title="Уроков сегодня нет"
+                description="Здесь появится расписание дня — время, ученик и статус каждого урока"
+                action={{ label: 'Открыть календарь', href: '/calendar' }}
+              />
             : sortedLessons.map((l, i) => <LessonRow key={l.id} lesson={l} isFirst={i === 0} />)
           }
         </SectionCard>
 
         <SectionCard title="Текущие циклы" action={<SectionLink href="/courses">Курсы →</SectionLink>}>
           {currentCycles.length === 0
-            ? <p style={EMPTY}>Нет активных циклов</p>
+            ? <EmptyState
+                size="sm"
+                icon={RefreshCw}
+                title="Активных циклов нет"
+                description="Цикл — пакет уроков по курсу, после которого пора брать оплату. Появится, как только пройдёт первый урок"
+              />
             : currentCycles.map((cycle, i) => {
                 const complete = cycle.progress === cycle.cycle_size
                 return (
@@ -204,7 +223,13 @@ export default function DashboardPage() {
 
         <SectionCard title="Последние платежи" action={<SectionLink href="/payments">Все →</SectionLink>}>
           {recentPayments.length === 0
-            ? <p style={EMPTY}>Платежей пока нет</p>
+            ? <EmptyState
+                size="sm"
+                icon={Wallet}
+                title="Платежей пока нет"
+                description="Отмеченные оплаты появятся здесь — свежие сверху, с суммой и числом оплаченных уроков"
+                action={{ label: 'Отметить оплату', href: '/payments' }}
+              />
             : (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 52px', gap: 8, padding: '8px 18px 6px' }}>

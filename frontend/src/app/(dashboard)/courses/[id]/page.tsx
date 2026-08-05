@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX, Wallet, Users, CalendarDays } from 'lucide-react'
 
 import {
   useCourse,
@@ -34,6 +34,7 @@ import { SeriesDialog } from '@/components/lessons/SeriesDialog'
 import { PaymentForm } from '@/components/payments/PaymentForm'
 import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
 import { PageHeader } from '@/components/common/PageHeader'
+import { EmptyState } from '@/components/common/EmptyState'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
 import { SeriesUpdateInput } from '@/lib/api/lessons'
@@ -373,7 +374,13 @@ export default function CourseDetailPage() {
           </Button>
         </div>
         {payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Нет оплат</p>
+          <EmptyState
+            size="sm"
+            icon={Wallet}
+            title="Оплат по курсу нет"
+            description="Отметь оплату — от неё считается баланс уроков и подсказка, когда просить следующую"
+            action={{ label: 'Добавить оплату', onClick: () => setPaymentFormOpen(true) }}
+          />
         ) : (
           <div className="space-y-1">
             {payments.map((p) => (
@@ -437,7 +444,12 @@ export default function CourseDetailPage() {
             </div>
           )}
           {enrollments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Нет записанных учеников</p>
+            <EmptyState
+              size="sm"
+              icon={Users}
+              title="В группе пока никого"
+              description="Добавь учеников из списка выше — тогда на каждом уроке можно будет отмечать посещаемость"
+            />
           ) : (
             <ul className="space-y-1">
               {enrollments.map((e) => (
@@ -485,7 +497,13 @@ export default function CourseDetailPage() {
             <div key={i} className="h-8 rounded bg-muted animate-pulse mb-1" />
           ))
         ) : lessons.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Нет уроков</p>
+          <EmptyState
+            size="sm"
+            icon={CalendarDays}
+            title="Уроков в этом периоде нет"
+            description="Добавь урок — он появится здесь и в календаре, а после проведения сам отметится как завершённый"
+            action={{ label: 'Добавить урок', onClick: openCreateLesson }}
+          />
         ) : (
           <div className="space-y-1">
             {lessons.map((lesson) => (
