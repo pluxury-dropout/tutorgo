@@ -42,7 +42,7 @@ func (m *mockPdfImportRepo) SetStatus(ctx context.Context, id, status string, er
 	return m.Called(ctx, id, status, errMsg).Error(0)
 }
 
-func (m *mockPdfImportRepo) DeleteStalePending(ctx context.Context) ([]string, error) {
+func (m *mockPdfImportRepo) DeleteStale(ctx context.Context) ([]string, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]string), args.Error(1)
 }

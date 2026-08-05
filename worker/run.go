@@ -100,12 +100,13 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.
 	}
 	log.Info("pdf import worker started")
 
-	// Чистка протухших preflight: раз в час, плюс сразу при старте.
+	// Чистка отработавших импортов и их оригиналов в S3: раз в час, плюс сразу
+	// при старте (см. DeleteStale — окно 24ч на любой статус).
 	go func() {
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()
 		for {
-			keys, err := repo.DeleteStalePending(ctx)
+			keys, err := repo.DeleteStale(ctx)
 			if err != nil {
 				log.Error("cleanup stale pdf imports", slog.String("error", err.Error()))
 			}

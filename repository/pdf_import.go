@@ -29,9 +29,9 @@ type PdfImportRepository interface {
 	Start(ctx context.Context, id string, from, to int, enqueue func(pgx.Tx) error) ([]models.PdfImportPage, error)
 	MarkPageDone(ctx context.Context, id string, n int) error
 	SetStatus(ctx context.Context, id, status string, errMsg *string) error
-	// DeleteStalePending удаляет pending старше 24ч, возвращает их s3-ключи
-	// (воркер удалит объекты из S3 best-effort).
-	DeleteStalePending(ctx context.Context) ([]string, error)
+	// DeleteStale удаляет импорты старше 24ч в любом статусе, возвращает их
+	// s3-ключи (воркер удалит оригиналы из S3 best-effort).
+	DeleteStale(ctx context.Context) ([]string, error)
 	BoardBelongsToTutor(ctx context.Context, boardID, tutorID string) (bool, error)
 	PageBelongsToBoard(ctx context.Context, pageID, boardID string) (bool, error)
 }
@@ -155,10 +155,27 @@ func (r *pdfImportRepository) SetStatus(ctx context.Context, id, status string, 
 	return err
 }
 
-func (r *pdfImportRepository) DeleteStalePending(ctx context.Context) ([]string, error) {
+// DeleteStale чистит импорты старше 24 часов независимо от статуса: оригинал
+// PDF в S3 — транспорт между API (кладёт при preflight) и воркером (забирает
+// при рендере), а не хранилище. Доска ссылается только на board_assets, строку
+// импорта после рендера не читает никто (ручек чтения нет), Start() не даёт
+// перезапустить импорт повторно — значит через сутки и строка, и оригинал не
+// нужны ни в одном статусе: done, failed, зависший rendering, брошенный
+// pending. Одно правило по времени вместо ветки на каждый статус — иначе
+// какой-то из них снова окажется ничьим (так и было с failed).
+//
+// 24 часа — с большим запасом: жизнь джобы ограничена MaxAttempts=5 и
+// дефолтным backoff River (~16 минут до последней попытки). Верхняя граница
+// окна задана не рендером, а человеком: preflight создаёт запись до того, как
+// пользователь выберет диапазон страниц в модалке.
+//
+// ponytail: TTL вместо удаления по успеху. Событийная чистка требует, чтобы
+// событие гарантированно случилось, — падение процесса между SetStatus(done) и
+// удалением снова оставит сироту.
+func (r *pdfImportRepository) DeleteStale(ctx context.Context) ([]string, error) {
 	rows, err := r.conn.Query(ctx,
 		`DELETE FROM board_pdf_imports
-		 WHERE status = 'pending' AND created_at < now() - interval '24 hours'
+		 WHERE created_at < now() - interval '24 hours'
 		 RETURNING s3_key`)
 	if err != nil {
 		return nil, err
