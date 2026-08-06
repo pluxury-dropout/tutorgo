@@ -127,8 +127,11 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	}))
 
 	// Public routes
-	authLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
+	// Логин/refresh/logout делят одно ведро на IP: 10 попыток подряд, потом 1 раз в 3 с.
+	// Человек, вспоминающий пароль, сюда не упирается; сюда же ложится фоновый refresh.
+	authLimiter := middleware.RateLimit(rate.Every(3*time.Second), 15)
 	// Регистрация/resend шлют письма — жёстче лимит по IP (≈5/час), беречь sender-репутацию.
+	// У resend поверх этого ещё per-email кулдаун 60 с в service/registration.go.
 	regLimiter := middleware.RateLimit(rate.Every(12*time.Minute), 5)
 	r.POST("/auth/register", regLimiter, authHandler.Register)
 	r.POST("/auth/register/verify", authLimiter, authHandler.RegisterVerify)
@@ -143,7 +146,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	r.POST("/subscription/webhook", subscriptionHandler.Webhook)
 
 	// Public student auth routes
-	studentAuthLimiter := middleware.RateLimit(rate.Every(12*time.Second), 3)
+	studentAuthLimiter := middleware.RateLimit(rate.Every(3*time.Second), 15)
 	r.POST("/student/auth/accept-invite", studentAuthLimiter, studentAuthHandler.AcceptInvite)
 	r.POST("/student/auth/login", studentAuthLimiter, studentAuthHandler.Login)
 	r.POST("/student/auth/refresh", studentAuthLimiter, studentAuthHandler.Refresh)
