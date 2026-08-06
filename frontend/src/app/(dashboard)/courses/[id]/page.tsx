@@ -120,7 +120,7 @@ export default function CourseDetailPage() {
 
   const { data: course, isLoading } = useCourse(id)
   const { data: balance }           = useCourseBalance(id)
-  const { data: enrollments = [] }  = useCourseEnrollments(id)
+  const { data: enrollments = [], isPending: enrollmentsPending } = useCourseEnrollments(id)
   const { data: students = [] }     = useStudents()
   const [period, setPeriod] = useState(currentWeekRange)
   const { data: lessons = [], isLoading: lessonsLoading } = useLessonsByPeriod(
@@ -129,7 +129,7 @@ export default function CourseDetailPage() {
     period.to.toISOString(),
   )
   const lessonsTotal = lessons.length
-  const { data: payments = [] }     = usePayments(id)
+  const { data: payments = [], isPending: paymentsPending } = usePayments(id)
 
   const [courseFormOpen, setCourseFormOpen]     = useState(false)
   const [lessonFormOpen, setLessonFormOpen]     = useState(false)
@@ -373,7 +373,13 @@ export default function CourseDetailPage() {
             <Plus className="h-4 w-4 mr-1.5" /> Добавить оплату
           </Button>
         </div>
-        {payments.length === 0 ? (
+        {paymentsPending ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-8 rounded bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : payments.length === 0 ? (
           <EmptyState
             size="sm"
             icon={Wallet}
@@ -443,7 +449,13 @@ export default function CourseDetailPage() {
               </Button>
             </div>
           )}
-          {enrollments.length === 0 ? (
+          {enrollmentsPending ? (
+            <div className="space-y-2">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="h-8 rounded bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : enrollments.length === 0 ? (
             <EmptyState
               size="sm"
               icon={Users}

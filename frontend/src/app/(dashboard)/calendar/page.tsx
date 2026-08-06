@@ -85,8 +85,9 @@ export default function CalendarPage() {
     return { from: start.toISOString(), to: end.toISOString() }
   })
 
-  const { data: lessons = [] } = useCalendar(range.from, range.to)
-  const { data: tasks   = [] } = useTasks(range.from, range.to)
+  const { data: lessons = [], isPending: lessonsPending } = useCalendar(range.from, range.to)
+  const { data: tasks   = [], isPending: tasksPending   } = useTasks(range.from, range.to)
+  const eventsLoading = lessonsPending || tasksPending
 
   const lessonEvents = lessons.map((l) => {
     const status = effectiveStatus(l)
@@ -285,8 +286,9 @@ export default function CalendarPage() {
       />
       <div className={`${isMobile ? 'hidden' : 'flex flex-col'} h-full min-h-0 overflow-hidden`}>
         {/* Подсказка вместо пустой сетки: новичок не догадывается, что урок
-            ставится кликом по слоту. Исчезает, как только в периоде есть события. */}
-        {events.length === 0 && (
+            ставится кликом по слоту. Исчезает, как только в периоде есть события,
+            и не показывается, пока запросы периода ещё в полёте. */}
+        {events.length === 0 && !eventsLoading && (
           <div className="mb-2 shrink-0 rounded-lg border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
             Уроков в этом периоде нет. Кликни по свободному слоту, чтобы поставить урок или задачу —
             урок привязывается к курсу, так что сначала заведи курс с учеником.

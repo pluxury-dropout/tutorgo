@@ -74,18 +74,35 @@ function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boole
   )
 }
 
+function RowsSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-2" style={{ padding: '12px 18px' }}>
+      {[...Array(rows)].map((_, i) => (
+        <div key={i} className="h-8 rounded bg-muted animate-pulse" />
+      ))}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   useMinuteTick()
   const { todayFrom, todayTo, weekStart, weekEnd, monthStart, monthEnd, dateLabel } = useMemo(buildDateRanges, [])
-  const { data: studentCount   = 0  } = useStudentCount()
-  const { data: courseCount    = 0  } = useCourseCount()
-  const { data: todayLessons   = [] } = useCalendar(todayFrom, todayTo)
+  const { data: studentCount   = 0,  isPending: studentsPending } = useStudentCount()
+  const { data: courseCount    = 0,  isPending: coursesPending  } = useCourseCount()
+  const { data: todayLessons   = [], isPending: todayPending    } = useCalendar(todayFrom, todayTo)
   const { data: weekLessons    = [] } = useCalendar(weekStart, weekEnd)
-  const { data: monthLessons   = [] } = useCalendar(monthStart, monthEnd)
-  const { data: recentPayments = [] } = useRecentPayments()
+  const { data: monthLessons   = [], isPending: monthPending    } = useCalendar(monthStart, monthEnd)
+  const { data: recentPayments = [], isPending: paymentsPending } = useRecentPayments()
   const { data: monthlyIncome   = 0 } = useMonthlyIncome()
   const { data: monthlyExpected = 0 } = useMonthlyExpected()
-  const { data: currentCycles  = [] } = useCurrentCycles()
+  const { data: currentCycles  = [], isPending: cyclesPending   } = useCurrentCycles()
+
+  // Дефолты выше (0 / []) неотличимы от «данных правда нет», поэтому до первого
+  // ответа сервера пустые состояния и онбординг не рисуем — иначе они мелькают
+  // у препода, у которого всё давно заполнено. isPending, а не isFetching:
+  // фоновый рефетч данные из кеша не стирает и мигать не должен.
+  const loading = studentsPending || coursesPending || todayPending
+    || monthPending || paymentsPending || cyclesPending
 
   const sortedLessons = useMemo(
     () => [...todayLessons].sort((a, b) =>
@@ -121,12 +138,14 @@ export default function DashboardPage() {
       </div>
 
       {/* Онбординг — сам исчезает, когда все четыре шага сделаны */}
-      <GettingStarted
-        hasStudents={studentCount > 0}
-        hasCourses={courseCount > 0}
-        hasLessons={monthLessons.length > 0}
-        hasPayments={recentPayments.length > 0}
-      />
+      {!loading && (
+        <GettingStarted
+          hasStudents={studentCount > 0}
+          hasCourses={courseCount > 0}
+          hasLessons={monthLessons.length > 0}
+          hasPayments={recentPayments.length > 0}
+        />
+      )}
 
       {/* KPI + доход */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -170,7 +189,9 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: 10, alignItems: 'start' }}>
 
         <SectionCard title="Уроки сегодня" action={<SectionLink href="/calendar">Расписание →</SectionLink>}>
-          {sortedLessons.length === 0
+          {loading
+            ? <RowsSkeleton />
+            : sortedLessons.length === 0
             ? <EmptyState
                 size="sm"
                 icon={CalendarDays}
@@ -183,7 +204,9 @@ export default function DashboardPage() {
         </SectionCard>
 
         <SectionCard title="Текущие циклы" action={<SectionLink href="/courses">Курсы →</SectionLink>}>
-          {currentCycles.length === 0
+          {loading
+            ? <RowsSkeleton />
+            : currentCycles.length === 0
             ? <EmptyState
                 size="sm"
                 icon={RefreshCw}
@@ -222,7 +245,9 @@ export default function DashboardPage() {
         </SectionCard>
 
         <SectionCard title="Последние платежи" action={<SectionLink href="/payments">Все →</SectionLink>}>
-          {recentPayments.length === 0
+          {loading
+            ? <RowsSkeleton />
+            : recentPayments.length === 0
             ? <EmptyState
                 size="sm"
                 icon={Wallet}
