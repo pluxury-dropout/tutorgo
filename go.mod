@@ -19,6 +19,7 @@ require (
 	github.com/livekit/server-sdk-go/v2 v2.16.3
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/redis/go-redis/v9 v9.17.2
+	github.com/resend/resend-go/v3 v3.12.0
 	github.com/riverqueue/river v0.40.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.40.0
 	github.com/riverqueue/river/rivertype v0.40.0
@@ -123,7 +124,6 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
-	github.com/resend/resend-go/v3 v3.12.0 // indirect
 	github.com/riverqueue/river/riverdriver v0.40.0 // indirect
 	github.com/riverqueue/river/rivershared v0.40.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect

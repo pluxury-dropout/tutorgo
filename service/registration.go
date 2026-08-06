@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"html"
+	"log/slog"
 	"math/big"
 	"time"
 
@@ -39,13 +41,15 @@ type RegistrationService interface {
 }
 
 type registrationService struct {
-	repo  repository.PendingRegistrationRepository
-	tutor TutorService
-	send  email.Sender
+	repo   repository.PendingRegistrationRepository
+	tutor  TutorService
+	send   email.Sender
+	appURL string
+	log    *slog.Logger
 }
 
-func NewRegistrationService(repo repository.PendingRegistrationRepository, tutor TutorService, send email.Sender) RegistrationService {
-	return &registrationService{repo: repo, tutor: tutor, send: send}
+func NewRegistrationService(repo repository.PendingRegistrationRepository, tutor TutorService, send email.Sender, appURL string, log *slog.Logger) RegistrationService {
+	return &registrationService{repo: repo, tutor: tutor, send: send, appURL: appURL, log: log}
 }
 
 func (s *registrationService) Start(ctx context.Context, req models.RegisterRequest) error {
@@ -109,6 +113,13 @@ func (s *registrationService) Verify(ctx context.Context, email, code string) (m
 		return models.Tutor{}, err
 	}
 	_ = s.repo.Delete(ctx, email) // best-effort: аккаунт создан, остаток вычистит DeleteExpired
+
+	// Welcome — тоже best-effort: аккаунт уже в БД, и завалить из-за него регистрацию
+	// значит отправить человека на повторную попытку, где его встретит «email занят».
+	if err := s.send(ctx, p.Email, welcomeSubject, welcomeBody(p.FirstName, s.appURL)); err != nil {
+		s.log.Error("welcome email failed",
+			slog.String("email", p.Email), slog.String("err", err.Error()))
+	}
 	return tutor, nil
 }
 
@@ -148,11 +159,31 @@ func generateOTP() string {
 	return fmt.Sprintf("%06d", n.Int64())
 }
 
-const otpSubject = "Код подтверждения Amida"
+const (
+	otpSubject     = "Код подтверждения Amida"
+	welcomeSubject = "Добро пожаловать в Amida"
+)
 
 func otpBody(code string) string {
-	return fmt.Sprintf(
-		`<p>Ваш код подтверждения: <strong style="font-size:20px">%s</strong></p>`+
-			`<p>Код действителен 10 минут. Если вы не регистрировались — просто проигнорируйте письмо.</p>`,
-		code)
+	return email.Layout("Код подтверждения", fmt.Sprintf(
+		`<p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#3f3f46">Введите этот код, чтобы завершить регистрацию:</p>`+
+			`<div style="background:#f4f4f5;border-radius:8px;padding:16px;text-align:center;`+
+			`font-size:28px;font-weight:600;letter-spacing:0.2em;color:#18181b">%s</div>`+
+			`<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#71717a">Код действителен 10 минут. `+
+			`Если вы не регистрировались — просто проигнорируйте письмо.</p>`,
+		code))
+}
+
+// welcomeBody: имя приходит от пользователя и попадает в HTML — экранируем.
+func welcomeBody(firstName, appURL string) string {
+	greeting := "Здравствуйте!"
+	if firstName != "" {
+		greeting = fmt.Sprintf("Здравствуйте, %s!", html.EscapeString(firstName))
+	}
+	return email.Layout("Аккаунт создан", fmt.Sprintf(
+		`<p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#3f3f46">%s</p>`+
+			`<p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#3f3f46">`+
+			`Всё готово: добавляйте учеников, ведите расписание, принимайте оплаты и проводите уроки `+
+			`с видеосвязью и общей доской — в одном месте.</p>%s`,
+		greeting, email.Button(appURL, "Перейти в кабинет")))
 }

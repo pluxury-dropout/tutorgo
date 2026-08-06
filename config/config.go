@@ -24,6 +24,7 @@ type Config struct {
 	S3Bucket         string
 	ResendAPIKey     string
 	EmailFrom        string
+	AppURL           string
 	RedisURL         string
 	DBMaxConns       int32
 }
@@ -69,6 +70,9 @@ func Load(log *slog.Logger) Config {
 		S3Bucket:         os.Getenv("S3_BUCKET"),
 		ResendAPIKey:     os.Getenv("RESEND_API_KEY"),
 		EmailFrom:        os.Getenv("EMAIL_FROM"),
+		// Отдельно от ALLOWED_ORIGIN: тот — список источников для CORS, а этот —
+		// один адрес, на который ведут ссылки в письмах.
+		AppURL: os.Getenv("APP_URL"),
 		// Пустой RedisURL — валидный однопроцессный режим, не ошибка. См. pubsub.New.
 		RedisURL: os.Getenv("REDIS_URL"),
 		// Размер пула — env, а не константа: у ролей разный профиль (API держит
@@ -79,6 +83,9 @@ func Load(log *slog.Logger) Config {
 
 	if cfg.EmailFrom == "" {
 		cfg.EmailFrom = "TutorHub <onboarding@resend.dev>" // ponytail: дефолт для dev/resend-песочницы
+	}
+	if cfg.AppURL == "" {
+		cfg.AppURL = "https://amida.kz"
 	}
 
 	if cfg.DBUrl == "" {

@@ -1,16 +1,15 @@
-// Package email отправляет транзакционные письма через Resend одним HTTP-запросом.
-// ponytail: одна функция, без SDK; смена провайдера = правка Send, не архитектуры.
+// Package email отправляет транзакционные письма через Resend.
+// ponytail: одна функция поверх официального SDK; смена провайдера = правка NewSender,
+// а не архитектуры — сервисы видят только тип Sender.
 package email
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/resend/resend-go/v3"
 )
 
 // Sender шлёт письмо. Возвращается из NewSender с зашитыми ключом/адресом, чтобы
@@ -27,31 +26,16 @@ func NewSender(apiKey, from string, log *slog.Logger) Sender {
 			return nil
 		}
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
+	// NewCustomClient, а не NewClient: дефолтный http.Client у SDK ждёт минуту,
+	// а отправка висит внутри ручки регистрации, ответа которой ждёт человек.
+	client := resend.NewCustomClient(&http.Client{Timeout: 10 * time.Second}, apiKey)
 	return func(ctx context.Context, to, subject, htmlBody string) error {
-		body, _ := json.Marshal(map[string]string{
-			"from":    from,
-			"to":      to,
-			"subject": subject,
-			"html":    htmlBody,
+		_, err := client.Emails.SendWithContext(ctx, &resend.SendEmailRequest{
+			From:    from,
+			To:      []string{to},
+			Subject: subject,
+			Html:    htmlBody,
 		})
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-			"https://api.resend.com/emails", bytes.NewReader(body))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= 300 {
-			b, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("resend: status %d: %s", resp.StatusCode, b)
-		}
-		return nil
+		return err
 	}
 }
