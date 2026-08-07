@@ -1,7 +1,0 @@
-{"type":"server-started","port":61826,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:61826","screen_dir":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/36438-1781432722/content","state_dir":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/36438-1781432722/state"}
-{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/36438-1781432722/content/camera-layout.html"}
-{"source":"user-event","type":"click","text":"tldraw доска (весь экран)\n        \n        \n          📹\n          📹\n        \n      \n    \n    \n      B — Picture-in-Picture\n      Доска занимает весь экран, камеры — маленькие плавающие окошки поверх (перетаскиваемые). Максимум пространства для доски.","choice":"pip","id":null,"timestamp":1781432805083}
-{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/36438-1781432722/content/waiting-1.html"}
-{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/36438-1781432722/content/pip-explanation.html"}
-{"type":"screen-added","file":"/home/dragonbrn/tutorgo/.superpowers/brainstorm/36438-1781432722/content/architecture.html"}
-{"type":"server-stopped","reason":"idle timeout"}
