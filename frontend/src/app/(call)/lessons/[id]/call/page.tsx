@@ -49,14 +49,16 @@ export default function CallPage() {
   async function handleDisconnected(reason?: DisconnectReason) {
     if (reason !== DisconnectReason.CLIENT_INITIATED) return
     try { await callsApi.endRoom(id) } catch {}
-    router.back()
+    // replace, а не back(): урок всегда открывается в новой вкладке
+    // (window.open в LessonQuickDialog/Sidebar), там history пуст и back() — no-op.
+    router.replace('/dashboard')
   }
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
         <p className="text-destructive">{error}</p>
-        <Button variant="outline" onClick={() => router.back()}>Назад</Button>
+        <Button variant="outline" onClick={() => router.replace('/dashboard')}>Назад</Button>
       </div>
     )
   }
