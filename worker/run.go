@@ -20,7 +20,7 @@ import (
 	"tutorgo/storage"
 )
 
-const renderDPI = 200
+const renderDPI = 150
 
 // Run поднимает River-воркер и блокируется до отмены ctx.
 func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.Logger, bus *pubsub.BoardBus) error {
@@ -83,7 +83,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.
 			return store.Put(ctx, s3Key, f, st.Size(), "image/jpeg")
 		},
 		Notify: bus.Publish,
-		Log: log,
+		Log:    log,
 	}
 
 	workers := river.NewWorkers()
