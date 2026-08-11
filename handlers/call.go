@@ -25,6 +25,7 @@ type quickRoom struct {
 type CallHandler struct {
 	lessonService  service.LessonService
 	studentService service.StudentService
+	tutorService   service.TutorService
 	log            *slog.Logger
 	livekitURL     string
 	apiKey         string
@@ -35,7 +36,7 @@ type CallHandler struct {
 	quickRooms map[string]*quickRoom
 }
 
-func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string, studentSvc service.StudentService) *CallHandler {
+func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string, studentSvc service.StudentService, tutorSvc service.TutorService) *CallHandler {
 	var roomClient *lksdk.RoomServiceClient
 	if key != "" {
 		roomClient = lksdk.NewRoomServiceClient(url, key, secret)
@@ -43,6 +44,7 @@ func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secre
 	return &CallHandler{
 		lessonService:  svc,
 		studentService: studentSvc,
+		tutorService:   tutorSvc,
 		log:            log,
 		livekitURL:     url,
 		apiKey:         key,
@@ -50,6 +52,30 @@ func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secre
 		roomClient:     roomClient,
 		quickRooms:     make(map[string]*quickRoom),
 	}
+}
+
+// displayName склеивает имя для LiveKit-токена. Имя из токена LiveKit
+// раздаёт всем участникам в момент join'а — без него панель участников до
+// первого движения мыши показывает роль («Ученик», «Репетитор»): настоящее имя
+// иначе доезжает только с cursor-сообщением доски. Профиль не прочитался или
+// пуст — остаётся роль.
+func displayName(first, last, role string) string {
+	if full := strings.TrimSpace(first + " " + last); full != "" {
+		return full
+	}
+	return role
+}
+
+// tutorName — имя репетитора для токена; ошибку глотаем, звонок важнее подписи.
+func (h *CallHandler) tutorName(c *gin.Context, tutorID string) string {
+	if h.tutorService == nil {
+		return "Репетитор"
+	}
+	t, err := h.tutorService.GetByID(c.Request.Context(), tutorID)
+	if err != nil {
+		return "Репетитор"
+	}
+	return displayName(t.FirstName, t.LastName, "Репетитор")
 }
 
 // POST /lessons/:id/room-token — защищённый, только для репетитора
@@ -86,7 +112,7 @@ func (h *CallHandler) GetToken(c *gin.Context) {
 	}
 	at.SetVideoGrant(grant).
 		SetIdentity("tutor-" + tutorID).
-		SetName("Репетитор").
+		SetName(h.tutorName(c, tutorID)).
 		SetValidFor(3 * time.Hour)
 
 	token, err := at.ToJWT()
@@ -121,12 +147,16 @@ func (h *CallHandler) GetStudentToken(c *gin.Context) {
 		return
 	}
 	roomName := "lesson-" + lessonID
+	name := "Ученик"
+	if p, err := h.studentService.GetProfile(c.Request.Context(), studentID); err == nil {
+		name = displayName(p.FirstName, p.LastName, name)
+	}
 	canPublish, canSubscribe := true, true
 	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
 	at.SetVideoGrant(&lkauth.VideoGrant{
 		RoomJoin: true, Room: roomName,
 		CanPublish: &canPublish, CanSubscribe: &canSubscribe,
-	}).SetIdentity("student-" + studentID).SetName("Ученик").SetValidFor(3 * time.Hour)
+	}).SetIdentity("student-" + studentID).SetName(name).SetValidFor(3 * time.Hour)
 	token, err := at.ToJWT()
 	if err != nil {
 		h.log.Error("Failed to generate student token", slog.String("error", err.Error()))
@@ -245,7 +275,7 @@ func (h *CallHandler) StartQuickRoom(c *gin.Context) {
 	}
 	at.SetVideoGrant(grant).
 		SetIdentity("tutor-" + tutorID).
-		SetName("Репетитор").
+		SetName(h.tutorName(c, tutorID)).
 		SetValidFor(3 * time.Hour)
 
 	token, err := at.ToJWT()

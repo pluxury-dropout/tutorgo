@@ -83,7 +83,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
-	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, studentService)
+	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, studentService, tutorService)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 	studentAuthHandler := handlers.NewStudentAuthHandler(studentService, studentRefreshService, log, cfg.JWTSecret, cfg.Env == "production")
 

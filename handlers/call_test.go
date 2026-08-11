@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 	"tutorgo/handlers"
+	"tutorgo/models"
 
 	"github.com/gin-gonic/gin"
 	lkauth "github.com/livekit/protocol/auth"
@@ -22,18 +23,19 @@ import (
 )
 
 func newCallRouter(svc *mockLessonService) *gin.Engine {
-	return newCallRouterWithStudentSvc(svc, new(mockStudentService))
+	return newCallRouterWithStudentSvc(svc, new(mockStudentService), new(mockTutorService))
 }
 
-func newCallRouterWithStudentSvc(svc *mockLessonService, studentSvc *mockStudentService) *gin.Engine {
+func newCallRouterWithStudentSvc(svc *mockLessonService, studentSvc *mockStudentService, tutorSvc *mockTutorService) *gin.Engine {
 	r := gin.New()
-	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret", studentSvc)
+	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret", studentSvc, tutorSvc)
 	r.GET("/public/lessons/:id/room-status", h.GetRoomStatus)
 	r.POST("/webhooks/livekit", h.LiveKitWebhook)
 	auth := r.Group("/")
 	auth.Use(withTutorID(testTutorID))
 	auth.POST("/lessons/:id/start-room", h.StartRoom)
 	auth.POST("/lessons/:id/end-room", h.EndRoom)
+	auth.POST("/lessons/:id/room-token", h.GetToken)
 	student := r.Group("/")
 	student.Use(withStudentID(testStudentID))
 	student.POST("/student/lessons/:id/room-token", h.GetStudentToken)
@@ -144,7 +146,7 @@ func TestLiveKitWebhook_RoomFinished_EndsRoom(t *testing.T) {
 func TestStudentToken_NotEnrolled_Forbidden(t *testing.T) {
 	svc := new(mockLessonService)
 	studentSvc := new(mockStudentService)
-	r := newCallRouterWithStudentSvc(svc, studentSvc)
+	r := newCallRouterWithStudentSvc(svc, studentSvc, new(mockTutorService))
 
 	studentSvc.On("EnrolledInLesson", mock.Anything, testStudentID, testLessonID).Return(false, nil)
 
@@ -157,9 +159,11 @@ func TestStudentToken_NotEnrolled_Forbidden(t *testing.T) {
 func TestStudentToken_Enrolled_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	studentSvc := new(mockStudentService)
-	r := newCallRouterWithStudentSvc(svc, studentSvc)
+	r := newCallRouterWithStudentSvc(svc, studentSvc, new(mockTutorService))
 
 	studentSvc.On("EnrolledInLesson", mock.Anything, testStudentID, testLessonID).Return(true, nil)
+	studentSvc.On("GetProfile", mock.Anything, testStudentID).
+		Return(models.StudentProfile{ID: testStudentID, FirstName: "Иван", LastName: "Петров"}, nil)
 
 	w := makeRequest(t, r, http.MethodPost, "/student/lessons/"+testLessonID+"/room-token", nil)
 
@@ -179,8 +183,40 @@ func TestStudentToken_Enrolled_Success(t *testing.T) {
 		t.Fatalf("failed to verify token: %v", err)
 	}
 	assert.Equal(t, "student-"+testStudentID, grants.Identity)
+	// Имя в токене — то, что панель участников покажет сразу при подключении,
+	// не дожидаясь первого курсора с доски.
+	assert.Equal(t, "Иван Петров", grants.Name)
 
 	studentSvc.AssertExpectations(t)
+}
+
+func TestTutorToken_CarriesRealName(t *testing.T) {
+	svc := new(mockLessonService)
+	tutorSvc := new(mockTutorService)
+	r := newCallRouterWithStudentSvc(svc, new(mockStudentService), tutorSvc)
+
+	svc.On("GetByID", mock.Anything, testLessonID, testTutorID).Return(models.Lesson{ID: testLessonID}, nil)
+	tutorSvc.On("GetByID", mock.Anything, testTutorID).
+		Return(models.Tutor{ID: testTutorID, FirstName: "Мария", LastName: "Соколова"}, nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/lessons/"+testLessonID+"/room-token", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var body map[string]string
+	decodeJSON(t, w, &body)
+
+	verifier, err := lkauth.ParseAPIToken(body["token"])
+	if err != nil {
+		t.Fatalf("failed to parse token: %v", err)
+	}
+	_, grants, err := verifier.Verify("secret")
+	if err != nil {
+		t.Fatalf("failed to verify token: %v", err)
+	}
+	assert.Equal(t, "tutor-"+testTutorID, grants.Identity)
+	assert.Equal(t, "Мария Соколова", grants.Name)
+
+	tutorSvc.AssertExpectations(t)
 }
 
 func TestLiveKitWebhook_BadSignature_Rejected(t *testing.T) {
