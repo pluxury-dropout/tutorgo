@@ -1,71 +1,98 @@
-// Перо держится на одном свойстве perfect-freehand: при thinning:0 радиус
-// штриха берётся как size/2 и весь pressure-путь (а для мыши «нажим» —
-// это скорость) обходится стороной. Свойство чужое (perfect-freehand 1.2.0,
-// вложен в @excalidraw/excalidraw), и его смена при апгрейде ничего не сломает
-// громко: перо просто тихо начнёт вилять толщиной. Поэтому пиним поведение.
+// Перо собрано из трёх чужих величин: size и thinning захардкожены в бандле
+// Excalidraw, шкала скорости — внутри perfect-freehand (1.2.0). Все три правит
+// scripts/excalidraw-patch.mjs на postinstall, значения живут в
+// scripts/pen-config.mjs. Апгрейд любого из пакетов ничего не сломает громко:
+// перо просто тихо вернёт себе чужое поведение. Поэтому пиним и конфигурацию,
+// и поведение.
 //
-// Сам факт, что бандл пропатчен, проверяет scripts/excalidraw-patch.mjs — он
-// падает на postinstall, если строка в dist уехала.
-//
-// Опции повторяют getFreeDrawSvgPath из dist/*/chunk-*.js — если разойдутся,
-// тест начнёт мерить не то, что рисует доска.
+// Тест читает НАСТОЯЩИЙ бандл и импортирует НАСТОЯЩУЮ perfect-freehand — то,
+// чем рисует доска, а не копию опций. Отсюда же второй смысл: он падает, если
+// константы покрутили, а `npm run excalidraw-patch` прогнать забыли.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readdir, readFile } from 'node:fs/promises'
 import { getStrokePoints, getStrokeOutlinePoints } from 'perfect-freehand'
+import { PEN_SCALE, THINNING, SPEED_SCALE } from '../../../scripts/pen-config.mjs'
 
-const opts = (size: number, thinning: number, simulatePressure: boolean) => ({
+const DEV = 'node_modules/@excalidraw/excalidraw/dist/dev'
+
+// Опции getFreeDrawSvgPath: size и thinning — из бандла, остальное там жёстко.
+const bundledOptions = async () => {
+  for (const f of (await readdir(DEV)).filter((f) => f.endsWith('.js'))) {
+    const m = (await readFile(`${DEV}/${f}`, 'utf8')).match(
+      /size: \w+\.strokeWidth \* ([\d.]+),\s*thinning: ([\d.]+),/,
+    )
+    if (m) return { scale: Number(m[1]), thinning: Number(m[2]) }
+  }
+  throw new Error(`getFreeDrawSvgPath не найден в ${DEV} — сверь scripts/excalidraw-patch.mjs`)
+}
+
+const opts = (size: number, thinning: number) => ({
   size,
   thinning,
   smoothing: 0.5,
   streamline: 0.5,
   easing: (t: number) => Math.sin((t * Math.PI) / 2),
   last: true,
-  simulatePressure,
+  simulatePressure: true,
 })
 
-// Горизонтальный штрих; шаг между точками = скорость мыши.
-const stroke = (step: number) => {
+// Горизонтальный штрих; шаг между точками = скорость указателя (px на событие).
+// Ширину меряем в середине: концы скругляются в любом режиме (`last`).
+const midWidth = (step: number, size: number, thinning: number) => {
+  const o = opts(size, thinning)
   const pts: number[][] = []
-  for (let x = 0; x <= 600; x += step) pts.push([x, 100])
-  return pts
-}
-
-// Ширина в середине штриха: концы скругляются в любом режиме (`last`).
-const midWidth = (step: number, size: number, thinning: number, simulatePressure: boolean) => {
-  const o = opts(size, thinning, simulatePressure)
-  const pts = stroke(step)
-  const input = simulatePressure ? pts : pts.map(([x, y]) => [x, y, 0.5])
-  const out = getStrokeOutlinePoints(getStrokePoints(input, o), o)
-  const mid = out.filter(([x]) => x > 200 && x < 400)
+  for (let x = 0; x <= 1200; x += step) pts.push([x, 100])
+  const out = getStrokeOutlinePoints(getStrokePoints(pts, o), o)
+  const mid = out.filter(([x]) => x > 400 && x < 800)
   return 2 * Math.max(...mid.map(([, y]) => Math.abs(y - 100)))
 }
 
-// strokeWidth из тулбара (1/2/4) × PEN_SCALE из scripts/excalidraw-patch.mjs.
-const SIZES = [1, 2, 4].map((strokeWidth) => strokeWidth * 1.5)
-
-test('thinning:0 — ширина ровно size, что бы ни делали мышь и стилус', () => {
-  for (const size of SIZES) {
-    for (const simulatePressure of [true, false]) {
-      for (const step of [2, 40]) {
-        const w = midWidth(step, size, 0, simulatePressure)
-        assert.ok(
-          Math.abs(w - size) < 0.01,
-          `size ${size}, шаг ${step}, simulatePressure ${simulatePressure}: ширина ${w}`,
-        )
-      }
-    }
-  }
+test('бандл собран с текущим pen-config', async () => {
+  const { scale, thinning } = await bundledOptions()
+  assert.equal(scale, PEN_SCALE, 'size в бандле разошёлся с PEN_SCALE')
+  assert.equal(thinning, THINNING, 'thinning в бандле разошёлся с THINNING')
 })
 
-test('контроль: при thinning>0 скорость влияет на толщину', () => {
-  // Без этого теста первый прошёл бы и на пере, у которого эффекта скорости
-  // нет вообще — например, если бы getStrokeOutlinePoints перестал читать
-  // pressure и «ровно» стало бы ровным по случайности, а не по thinning:0.
-  //
-  // Меряем на штатных 4.25: имитация нажима считается как min(1, distance/size)
-  // и на наших тонких размерах насыщается — виляние там и без патча почти не
-  // видно. Контролю нужен размер, на котором эффект заведомо есть.
-  const slow = midWidth(2, 4.25, 0.6, true)
-  const fast = midWidth(40, 4.25, 0.6, true)
-  assert.ok(slow / fast > 1.2, `скорость не влияет (${slow} vs ${fast})`)
+// Скорости по разные стороны SPEED_SCALE: обе ЗАВЕДОМО больше тонкого size —
+// иначе без патча тонкое перо тоже слегка виляет, и проверка ничего не ловит.
+const SLOW = SPEED_SCALE / 3
+const FAST = SPEED_SCALE * 2
+
+// strokeWidth из тулбара — три градации.
+const SIZES = [1, 2, 4].map((w) => w * PEN_SCALE)
+
+test('толщина следует за скоростью так, как задано в pen-config', () => {
+  if (THINNING === 0) {
+    // Ровное перо: pressure-путь обойдён, радиус берётся как size/2.
+    for (const size of SIZES) {
+      for (const [name, step] of [['медленно', SLOW], ['быстро', FAST]] as const) {
+        const w = midWidth(step, size, THINNING)
+        assert.ok(Math.abs(w - size) < 0.01, `size ${size}, ${name}: ширина ${w}`)
+      }
+    }
+    return
+  }
+
+  const ratios = SIZES.map((size) => {
+    const slow = midWidth(SLOW, size, THINNING)
+    const fast = midWidth(FAST, size, THINNING)
+    assert.ok(slow > fast, `size ${size}: медленный штрих не толще быстрого (${slow} vs ${fast})`)
+    // Быстрый штрих не должен уходить под 1.5px: freedraw заливается как
+    // фигура, и субпиксельная ширина бледнеет в антиалиасинге.
+    assert.ok(fast >= 1.5, `size ${size}: быстрый штрих ${fast.toFixed(2)}px — бледнеет, подними PEN_SCALE`)
+    return slow / fast
+  })
+
+  // Суть патча SPEED_SCALE: профиль «скорость → толщина» ОДИН для всех градаций
+  // тулбара. В оригинале шкалой служит сам size, и тогда тонкое перо насыщается
+  // в «всегда быстро» (ratio ≈ 1.0), пока толстое ещё виляет (ratio ≈ 2.0) —
+  // расхождение и ловим. Проверка не зависит от калибровки: она сравнивает
+  // градации между собой, а не с эталонными числами.
+  const spread = Math.max(...ratios) - Math.min(...ratios)
+  assert.ok(
+    spread < 0.01,
+    `профиль скорости зависит от толщины (${ratios.map((r) => r.toFixed(3)).join(', ')}) — ` +
+      'не применён патч SPEED_SCALE в perfect-freehand?',
+  )
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback, useEffect } from 'react'
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import {
   Excalidraw,
   convertToExcalidrawElements,
@@ -58,8 +58,6 @@ const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 // подхватывать позицию с другого устройства.
 const camKey = (pageId: string) => `board-cam:${pageId}`
 const CAM_SAVE_MS = 300
-// Границы зума Excalidraw — мусор из storage не должен схлопнуть доску в точку.
-const clampZoom = (z: number) => Math.min(30, Math.max(0.1, z))
 
 function readCamera(pageId: string) {
   try {
@@ -171,6 +169,11 @@ export function ExcalidrawCanvas({
   // trailing'ом (нужна позиция ПОСЛЕ жеста, а не в его начале).
   const camTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pageId = page?.id
+
+  // Снимок сохранённой камеры на момент монтирования Excalidraw (он пересоздаётся
+  // по key={pageId}). Не состояние, а начальное значение — перечитывать на каждый
+  // рендер нечего, писать её продолжает saveCamera.
+  const camera = useMemo(() => (pageId ? readCamera(pageId) : null), [pageId])
   const saveCamera = useCallback(() => {
     if (camTimerRef.current || !pageId) return
     camTimerRef.current = setTimeout(() => {
@@ -511,27 +514,29 @@ export function ExcalidrawCanvas({
           langCode="ru-RU"
           // Дефолт — Nunito вместо Excalifont. Только appState: элементы
           // приезжают по WS, initialData их не трогает.
-          initialData={{ appState: { currentItemFontFamily: FONT_FAMILY.Nunito } }}
+          initialData={{
+            appState: {
+              currentItemFontFamily: FONT_FAMILY.Nunito,
+              // Камеру отдаём декларативно, а не updateScene'ом из
+              // excalidrawAPI: тот колбэк Excalidraw зовёт из КОНСТРУКТОРА App,
+              // и в dev StrictMode конструктор отрабатывает дважды, а монтируют
+              // один инстанс — updateScene от осиротевшего бил setState'ом в
+              // компонент, который никогда не смонтируется («not yet mounted»).
+              // Отложить это таймером нельзя: ждать там нечего. initialData
+              // Excalidraw применяет сам в componentDidMount через restore(),
+              // причём zoom нормализует по своим MIN/MAX_ZOOM — клампить не
+              // нужно, мусор из storage отсекает readCamera.
+              ...(camera && {
+                scrollX: camera.scrollX,
+                scrollY: camera.scrollY,
+                zoom: { value: camera.zoom as NormalizedZoomValue },
+              }),
+            },
+          }}
           excalidrawAPI={(api) => {
             apiRef.current = api
             onApiReady(api)
             onApi?.(api)
-            const cam = pageId && readCamera(pageId)
-            // Через setTimeout: api приходит из конструктора Excalidraw, где
-            // updateScene — setState на несмонтированном компоненте (тот же
-            // приём, что у pushCollaborators в useExcalidrawSync).
-            if (cam)
-              setTimeout(
-                () =>
-                  api.updateScene({
-                    appState: {
-                      scrollX: cam.scrollX,
-                      scrollY: cam.scrollY,
-                      zoom: { value: clampZoom(cam.zoom) as NormalizedZoomValue },
-                    },
-                  }),
-                0
-              )
           }}
           onChange={(elements, appState) => {
             keepAspect(elements)
