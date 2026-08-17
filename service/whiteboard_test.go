@@ -250,3 +250,21 @@ func TestWhiteboardService_CreateInvite_ForeignBoard(t *testing.T) {
 	assert.ErrorIs(t, err, service.ErrNotFound)
 	repo.AssertNotCalled(t, "CreateInvite")
 }
+
+// Снапшот с пустым elements сохраняет карту files и не трогает элементы.
+// Это ровно тот запрос, который шлёт фронт при регистрации картинки: сцена
+// персистится поэлементно по WS, а карта files живёт только здесь. Сломается
+// этот контракт — вставленные картинки перестанут переживать перезагрузку.
+func TestWhiteboardService_MergeSnapshot_FilesOnly(t *testing.T) {
+	repo := new(mockWhiteboardRepo)
+	svc := service.NewWhiteboardService(repo)
+
+	files := json.RawMessage(`{"f1":{"url":"/public/board-assets/f1","mimeType":"image/jpeg"}}`)
+	empty := mock.MatchedBy(func(els []models.BoardElement) bool { return len(els) == 0 })
+	repo.On("MergeElements", mock.Anything, "page-1", empty).Return(nil)
+	repo.On("MergeFiles", mock.Anything, "page-1", files).Return(nil)
+
+	err := svc.MergeSnapshot(context.Background(), "page-1", []json.RawMessage{}, files)
+	assert.NoError(t, err)
+	repo.AssertExpectations(t)
+}

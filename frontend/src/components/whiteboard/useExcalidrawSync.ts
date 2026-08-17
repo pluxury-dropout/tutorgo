@@ -47,10 +47,10 @@ import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 type ConnStatus = 'connecting' | 'connected' | 'disconnected'
 
 const UPDATE_THROTTLE_MS = 100
-// Каждый снапшот — полная перезапись строки в Postgres, а значит и WAL на весь
-// её объём. Секунда давала до 3600 перезаписей за час активного урока; три
-// режут это втрое. Потерять больше нельзя: teardown и pagehide дошлют сцену.
-const SNAPSHOT_DEBOUNCE_MS = 3000
+// Регистрация файлов идёт пачкой (PDF на 50 страниц — 50 вызовов registerFile
+// подряд), схлопываем их в один POST. Полная сцена сюда больше не уезжает, так
+// что дебаунс не про WAL, а только про склейку пачки.
+const FILES_DEBOUNCE_MS = 1000
 const FOLLOW_LERP = 0.3 // доля пути к цели за кадр — компромисс плавность/лаг
 const CURSOR_THROTTLE_MS = 50
 
@@ -113,7 +113,7 @@ export function useExcalidrawSync(
   const pendingBodyRef = useRef<string | null>(null)
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const filesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Гард против зомби-реконнектов после cleanup эффекта (поздний onclose
   // на размонтированном компоненте / переключённой странице).
@@ -247,10 +247,23 @@ export function useExcalidrawSync(
     [pageId, postSnapshot]
   )
 
-  const sendSnapshot = useCallback(() => {
-    const api = apiRef.current
-    if (api) sendSnapshotElements(api.getSceneElementsIncludingDeleted())
-  }, [sendSnapshotElements])
+  // Карта files — единственное, чего нет в поэлементном персисте: WS-сообщение
+  // 'file' сервер ретранслирует пирам, но в БД не пишет (MergeFiles зовут только
+  // отсюда). Шлём её тем же роутом с ПУСТЫМ elements: MergeElements на пустом
+  // списке — no-op, MergeFiles сливает карту, стереть ничего нельзя.
+  //
+  // Раньше этим путём каждые 3 с уезжала вся сцена. На боевой странице в 2337
+  // элементов JSON.stringify занимал 69 мс главного потока и слал 2.8 МБ — ровно
+  // те провалы кадров при панорамировании, из-за которых это и переписано.
+  // Элементы туда больше не нужны: с миграции 029 они доезжают диффами по WS.
+  //
+  // Гард seededRef тут не нужен (в отличие от sendSnapshotElements): затирать
+  // нечего, а картинку, вставленную до прихода сида, терять нельзя. HTTP не
+  // зависит от WS, так что путь живёт и на оборванном сокете.
+  const persistFiles = useCallback(() => {
+    if (!pageId) return
+    void postSnapshot(pageId, serializeSnapshot([], filesRef.current))
+  }, [pageId, postSnapshot])
 
   // Шлёт пирам элементы, изменившиеся с последнего flush.
   const flushUpdate = useCallback(() => {
@@ -353,8 +366,8 @@ export function useExcalidrawSync(
         if (apiRef.current) applySnapshot(msg.payload)
         else pendingSeedRef.current = msg.payload
         // Флаг ставим по факту получения, а не применения: пока api нет,
-        // отправлять всё равно нечего (sendSnapshot требует api, teardown —
-        // кэш из onChange), а onApiReady применит буфер до первого onChange.
+        // отправлять всё равно нечего (teardown шлёт кэш из onChange), а
+        // onApiReady применит буфер до первого onChange.
         seededRef.current = true
         return
       }
@@ -536,15 +549,18 @@ export function useExcalidrawSync(
       targetCamRef.current = null
       if (retryRef.current) clearTimeout(retryRef.current)
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
-      if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+      if (filesTimerRef.current) clearTimeout(filesTimerRef.current)
       if (viewportTimerRef.current) clearTimeout(viewportTimerRef.current)
-      retryRef.current = updateTimerRef.current = snapshotTimerRef.current = null
+      retryRef.current = updateTimerRef.current = filesTimerRef.current = null
       viewportTimerRef.current = null
       // Best-effort финальный снапшот из кэша сцены (не из live apiRef, см.
       // lastSceneRef). Тег pageId защищает от гонки с initial onChange нового
       // Excalidraw: шлём, только если кэш — от уходящей страницы. filesRef ещё
       // держит файлы уходящей страницы (reset filesRef — в setup нового
       // эффекта, ПОСЛЕ этого cleanup). null → локальных правок не было, пропуск.
+      // Он же дошлёт карту files, если отменённый выше дебаунс не успел, и
+      // закрывает окно в 100 мс между последним flushUpdate и закрытием сокета —
+      // это единственное место, где полная сцена ещё уезжает по HTTP.
       const cached = lastSceneRef.current
       if (cached && cached.pageId === pageId) sendSnapshotElements(cached.elements)
       const ws = wsRef.current
@@ -580,7 +596,10 @@ export function useExcalidrawSync(
     pushCollaborators()
   }, [pageId, pushCollaborators])
 
-  // Локальная правка: троттлим update (100мс), дебаунсим снапшот (3с).
+  // Локальная правка: троттлим update (100мс). Excalidraw зовёт onChange из
+  // componentDidUpdate, то есть на КАЖДЫЙ кадр панорамирования и на каждый пуш
+  // коллабораторов — всё, что висит здесь, автоматически покадровое. Держим путь
+  // пустым: сериализация сцены отсюда убрана (см. persistFiles).
   const onChange = useCallback(() => {
     // Кэшируем сцену уходящей страницы для teardown-снапшота (тег pageId —
     // чтобы initial onChange нового Excalidraw не подменил кэш пустой сценой).
@@ -592,9 +611,7 @@ export function useExcalidrawSync(
         flushUpdate()
       }, UPDATE_THROTTLE_MS)
     }
-    if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
-    snapshotTimerRef.current = setTimeout(sendSnapshot, SNAPSHOT_DEBOUNCE_MS)
-  }, [pageId, flushUpdate, sendSnapshot])
+  }, [pageId, flushUpdate])
 
   const sendCursor = useCallback(
     (x: number, y: number) => {
@@ -663,6 +680,9 @@ export function useExcalidrawSync(
     [sendFollow]
   )
 
+  // Единственная точка, где карта files пополняется локально, — значит и
+  // единственный повод её персистить. Раньше это делал дебаунс onChange, то есть
+  // и на кадрах камеры, где files не менялись.
   const registerFile = useCallback(
     (fileId: string, url: string, mimeType: string) => {
       filesRef.current[fileId] = { url, mimeType }
@@ -671,8 +691,13 @@ export function useExcalidrawSync(
           JSON.stringify({ type: 'file', payload: { fileId, url, mimeType } })
         )
       }
+      if (filesTimerRef.current) clearTimeout(filesTimerRef.current)
+      filesTimerRef.current = setTimeout(() => {
+        filesTimerRef.current = null
+        persistFiles()
+      }, FILES_DEBOUNCE_MS)
     },
-    []
+    [persistFiles]
   )
 
   const sendMedia = useCallback((p: MediaPayload) => {
