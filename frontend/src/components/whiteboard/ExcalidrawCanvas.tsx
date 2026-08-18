@@ -929,19 +929,29 @@ export function ExcalidrawCanvas({
               setMathEditor(null)
             }}
             onCancel={() => {
-              const api = apiRef.current
-              // Формула этого сеанса набора: черновой кадр (debounce) уже мог
-              // создать элемент на доске до Esc. Убираем тумбстоуном мимо
-              // истории — до commit'а формулы не было, Ctrl+Z не должен её видеть.
-              // Правку уже стоявшей формулы (isNew === false) Esc просто закрывает.
-              if (api && mathEditor.isNew && mathEditor.elementId) {
-                const elementId = mathEditor.elementId
-                api.updateScene({
-                  elements: api
-                    .getSceneElementsIncludingDeleted()
-                    .map((e) => (e.id === elementId ? newElementWith(e, { isDeleted: true }) : e)),
-                  captureUpdate: CaptureUpdateAction.NEVER,
-                })
+              if (mathEditor.isNew) {
+                // Формула этого сеанса набора: черновой кадр (debounce) уже мог
+                // создать элемент на доске до Esc. Убираем тумбстоуном мимо
+                // истории — до commit'а формулы не было, Ctrl+Z не должен её видеть.
+                const api = apiRef.current
+                if (api && mathEditor.elementId) {
+                  const elementId = mathEditor.elementId
+                  api.updateScene({
+                    elements: api
+                      .getSceneElementsIncludingDeleted()
+                      .map((e) => (e.id === elementId ? newElementWith(e, { isDeleted: true }) : e)),
+                    captureUpdate: CaptureUpdateAction.NEVER,
+                  })
+                }
+              } else if (mathEditor.elementId) {
+                // Правка уже стоявшей формулы: черновые кадры реально меняли
+                // элемент (captureUpdate: NEVER) и уже уехали пирам обычным
+                // диффом. Откатываем тем же путём, что и обычный кадр —
+                // applyFormula с исходным latex, commit=false, чтобы возврат
+                // тоже не попал в историю. Ширина не пострадала: preserveWidth
+                // держит её нетронутой все черновые кадры правки существующей
+                // формулы, только высота гуляла под соотношение сторон.
+                void applyFormula(mathEditor.elementId, mathEditor.latex, false)
               }
               setMathEditor(null)
             }}
