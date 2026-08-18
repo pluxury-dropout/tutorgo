@@ -11,18 +11,24 @@ import { readFormula } from './mathFormula.ts'
  * Формулы сцены, для которых картинки ещё нет.
  *
  * Отдельная чистая функция, потому что это единственная логика, которую можно
- * проверить тестом: остальное — вызовы Excalidraw.
+ * проверить тестом: остальное — вызовы Excalidraw. `haveFile` — источник
+ * истины про то, что уже отрендерено (см. useMathFiles: он переживает
+ * пересоздание инстанса Excalidraw, в отличие от любого локального
+ * накопителя). `failed` — формулы, чей рендер уже провалился и которые не
+ * стоит пробовать на каждый onChange.
  */
 export function formulasNeedingRender(
   elements: readonly ExcalidrawElement[],
-  known: ReadonlySet<string>
+  haveFile: ReadonlySet<string>,
+  failed: ReadonlySet<string>
 ): { fileId: string; latex: string }[] {
   const out: { fileId: string; latex: string }[] = []
-  const seen = new Set(known)
+  const seen = new Set<string>()
   for (const el of elements) {
     if (el.type !== 'image' || el.isDeleted || !el.fileId) continue
+    if (haveFile.has(el.fileId) || failed.has(el.fileId) || seen.has(el.fileId)) continue
     const formula = readFormula(el)
-    if (!formula || seen.has(el.fileId)) continue
+    if (!formula) continue
     seen.add(el.fileId)
     out.push({ fileId: el.fileId, latex: formula.latex })
   }
@@ -36,17 +42,22 @@ export function formulasNeedingRender(
  * Вызывается из onChange, то есть на КАЖДЫЙ кадр панорамирования — поэтому
  * ранний выход обязан быть дешёвым. И главное: api.addFiles() безусловно зовёт
  * scene.triggerUpdate() (даже когда ничего не добавил), а тот вызывает onChange
- * снова. Без множества уже отрендеренного это бесконечный цикл.
+ * снова. Признак «уже отрендерено» поэтому берём из api.getFiles() — он живёт
+ * в самом инстансе Excalidraw и переживает его пересоздание по key={pageId}
+ * (см. hydrateFiles в useExcalidrawSync.ts — тот же приём). Локальный Set
+ * держим только для формул, чей рендер уже провалился: в getFiles() их не
+ * будет никогда, и без failedRef они бы рендерились заново на каждый кадр.
  */
 export function useMathFiles(apiRef: RefObject<ExcalidrawImperativeAPI | null>) {
-  const doneRef = useRef(new Set<string>())
+  const failedRef = useRef(new Set<string>())
   const inFlightRef = useRef(false)
 
   const renderMissing = useCallback(() => {
     const api = apiRef.current
     if (!api || inFlightRef.current) return
 
-    const pending = formulasNeedingRender(api.getSceneElements(), doneRef.current)
+    const haveFile = new Set(Object.keys(api.getFiles()))
+    const pending = formulasNeedingRender(api.getSceneElements(), haveFile, failedRef.current)
     if (pending.length === 0) return
 
     inFlightRef.current = true
@@ -57,25 +68,35 @@ export function useMathFiles(apiRef: RefObject<ExcalidrawImperativeAPI | null>) 
         const files: BinaryFileData[] = []
 
         for (const { fileId, latex } of pending) {
-          const { svg, error } = await latexToSvg(latex, { color: colorOf(api, fileId) })
-          // Битый SVG не отдаём: Excalidraw пометил бы элемент status:'error'
-          // через newElementWith, а это version++ — порча уехала бы всем пирам.
-          if (error || !svg) {
-            doneRef.current.add(fileId)
-            continue
+          try {
+            const { svg, error } = await latexToSvg(latex, { color: colorOf(api, fileId) })
+            // Битый SVG не отдаём: Excalidraw пометил бы элемент status:'error'
+            // через newElementWith, а это version++ — порча уехала бы всем пирам.
+            if (error || !svg) {
+              failedRef.current.add(fileId)
+              continue
+            }
+            files.push({
+              id: fileId as FileId,
+              dataURL: svgToDataUrl(svg) as DataURL,
+              mimeType: 'image/svg+xml',
+              created: Date.now(),
+            })
+          } catch (err) {
+            // try/catch на КАЖДЫЙ элемент, а не вокруг всего цикла: обвал
+            // рендера одной формулы (патологический LaTeX, срыв загрузки
+            // чанка шрифта) не должен унести с собой уже отрендеренные
+            // элементы 1..N-1 — они и так ещё не дошли до addFiles.
+            failedRef.current.add(fileId)
+            console.warn('Формулу не удалось отрендерить', err)
           }
-          doneRef.current.add(fileId)
-          files.push({
-            id: fileId as FileId,
-            dataURL: svgToDataUrl(svg) as DataURL,
-            mimeType: 'image/svg+xml',
-            created: Date.now(),
-          })
         }
 
         if (files.length > 0) apiRef.current?.addFiles(files)
       } catch (err) {
-        console.warn('Формулу не удалось отрендерить', err)
+        // Сюда попадает только сбой самого динамического импорта — отдельные
+        // формулы в failedRef не попадают, следующий onChange повторит батч.
+        console.warn('Не удалось загрузить рендерер формул', err)
       } finally {
         inFlightRef.current = false
       }
@@ -88,5 +109,7 @@ export function useMathFiles(apiRef: RefObject<ExcalidrawImperativeAPI | null>) 
 /** Цвет запечён в fileId, но сам SVG красим по элементу — берём его цвет обводки. */
 function colorOf(api: ExcalidrawImperativeAPI, fileId: string): string {
   const el = api.getSceneElements().find((e) => e.type === 'image' && e.fileId === fileId)
+  // customData — произвольный JSON чужого элемента Excalidraw, каст на совести
+  // вызывающего кода; полю просто нет типа в апстриме.
   return (el?.customData?.color as string) ?? '#1e1e1e'
 }

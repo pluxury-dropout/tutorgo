@@ -11,13 +11,18 @@ const el = (over: Record<string, unknown>) => ({
   ...over,
 })
 
-test('возвращает формулы, которых нет в кэше', () => {
-  const out = formulasNeedingRender([el({})] as never, new Set())
+test('возвращает формулы, которых нет ни в файлах, ни среди провалившихся', () => {
+  const out = formulasNeedingRender([el({})] as never, new Set(), new Set())
   assert.deepEqual(out, [{ fileId: 'math-1', latex: 'x^2' }])
 })
 
-test('молчит, когда всё уже отрендерено — иначе addFiles зациклит onChange', () => {
-  const out = formulasNeedingRender([el({})] as never, new Set(['math-1']))
+test('молчит, когда файл уже есть в карте файлов — иначе addFiles зациклит onChange', () => {
+  const out = formulasNeedingRender([el({})] as never, new Set(['math-1']), new Set())
+  assert.deepEqual(out, [])
+})
+
+test('молчит для формул, чей рендер уже провалился — их не будет в getFiles() никогда', () => {
+  const out = formulasNeedingRender([el({})] as never, new Set(), new Set(['math-1']))
   assert.deepEqual(out, [])
 })
 
@@ -27,10 +32,10 @@ test('игнорирует не-формулы и удалённые элеме�
     el({ isDeleted: true, fileId: 'math-2' }),
     { type: 'text', text: 'x^2', customData: formulaCustomData('x^2') },
   ]
-  assert.deepEqual(formulasNeedingRender(items as never, new Set()), [])
+  assert.deepEqual(formulasNeedingRender(items as never, new Set(), new Set()), [])
 })
 
 test('дедуплицирует одинаковые формулы в одном проходе', () => {
   const items = [el({}), el({ id: 'b' })]
-  assert.equal(formulasNeedingRender(items as never, new Set()).length, 1)
+  assert.equal(formulasNeedingRender(items as never, new Set(), new Set()).length, 1)
 })
