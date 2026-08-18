@@ -274,6 +274,12 @@ export function ExcalidrawCanvas({
     mode: null,
     id: null,
   })
+  // Синхронная копия selection для сравнения внутри onChange. Сам onChange —
+  // инлайновая стрелка, свежая на каждый рендер, но React может не успеть
+  // закоммитить обновлённый selection (state) между двумя соседними вызовами
+  // onChange в пределах одного жеста — тогда стейт-версия сравнения словила бы
+  // повторный «пере-детект» той же смены выделения. Ref не ждёт коммита.
+  const selectionRef = useRef(selection)
   // Растёт на каждый onChange доски — сигнал MathShapeAction переспросить
   // .panelColumn: контейнер пересоздаётся React'ом при снятии/повторном
   // выделении, MutationObserver внутри компонента — лишь подстраховка.
@@ -649,8 +655,9 @@ export function ExcalidrawCanvas({
         angle: src.angle,
         groupIds: [...src.groupIds],
         frameId: src.frameId,
-        // color формулы мы сами клали строкой в applyFormula — customData
-        // чужой элемент типизирован как Record<string, unknown>
+        // customData — Record<string, unknown> чужого элемента, но color в
+        // него кладём мы сами строкой при вставке формулы (applyFormula),
+        // поэтому каст безопасен.
         strokeColor: (src.customData?.color as string) ?? api.getAppState().currentItemStrokeColor,
       },
     ])
@@ -796,8 +803,17 @@ export function ExcalidrawCanvas({
                     ? ({ mode: 'text', id: one.id } as const)
                     : ({ mode: null, id: null } as const)
                 : ({ mode: null, id: null } as const)
-              setSelection((prev) => (prev.mode === next.mode && prev.id === next.id ? prev : next))
-              setPanelRevision((n) => n + 1)
+              // Ревизию поднимаем только на реальную смену выделения — onChange
+              // летит на каждый кадр рисования и панорамирования, и безусловный
+              // инкремент гонял бы MutationObserver в MathShapeAction на каждом
+              // таком кадре без всякой связи с панелью свойств. Сверяемся с
+              // ref, а не с state selection: state могло ещё не закоммититься
+              // между соседними вызовами onChange одного жеста.
+              if (selectionRef.current.mode !== next.mode || selectionRef.current.id !== next.id) {
+                selectionRef.current = next
+                setSelection(next)
+                setPanelRevision((n) => n + 1)
+              }
             }
             keepAspect(elements)
             fitOnFirstVisit(elements)
