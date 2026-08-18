@@ -249,6 +249,13 @@ export function ExcalidrawCanvas({
     /** id уже стоящей на доске формулы; null — формула ещё не создана */
     elementId: string | null
     latex: string
+    /**
+     * true — формула создаётся в этом сеансе редактора (openNewFormula,
+     * convertTextToFormula): натуральные размеры рендера, Esc удаляет черновик.
+     * false — правится формула, уже стоявшая на доске (даблклик, кнопка панели
+     * свойств): ширина, растянутая пользователем руками, сохраняется.
+     */
+    isNew: boolean
     /** экранные координаты поля ввода */
     anchor: { left: number; top: number }
     /** куда и с какими свойствами ставить новую формулу */
@@ -513,10 +520,15 @@ export function ExcalidrawCanvas({
       const existing = elementId ? elements.find((e) => e.id === elementId) : null
 
       if (existing) {
-        // Пользователь мог растянуть формулу руками — держим его ширину,
-        // высоту пересчитываем по новому соотношению сторон.
-        const nextWidth = existing.width
-        const nextHeight = +(nextWidth * (height / width)).toFixed(2)
+        // isNew === false — правится формула, уже стоявшая на доске: пользователь
+        // мог растянуть её руками, держим его ширину, высоту пересчитываем по
+        // новому соотношению сторон. isNew === true — элемент уже создан
+        // предыдущим черновым кадром ЭТОГО сеанса набора, но ширина ещё не
+        // финальная (первый кадр мог уйти на одном символе) — берём натуральные
+        // размеры свежего рендера на каждый кадр, а не застывшие с первого.
+        const preserveWidth = !mathEditor?.isNew
+        const nextWidth = preserveWidth ? existing.width : width
+        const nextHeight = preserveWidth ? +(nextWidth * (height / width)).toFixed(2) : height
         api.updateScene({
           elements: elements.map((e) =>
             // Формула всегда image-элемент; type-guard нужен, чтобы TS увидел
@@ -553,7 +565,10 @@ export function ExcalidrawCanvas({
       ])
       api.updateScene({
         elements: [...elements, el],
-        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        // Черновой кадр не должен попасть в историю — иначе Esc после него
+        // не сможет откатить создание одним newElementWith(isDeleted:true) без
+        // лишнего шага отмены, и Ctrl+Z на готовую формулу бил бы дважды.
+        captureUpdate: commit ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
       })
       setMathEditor((s) => (s ? { ...s, elementId: el.id } : s))
     },
@@ -573,6 +588,7 @@ export function ExcalidrawCanvas({
     setMathEditor({
       elementId: null,
       latex: '',
+      isNew: true,
       anchor: { left: rect.width / 2 - 180, top: rect.height - 180 },
       place: { x: scene.x, y: scene.y, angle: 0, groupIds: [], frameId: null },
     })
@@ -595,6 +611,7 @@ export function ExcalidrawCanvas({
     setMathEditor({
       elementId: null,
       latex,
+      isNew: true,
       anchor: { left: (rect?.width ?? 0) / 2 - 180, top: (rect?.height ?? 0) - 180 },
       // формула встаёт ровно на место текста и остаётся в его группе и фрейме
       place: {
@@ -706,6 +723,7 @@ export function ExcalidrawCanvas({
     setMathEditor({
       elementId: el.id,
       latex: formula.latex,
+      isNew: false,
       anchor: { left: e.clientX - (rect?.left ?? 0) - 160, top: e.clientY - (rect?.top ?? 0) + 24 },
       // формула уже стоит на доске; place не используется, но держим тип целым
       place: { x: el.x, y: el.y, angle: el.angle, groupIds: [...el.groupIds], frameId: el.frameId },
@@ -886,6 +904,7 @@ export function ExcalidrawCanvas({
             setMathEditor({
               elementId: el.id,
               latex: formula.latex,
+              isNew: false,
               anchor: { left: (rect?.width ?? 0) / 2 - 180, top: (rect?.height ?? 0) - 180 },
               place: { x: el.x, y: el.y, angle: el.angle, groupIds: [...el.groupIds], frameId: el.frameId },
             })
@@ -909,7 +928,23 @@ export function ExcalidrawCanvas({
               void applyFormula(mathEditor.elementId, latex, true)
               setMathEditor(null)
             }}
-            onCancel={() => setMathEditor(null)}
+            onCancel={() => {
+              const api = apiRef.current
+              // Формула этого сеанса набора: черновой кадр (debounce) уже мог
+              // создать элемент на доске до Esc. Убираем тумбстоуном мимо
+              // истории — до commit'а формулы не было, Ctrl+Z не должен её видеть.
+              // Правку уже стоявшей формулы (isNew === false) Esc просто закрывает.
+              if (api && mathEditor.isNew && mathEditor.elementId) {
+                const elementId = mathEditor.elementId
+                api.updateScene({
+                  elements: api
+                    .getSceneElementsIncludingDeleted()
+                    .map((e) => (e.id === elementId ? newElementWith(e, { isDeleted: true }) : e)),
+                  captureUpdate: CaptureUpdateAction.NEVER,
+                })
+              }
+              setMathEditor(null)
+            }}
           />
         )}
         {pdfDialog && (

@@ -41,7 +41,17 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
     void (async () => {
       // Статический импорт нельзя: при SSR condition "node" отдаёт сборку без
       // MathfieldElement, и он молча оказывается undefined.
-      const { MathfieldElement } = await import('mathlive')
+      let mathlive: typeof import('mathlive')
+      try {
+        mathlive = await import('mathlive')
+      } catch (err) {
+        // Сбой загрузки чанка (сеть, блокировщик) — редактор остаётся без
+        // поля, но без необработанного отказа промиса. Тот же приём, что и
+        // в useMathFiles.ts для соседнего динамического импорта.
+        console.warn('Не удалось загрузить редактор формул', err)
+        return
+      }
+      const { MathfieldElement } = mathlive
       if (disposed || !hostRef.current) return
 
       // Ни одного сетевого запроса: шрифты уже пришли из fonts.css, звуки не нужны.
@@ -117,7 +127,12 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
       <div ref={hostRef} />
       <button
         type="button"
-        onClick={() => window.mathVirtualKeyboard.show()}
+        onClick={() => {
+          // window.mathVirtualKeyboard регистрируется модулем 'mathlive' как
+          // побочный эффект импорта — до его резолва в эффекте (await import)
+          // свойства ещё нет, клик бросил бы TypeError.
+          if ('mathVirtualKeyboard' in window) window.mathVirtualKeyboard.show()
+        }}
         style={{ padding: '4px 8px', fontSize: 13, cursor: 'pointer' }}
       >
         Символы
