@@ -11,7 +11,7 @@ import {
 } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import './excalidraw-theme.css'
-import { AudioLines } from 'lucide-react'
+import { AudioLines, Sigma } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   ExcalidrawImperativeAPI,
@@ -25,6 +25,8 @@ import type {
 } from '@excalidraw/excalidraw/element/types'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import { useMathFiles } from './useMathFiles'
+import { fileIdForLatex, formulaCustomData } from './mathFormula'
+import { MathEditor } from './MathEditor'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
@@ -165,6 +167,9 @@ export function ExcalidrawCanvas({
   }, [status, sendMedia])
 
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  // Обёртка канваса: нужна для перевода экранных координат клика в координаты
+  // сцены (открытие редактора формулы) — переиспользуют задачи 5 и 6.
+  const wrapRef = useRef<HTMLDivElement>(null)
   const { renderMissing } = useMathFiles(apiRef)
 
   // onScrollChange летит покадрово во время пана — пишем не чаще CAM_SAVE_MS,
@@ -231,6 +236,21 @@ export function ExcalidrawCanvas({
   const [pdfDialog, setPdfDialog] = useState<{
     numPages: number
     point: { x: number; y: number }
+  } | null>(null)
+  const [mathEditor, setMathEditor] = useState<{
+    /** id уже стоящей на доске формулы; null — формула ещё не создана */
+    elementId: string | null
+    latex: string
+    /** экранные координаты поля ввода */
+    anchor: { left: number; top: number }
+    /** куда и с какими свойствами ставить новую формулу */
+    place: {
+      x: number
+      y: number
+      angle: number
+      groupIds: string[]
+      frameId: string | null
+    }
   } | null>(null)
 
   // Заливает картинку и отдаёт её Excalidraw под заранее известным fileId:
@@ -447,6 +467,98 @@ export function ExcalidrawCanvas({
     })
   }, [])
 
+  // Кадр набора: рисуем формулу и мутируем элемент. Промежуточные кадры не
+  // попадают в историю — Ctrl+Z должен откатывать формулу целиком.
+  const applyFormula = useCallback(
+    async (elementId: string | null, latex: string, commit: boolean) => {
+      const api = apiRef.current
+      if (!api || !latex.trim()) return
+
+      const color = api.getAppState().currentItemStrokeColor
+      const fontSize = api.getAppState().currentItemFontSize
+      const { latexToSvg, svgToDataUrl } = await import('@/lib/latexToSvg')
+      const { svg, width, height, error } = await latexToSvg(latex, { fontSize, color })
+      if (error || !svg) return
+
+      const fileId = fileIdForLatex(latex, color, fontSize) as FileId
+      api.addFiles([
+        {
+          id: fileId,
+          dataURL: svgToDataUrl(svg) as DataURL,
+          mimeType: 'image/svg+xml',
+          created: Date.now(),
+        },
+      ])
+
+      const elements = api.getSceneElementsIncludingDeleted()
+      const existing = elementId ? elements.find((e) => e.id === elementId) : null
+
+      if (existing) {
+        // Пользователь мог растянуть формулу руками — держим его ширину,
+        // высоту пересчитываем по новому соотношению сторон.
+        const nextWidth = existing.width
+        const nextHeight = +(nextWidth * (height / width)).toFixed(2)
+        api.updateScene({
+          elements: elements.map((e) =>
+            // Формула всегда image-элемент; type-guard нужен, чтобы TS увидел
+            // fileId — он есть только у ExcalidrawImageElement, не у union.
+            e.id === elementId && e.type === 'image'
+              ? newElementWith(e, {
+                  fileId,
+                  width: nextWidth,
+                  height: nextHeight,
+                  customData: { ...e.customData, ...formulaCustomData(latex), color },
+                })
+              : e
+          ),
+          captureUpdate: commit ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
+        })
+        return
+      }
+
+      const place = mathEditor?.place
+      if (!place) return
+      const [el] = convertToExcalidrawElements([
+        {
+          type: 'image',
+          fileId,
+          x: place.x,
+          y: place.y,
+          width,
+          height,
+          angle: place.angle,
+          groupIds: place.groupIds,
+          frameId: place.frameId,
+          customData: { ...formulaCustomData(latex), color },
+        },
+      ])
+      api.updateScene({
+        elements: [...elements, el],
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      })
+      setMathEditor((s) => (s ? { ...s, elementId: el.id } : s))
+    },
+    [mathEditor]
+  )
+
+  // Открытие пустого редактора: формула ставится в центр видимой области,
+  // поле ввода — под ней.
+  const openNewFormula = useCallback(() => {
+    const api = apiRef.current
+    const rect = wrapRef.current?.getBoundingClientRect()
+    if (!api || !rect) return
+    const scene = viewportCoordsToSceneCoords(
+      { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 },
+      api.getAppState()
+    )
+    setMathEditor({
+      elementId: null,
+      latex: '',
+      anchor: { left: rect.width / 2 - 180, top: rect.height - 180 },
+      place: { x: scene.x, y: scene.y, angle: 0, groupIds: [], frameId: null },
+    })
+  }, [])
+
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
   // обёртки срабатывает раньше). Не-PDF пропускаем — нативная вставка
   // картинок Excalidraw кладёт base64 в files; для брошенных мышкой мелких
@@ -495,6 +607,7 @@ export function ExcalidrawCanvas({
   return (
     <BoardContextProvider value={{ boardId, courseId, isGuest }}>
       <div
+        ref={wrapRef}
         className={`relative w-full h-full${hideUserList ? ' board-hide-userlist' : ''}`}
         onDropCapture={onDropCapture}
         onPasteCapture={onPasteCapture}
@@ -566,13 +679,14 @@ export function ExcalidrawCanvas({
           }}
           // Картинки и ролики вставляются через Ctrl+V (см. onPasteCapture и
           // validateEmbeddable) — кнопок под них не держим. Здесь остаётся
-          // единственное, чего буфером не сделать: библиотека аудио препода.
-          renderTopRightUI={() =>
-            isGuest ? null : (
+          // единственное, чего буфером не сделать: библиотека аудио препода
+          // и вставка формул (доступна и ученику — как обычный инструмент рисования).
+          renderTopRightUI={() => (
+            <>
               <button
                 data-board-ui
-                title="Материалы урока"
-                onClick={() => setMaterialsOpen((v) => !v)}
+                title="Формула"
+                onClick={openNewFormula}
                 style={{
                   height: 40,
                   padding: '0 14px 0 10px',
@@ -581,7 +695,7 @@ export function ExcalidrawCanvas({
                   gap: 7,
                   border: '1px solid var(--border)',
                   borderRadius: 10,
-                  background: materialsOpen ? 'var(--primary-light)' : 'var(--card)',
+                  background: 'var(--card)',
                   color: 'var(--foreground)',
                   fontSize: 13,
                   fontWeight: 500,
@@ -589,11 +703,36 @@ export function ExcalidrawCanvas({
                   cursor: 'pointer',
                 }}
               >
-                <AudioLines size={18} strokeWidth={1.75} />
-                Материалы
+                <Sigma size={18} strokeWidth={1.75} />
+                Формула
               </button>
-            )
-          }
+              {!isGuest && (
+                <button
+                  data-board-ui
+                  title="Материалы урока"
+                  onClick={() => setMaterialsOpen((v) => !v)}
+                  style={{
+                    height: 40,
+                    padding: '0 14px 0 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: materialsOpen ? 'var(--primary-light)' : 'var(--card)',
+                    color: 'var(--foreground)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <AudioLines size={18} strokeWidth={1.75} />
+                  Материалы
+                </button>
+              )}
+            </>
+          )}
           UIOptions={{
             canvasActions: {
               // Экспорт/сохранение файлов скрываем: персист у нас свой (WS).
@@ -615,6 +754,18 @@ export function ExcalidrawCanvas({
         )}
         {/* Плеер виден обоим: управлять им может и ученик, закрыть — только препод. */}
         <MediaPlayer player={player} canClose={!isGuest} />
+        {mathEditor && (
+          <MathEditor
+            initialLatex={mathEditor.latex}
+            anchor={mathEditor.anchor}
+            onDraft={(latex) => void applyFormula(mathEditor.elementId, latex, false)}
+            onCommit={(latex) => {
+              void applyFormula(mathEditor.elementId, latex, true)
+              setMathEditor(null)
+            }}
+            onCancel={() => setMathEditor(null)}
+          />
+        )}
         {pdfDialog && (
           <PdfRangeDialog
             open

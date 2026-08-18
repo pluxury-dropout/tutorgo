@@ -496,3 +496,8 @@
   0%, 100% { box-shadow: 0 0 0 3px rgba(59,165,93,0.95), 0 4px 14px rgba(0,0,0,0.25); }
   50% { box-shadow: 0 0 0 3px rgba(59,165,93,0.55), 0 4px 14px rgba(0,0,0,0.25); }
 }
+/* Виртуальная клавиатура MathLive: у неё z-index 105, у UI Excalidraw — до
+   999999, без правки клавиатура уезжает под панели доски. */
+body > .ML__keyboard {
+  --keyboard-zindex: 1000000;
+}
