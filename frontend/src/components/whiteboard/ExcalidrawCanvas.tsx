@@ -25,8 +25,9 @@ import type {
 } from '@excalidraw/excalidraw/element/types'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import { useMathFiles } from './useMathFiles'
-import { fileIdForLatex, formulaCustomData, readFormula } from './mathFormula'
+import { fileIdForLatex, formulaCustomData, looksLikeMath, readFormula } from './mathFormula'
 import { MathEditor } from './MathEditor'
+import { MathShapeAction } from './MathShapeAction'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
@@ -170,6 +171,13 @@ export function ExcalidrawCanvas({
   // Обёртка канваса: нужна для перевода экранных координат клика в координаты
   // сцены (открытие редактора формулы) — переиспользуют задачи 5 и 6.
   const wrapRef = useRef<HTMLDivElement>(null)
+  // Тот же узел в состоянии: MathShapeAction нужен контейнер порталу, а читать
+  // wrapRef.current во время рендера eslint (react-hooks/refs) запрещает —
+  // ref не переживает StrictMode-двойной рендер. Div не пересоздаётся за
+  // жизнь компонента (в отличие от Excalidraw с key={page?.id}), поэтому
+  // хватает одного присвоения на маунте.
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null)
+  useEffect(() => setWrapEl(wrapRef.current), [])
   const { renderMissing } = useMathFiles(apiRef)
 
   // onScrollChange летит покадрово во время пана — пишем не чаще CAM_SAVE_MS,
@@ -252,6 +260,17 @@ export function ExcalidrawCanvas({
       frameId: string | null
     }
   } | null>(null)
+
+  // Что выделено на доске одиночным элементом — повод показать кнопку
+  // конвертации в панели свойств (текст → формула / формула → текст).
+  const [selection, setSelection] = useState<{ mode: 'text' | 'formula' | null; id: string | null }>({
+    mode: null,
+    id: null,
+  })
+  // Растёт на каждый onChange доски — сигнал MathShapeAction переспросить
+  // .panelColumn: контейнер пересоздаётся React'ом при снятии/повторном
+  // выделении, MutationObserver внутри компонента — лишь подстраховка.
+  const [panelRevision, setPanelRevision] = useState(0)
 
   // Заливает картинку и отдаёт её Excalidraw под заранее известным fileId:
   // S3 → локальный dataURL → files-карта. Base64 в WS/снапшот не попадает
@@ -559,6 +578,74 @@ export function ExcalidrawCanvas({
     })
   }, [])
 
+  // Excalidraw не даёт сменить type, поэтому переключение — это удаление
+  // старого элемента и вставка нового на его месте.
+  const convertTextToFormula = useCallback(async () => {
+    const api = apiRef.current
+    if (!api || !selection.id) return
+    const src = api.getSceneElementsIncludingDeleted().find((e) => e.id === selection.id)
+    if (!src || src.type !== 'text') return
+
+    // Конвертер отличен на математике, но съедает пробелы: «Задача 5» стала бы
+    // произведением курсивных переменных. Не прошло гейт — открываем пустое поле.
+    const { convertAsciiMathToLatex } = await import('mathlive')
+    const latex = looksLikeMath(src.text) ? convertAsciiMathToLatex(src.text) : ''
+
+    const rect = wrapRef.current?.getBoundingClientRect()
+    setMathEditor({
+      elementId: null,
+      latex,
+      anchor: { left: (rect?.width ?? 0) / 2 - 180, top: (rect?.height ?? 0) - 180 },
+      // формула встаёт ровно на место текста и остаётся в его группе и фрейме
+      place: {
+        x: src.x,
+        y: src.y,
+        angle: src.angle,
+        groupIds: [...src.groupIds],
+        frameId: src.frameId,
+      },
+    })
+    // старый текст убираем тумбстоуном, иначе он вернётся к пирам через reconcile
+    api.updateScene({
+      elements: api
+        .getSceneElementsIncludingDeleted()
+        .map((e) => (e.id === src.id ? newElementWith(e, { isDeleted: true }) : e)),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    })
+  }, [selection])
+
+  // Обратное превращение: формула становится обычным текстом с её LaTeX.
+  const convertFormulaToText = useCallback(() => {
+    const api = apiRef.current
+    if (!api || !selection.id) return
+    const elements = api.getSceneElementsIncludingDeleted()
+    const src = elements.find((e) => e.id === selection.id)
+    const formula = readFormula(src)
+    if (!src || !formula) return
+
+    const [text] = convertToExcalidrawElements([
+      {
+        type: 'text',
+        x: src.x,
+        y: src.y,
+        text: formula.latex,
+        angle: src.angle,
+        groupIds: [...src.groupIds],
+        frameId: src.frameId,
+        // color формулы мы сами клали строкой в applyFormula — customData
+        // чужой элемент типизирован как Record<string, unknown>
+        strokeColor: (src.customData?.color as string) ?? api.getAppState().currentItemStrokeColor,
+      },
+    ])
+
+    api.updateScene({
+      elements: elements
+        .map((e) => (e.id === src.id ? newElementWith(e, { isDeleted: true }) : e))
+        .concat(text),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    })
+  }, [selection])
+
   // Перехват drop PDF ДО Excalidraw (у него нет хука на drop; capture-фаза
   // обёртки срабатывает раньше). Не-PDF пропускаем — нативная вставка
   // картинок Excalidraw кладёт base64 в files; для брошенных мышкой мелких
@@ -677,6 +764,23 @@ export function ExcalidrawCanvas({
           }}
           onChange={(elements, appState) => {
             renderMissing()
+            // Кнопка конвертации в панели свойств: одиночное выделение текста
+            // или формулы включает её, иначе (0 или несколько элементов) — нет.
+            const api = apiRef.current
+            if (api) {
+              const ids = appState.selectedElementIds
+              const picked = elements.filter((el) => ids[el.id] && !el.isDeleted)
+              const one = picked.length === 1 ? picked[0] : null
+              const next = one
+                ? readFormula(one)
+                  ? ({ mode: 'formula', id: one.id } as const)
+                  : one.type === 'text'
+                    ? ({ mode: 'text', id: one.id } as const)
+                    : ({ mode: null, id: null } as const)
+                : ({ mode: null, id: null } as const)
+              setSelection((prev) => (prev.mode === next.mode && prev.id === next.id ? prev : next))
+              setPanelRevision((n) => n + 1)
+            }
             keepAspect(elements)
             fitOnFirstVisit(elements)
             // Не onUserFollow: тот молчит, когда follow включают программно из
@@ -767,6 +871,26 @@ export function ExcalidrawCanvas({
             // нашу кнопку (S3). Проверено: UIOptions.tools.image есть в 0.18.
             tools: { image: false },
           }}
+        />
+        <MathShapeAction
+          revision={panelRevision}
+          container={wrapEl}
+          mode={selection.mode}
+          onConvert={() => void convertTextToFormula()}
+          onEdit={() => {
+            const api = apiRef.current
+            const el = api?.getSceneElements().find((x) => x.id === selection.id)
+            const formula = readFormula(el)
+            if (!el || !formula) return
+            const rect = wrapRef.current?.getBoundingClientRect()
+            setMathEditor({
+              elementId: el.id,
+              latex: formula.latex,
+              anchor: { left: (rect?.width ?? 0) / 2 - 180, top: (rect?.height ?? 0) - 180 },
+              place: { x: el.x, y: el.y, angle: el.angle, groupIds: [...el.groupIds], frameId: el.frameId },
+            })
+          }}
+          onToText={() => void convertFormulaToText()}
         />
         {!isGuest && materialsOpen && (
           <MaterialsPanel
