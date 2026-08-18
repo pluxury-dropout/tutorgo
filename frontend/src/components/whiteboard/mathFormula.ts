@@ -9,9 +9,15 @@ export function formulaCustomData(latex: string): { formula: FormulaData } {
   return { formula: { latex, v: '1' } }
 }
 
+/**
+ * Распаковать формулу из элемента. customData — произвольный JSON чужого
+ * элемента Excalidraw, приводим к типу для удобства, но проверяем строк-тип
+ * latex — это гарантирует безопасность каста.
+ */
 export function readFormula(
   el: { customData?: Record<string, unknown> } | null | undefined
 ): FormulaData | null {
+  // customData может содержать мусор; приводим к типу для удобства работы
   const raw = el?.customData?.formula as Partial<FormulaData> | undefined
   if (!raw || typeof raw.latex !== 'string') return null
   return { latex: raw.latex, v: '1' }
@@ -52,6 +58,7 @@ export function looksLikeMath(text: string): boolean {
   const s = text.trim()
   if (!s) return false
   if (/[Ѐ-ӿ]/.test(s)) return false
-  if (/[A-Za-z]{2,}\s+[A-Za-z]{2,}/.test(s)) return false
+  // Отсекаем метки типа "Task 5" или "Grade 10" — конвертер съест пробел
+  if (/[A-Za-z]{2,}\s+[A-Za-z0-9]/.test(s)) return false
   return /[0-9+\-*/^_=()]|sqrt|frac|pi|alpha|beta/.test(s)
 }

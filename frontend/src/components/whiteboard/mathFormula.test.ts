@@ -38,6 +38,9 @@ test('гейт пропускает математику и отсекает т�
   assert.ok(looksLikeMath('1/2'))
   assert.ok(looksLikeMath('E=mc^2'))
   assert.ok(looksLikeMath('sqrt(2)'))
+  // Математика с пробелами вокруг операторов должна пройти
+  assert.ok(looksLikeMath('2 + 2'))
+  assert.ok(looksLikeMath('a_1 + a_2'))
 
   // convertAsciiMathToLatex уничтожает пробелы: «Задача 5» превратилась бы
   // в произведение шести курсивных переменных.
@@ -45,4 +48,7 @@ test('гейт пропускает математику и отсекает т�
   assert.equal(looksLikeMath('Hello world'), false)
   assert.equal(looksLikeMath('Найти скорость'), false)
   assert.equal(looksLikeMath(''), false)
+  // Латинские метки с числами также должны быть отсечены
+  assert.equal(looksLikeMath('Task 5'), false)
+  assert.equal(looksLikeMath('Grade 10'), false)
 })
