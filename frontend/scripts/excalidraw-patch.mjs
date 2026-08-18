@@ -27,6 +27,12 @@
 //      компенсировать аддитивность при сильном приближении, а поверх
 //      умножения снова делает скорость неравномерной. Пинч не трогаем — он и
 //      так мультипликативный (initialScale × event.scale).
+//
+//   4. Новый текст (даблклик по пустому месту, инструмент «Текст») Excalidraw
+//      кладёт верхним левым углом в курсор, поэтому поле «вываливается» вниз
+//      из-под указателя. Сдвигаем на полстроки вверх — на курсоре оказывается
+//      середина первой строки. Ветка снапа к центру контейнера не трогается:
+//      там позицию даёт parentCenterPosition.
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { PEN_SCALE, THINNING, SPEED_SCALE } from './pen-config.mjs'
 
@@ -99,6 +105,15 @@ const EDITS = [
   // пропатчен» перестала бы отличать патч от съехавшего после апгрейда якоря.
   { from: 'Math.log10(Math.max(1, this.state.zoom.value))', to: '0 /* ponytail: zoom-амплификация */' },
   { from: 'Math.log10(Math.max(1,this.state.zoom.value))', to: '0/*ponytail:zoom*/' },
+
+  // Высота строки в Excalidraw = fontSize × lineHeight (getLineHeightInPx),
+  // половина её и есть сдвиг. В prod-бандле те же величины зовутся u и p,
+  // sceneY — r: имена короткие, поэтому якорем служит всё выражение целиком.
+  {
+    from: 'y: parentCenterPosition ? parentCenterPosition.elementCenterY : sceneY,',
+    to: 'y: parentCenterPosition ? parentCenterPosition.elementCenterY : sceneY - fontSize * lineHeight / 2,',
+  },
+  { from: 'y:s?s.elementCenterY:r,', to: 'y:s?s.elementCenterY:r-u*p/2,' },
 ]
 
 const count = (s, from) =>
