@@ -24,6 +24,7 @@ import type {
   ExcalidrawElement,
 } from '@excalidraw/excalidraw/element/types'
 import { useExcalidrawSync } from './useExcalidrawSync'
+import { useMathFiles } from './useMathFiles'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
 import { BoardContextProvider } from './BoardContext'
@@ -164,6 +165,7 @@ export function ExcalidrawCanvas({
   }, [status, sendMedia])
 
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  const { renderMissing } = useMathFiles(apiRef)
 
   // onScrollChange летит покадрово во время пана — пишем не чаще CAM_SAVE_MS,
   // trailing'ом (нужна позиция ПОСЛЕ жеста, а не в его начале).
@@ -539,6 +541,7 @@ export function ExcalidrawCanvas({
             onApi?.(api)
           }}
           onChange={(elements, appState) => {
+            renderMissing()
             keepAspect(elements)
             fitOnFirstVisit(elements)
             // Не onUserFollow: тот молчит, когда follow включают программно из
