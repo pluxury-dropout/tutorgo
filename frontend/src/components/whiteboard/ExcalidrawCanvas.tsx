@@ -25,7 +25,7 @@ import type {
 } from '@excalidraw/excalidraw/element/types'
 import { useExcalidrawSync } from './useExcalidrawSync'
 import { useMathFiles } from './useMathFiles'
-import { fileIdForLatex, formulaCustomData } from './mathFormula'
+import { fileIdForLatex, formulaCustomData, readFormula } from './mathFormula'
 import { MathEditor } from './MathEditor'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 import { blobToDataURL, imageFromClipboard } from './excalidrawSync'
@@ -604,6 +604,27 @@ export function ExcalidrawCanvas({
     })()
   }
 
+  const onDoubleClickCapture = (e: React.MouseEvent) => {
+    const api = apiRef.current
+    if (!api) return
+    const selected = api.getAppState().selectedElementIds
+    const el = api.getSceneElements().find((x) => selected[x.id])
+    const formula = readFormula(el)
+    // Без проверки на формулу мы отобрали бы у обычных картинок штатную
+    // обрезку: даблклик по image в 0.18.1 включает crop-режим.
+    if (!el || !formula) return
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = wrapRef.current?.getBoundingClientRect()
+    setMathEditor({
+      elementId: el.id,
+      latex: formula.latex,
+      anchor: { left: e.clientX - (rect?.left ?? 0) - 160, top: e.clientY - (rect?.top ?? 0) + 24 },
+      // формула уже стоит на доске; place не используется, но держим тип целым
+      place: { x: el.x, y: el.y, angle: el.angle, groupIds: [...el.groupIds], frameId: el.frameId },
+    })
+  }
+
   return (
     <BoardContextProvider value={{ boardId, courseId, isGuest }}>
       <div
@@ -611,6 +632,7 @@ export function ExcalidrawCanvas({
         className={`relative w-full h-full${hideUserList ? ' board-hide-userlist' : ''}`}
         onDropCapture={onDropCapture}
         onPasteCapture={onPasteCapture}
+        onDoubleClickCapture={onDoubleClickCapture}
       >
         {status === 'disconnected' && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm px-3 py-1 rounded-full">
