@@ -245,6 +245,14 @@ export function ExcalidrawCanvas({
     numPages: number
     point: { x: number; y: number }
   } | null>(null)
+  // Счётчик сеанса редактора формулы. applyFormula бежит асинхронно (await
+  // динамического импорта ~490 КБ + await рендера — сотни мс на первой
+  // формуле в сессии) и может доехать до api.updateScene ПОСЛЕ того, как
+  // редактор уже закрылся (Enter/Esc) или открылась другая формула —
+  // применять такой результат нельзя (дублирующая формула поверх коммита,
+  // осиротевший черновик после Esc). Бампится на каждое открытие и закрытие
+  // редактора; applyFormula ловит несовпадение сразу после await'ов.
+  const editorSessionRef = useRef(0)
   const [mathEditor, setMathEditor] = useState<{
     /** id уже стоящей на доске формулы; null — формула ещё не создана */
     elementId: string | null
@@ -256,6 +264,12 @@ export function ExcalidrawCanvas({
      * свойств): ширина, растянутая пользователем руками, сохраняется.
      */
     isNew: boolean
+    /**
+     * id текстового элемента, из которого formula конвертируется
+     * (convertTextToFormula); null во всех остальных путях открытия.
+     * Тумбстоуним его только в момент коммита — applyFormula.
+     */
+    sourceTextId: string | null
     /** экранные координаты поля ввода */
     anchor: { left: number; top: number }
     /** куда и с какими свойствами ставить новую формулу */
@@ -500,17 +514,50 @@ export function ExcalidrawCanvas({
   }, [])
 
   // Кадр набора: рисуем формулу и мутируем элемент. Промежуточные кадры не
-  // попадают в историю — Ctrl+Z должен откатывать формулу целиком.
+  // попадают в историю — Ctrl+Z должен откатывать формулу целиком. Возвращает
+  // true при успехе — onCommit закрывает редактор только на успехе, чтобы
+  // битый LaTeX не съедал набранный текст молча.
   const applyFormula = useCallback(
-    async (elementId: string | null, latex: string, commit: boolean) => {
+    async (elementId: string | null, latex: string, commit: boolean): Promise<boolean> => {
       const api = apiRef.current
-      if (!api || !latex.trim()) return
+      if (!api || !latex.trim()) return false
 
-      const color = api.getAppState().currentItemStrokeColor
+      // Сеанс на момент старта — сверяем после await'ов ниже (см. комментарий
+      // у editorSessionRef).
+      const session = editorSessionRef.current
       const fontSize = api.getAppState().currentItemFontSize
-      const { latexToSvg, svgToDataUrl } = await import('@/lib/latexToSvg')
-      const { svg, width, height, error } = await latexToSvg(latex, { fontSize, color })
-      if (error || !svg) return
+      // Правка уже стоящей формулы красится в её сохранённый цвет, а не в
+      // текущий цвет обводки инструмента — иначе и обычная правка, и Esc-откат
+      // молча перекрашивали бы формулу. Тот же приём, что и colorOf в
+      // useMathFiles.ts: customData — Record<string, unknown> чужого
+      // элемента, но color в него кладём мы сами строкой (см. ниже), каст безопасен.
+      const existingBefore = elementId
+        ? api.getSceneElementsIncludingDeleted().find((e) => e.id === elementId)
+        : null
+      const color =
+        (existingBefore?.customData?.color as string | undefined) ??
+        api.getAppState().currentItemStrokeColor
+
+      let svg: string, width: number, height: number, error: string | undefined
+      let svgToDataUrl: (svg: string) => string
+      try {
+        const mod = await import('@/lib/latexToSvg')
+        svgToDataUrl = mod.svgToDataUrl
+        ;({ svg, width, height, error } = await mod.latexToSvg(latex, { fontSize, color }))
+      } catch (err) {
+        // Срыв догрузки чанка (шрифт, сеть) — иначе необработанный rejection.
+        console.warn('Не удалось отрендерить формулу', err)
+        if (commit) toast.error('Не удалось отрендерить формулу')
+        return false
+      }
+      // Сеанс сменился (Esc/Enter уже закрыли этот редактор или открылась
+      // другая формула), пока ждали импорт и рендер — применять результат
+      // некуда: элемент/место, под которые он считался, уже не актуальны.
+      if (editorSessionRef.current !== session) return false
+      if (error || !svg) {
+        if (commit) toast.error(`Формула не распознана: ${error ?? 'пустой LaTeX'}`)
+        return false
+      }
 
       const fileId = fileIdForLatex(latex, color, fontSize) as FileId
       api.addFiles([
@@ -524,6 +571,11 @@ export function ExcalidrawCanvas({
 
       const elements = api.getSceneElementsIncludingDeleted()
       const existing = elementId ? elements.find((e) => e.id === elementId) : null
+      // Исходный текст конвертации text→formula (convertTextToFormula) убираем
+      // тумбстоуном только в момент коммита — до этого он остаётся на доске:
+      // нажатие кнопки не должно молча стирать текст раньше, чем есть формула,
+      // на которую его заменили (Esc/гейт looksLikeMath оставляли бы дыру).
+      const sourceTextId = commit ? mathEditor?.sourceTextId : null
 
       if (existing) {
         // isNew === false — правится формула, уже стоявшая на доске: пользователь
@@ -536,25 +588,27 @@ export function ExcalidrawCanvas({
         const nextWidth = preserveWidth ? existing.width : width
         const nextHeight = preserveWidth ? +(nextWidth * (height / width)).toFixed(2) : height
         api.updateScene({
-          elements: elements.map((e) =>
+          elements: elements.map((e) => {
             // Формула всегда image-элемент; type-guard нужен, чтобы TS увидел
             // fileId — он есть только у ExcalidrawImageElement, не у union.
-            e.id === elementId && e.type === 'image'
-              ? newElementWith(e, {
-                  fileId,
-                  width: nextWidth,
-                  height: nextHeight,
-                  customData: { ...e.customData, ...formulaCustomData(latex), color },
-                })
-              : e
-          ),
+            if (e.id === elementId && e.type === 'image') {
+              return newElementWith(e, {
+                fileId,
+                width: nextWidth,
+                height: nextHeight,
+                customData: { ...e.customData, ...formulaCustomData(latex), color },
+              })
+            }
+            if (sourceTextId && e.id === sourceTextId) return newElementWith(e, { isDeleted: true })
+            return e
+          }),
           captureUpdate: commit ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
         })
-        return
+        return true
       }
 
       const place = mathEditor?.place
-      if (!place) return
+      if (!place) return false
       const [el] = convertToExcalidrawElements([
         {
           type: 'image',
@@ -570,13 +624,19 @@ export function ExcalidrawCanvas({
         },
       ])
       api.updateScene({
-        elements: [...elements, el],
+        elements: [
+          ...elements.map((e) =>
+            sourceTextId && e.id === sourceTextId ? newElementWith(e, { isDeleted: true }) : e
+          ),
+          el,
+        ],
         // Черновой кадр не должен попасть в историю — иначе Esc после него
         // не сможет откатить создание одним newElementWith(isDeleted:true) без
         // лишнего шага отмены, и Ctrl+Z на готовую формулу бил бы дважды.
         captureUpdate: commit ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
       })
       setMathEditor((s) => (s ? { ...s, elementId: el.id } : s))
+      return true
     },
     [mathEditor]
   )
@@ -591,10 +651,12 @@ export function ExcalidrawCanvas({
       { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 },
       api.getAppState()
     )
+    editorSessionRef.current++
     setMathEditor({
       elementId: null,
       latex: '',
       isNew: true,
+      sourceTextId: null,
       anchor: { left: rect.width / 2 - 180, top: rect.height - 180 },
       place: { x: scene.x, y: scene.y, angle: 0, groupIds: [], frameId: null },
     })
@@ -614,10 +676,16 @@ export function ExcalidrawCanvas({
     const latex = looksLikeMath(src.text) ? convertAsciiMathToLatex(src.text) : ''
 
     const rect = wrapRef.current?.getBoundingClientRect()
+    editorSessionRef.current++
     setMathEditor({
       elementId: null,
       latex,
       isNew: true,
+      // Исходный текст тумбстоунится в applyFormula в момент коммита — до
+      // этого он остаётся на доске (иначе кнопка молча стирает текст раньше,
+      // чем появилась формула, которой его заменяют: гейт looksLikeMath или
+      // Esc без единого набранного символа оставили бы дыру).
+      sourceTextId: src.id,
       anchor: { left: (rect?.width ?? 0) / 2 - 180, top: (rect?.height ?? 0) - 180 },
       // формула встаёт ровно на место текста и остаётся в его группе и фрейме
       place: {
@@ -627,13 +695,6 @@ export function ExcalidrawCanvas({
         groupIds: [...src.groupIds],
         frameId: src.frameId,
       },
-    })
-    // старый текст убираем тумбстоуном, иначе он вернётся к пирам через reconcile
-    api.updateScene({
-      elements: api
-        .getSceneElementsIncludingDeleted()
-        .map((e) => (e.id === src.id ? newElementWith(e, { isDeleted: true }) : e)),
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     })
   }, [selection])
 
@@ -727,10 +788,12 @@ export function ExcalidrawCanvas({
     e.preventDefault()
     e.stopPropagation()
     const rect = wrapRef.current?.getBoundingClientRect()
+    editorSessionRef.current++
     setMathEditor({
       elementId: el.id,
       latex: formula.latex,
       isNew: false,
+      sourceTextId: null,
       anchor: { left: e.clientX - (rect?.left ?? 0) - 160, top: e.clientY - (rect?.top ?? 0) + 24 },
       // формула уже стоит на доске; place не используется, но держим тип целым
       place: { x: el.x, y: el.y, angle: el.angle, groupIds: [...el.groupIds], frameId: el.frameId },
@@ -917,10 +980,12 @@ export function ExcalidrawCanvas({
             const formula = readFormula(el)
             if (!el || !formula) return
             const rect = wrapRef.current?.getBoundingClientRect()
+            editorSessionRef.current++
             setMathEditor({
               elementId: el.id,
               latex: formula.latex,
               isNew: false,
+              sourceTextId: null,
               anchor: { left: (rect?.width ?? 0) / 2 - 180, top: (rect?.height ?? 0) - 180 },
               place: { x: el.x, y: el.y, angle: el.angle, groupIds: [...el.groupIds], frameId: el.frameId },
             })
@@ -941,10 +1006,22 @@ export function ExcalidrawCanvas({
             anchor={mathEditor.anchor}
             onDraft={(latex) => void applyFormula(mathEditor.elementId, latex, false)}
             onCommit={(latex) => {
-              void applyFormula(mathEditor.elementId, latex, true)
-              setMathEditor(null)
+              // Бампаем сеанс СРАЗУ: любой ещё летящий черновой applyFormula
+              // (debounce) должен опознать себя устаревшим, а не наложиться
+              // на этот коммит второй формулой.
+              editorSessionRef.current++
+              void (async () => {
+                const ok = await applyFormula(mathEditor.elementId, latex, true)
+                // Провал (битый LaTeX, срыв рендера) не закрывает редактор —
+                // иначе набранное молча терялось бы без единого сообщения.
+                // toast с текстом ошибки уже показан внутри applyFormula.
+                if (ok) setMathEditor(null)
+              })()
             }}
             onCancel={() => {
+              // См. onCommit — тот же принцип: закрытие сеанса инвалидирует
+              // ещё не доехавший черновик до того, как мы решаем, что удалять.
+              editorSessionRef.current++
               if (mathEditor.isNew) {
                 // Формула этого сеанса набора: черновой кадр (debounce) уже мог
                 // создать элемент на доске до Esc. Убираем тумбстоуном мимо

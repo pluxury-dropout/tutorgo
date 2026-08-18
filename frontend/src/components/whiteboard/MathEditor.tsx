@@ -14,7 +14,7 @@ interface Props {
   initialLatex: string
   /** промежуточный кадр — уезжает пирам, в историю не пишется */
   onDraft: (latex: string) => void
-  /** финал: Enter или кнопка «Готово» */
+  /** финал: Enter */
   onCommit: (latex: string) => void
   onCancel: () => void
   /** экранные координаты левого-нижнего угла формулы */
@@ -83,6 +83,14 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
       })
 
       mf.addEventListener('keydown', (e) => {
+        // Сток ввода MathLive всплывает до document с ретаргетом на
+        // <math-field>; Excalidraw слушает document keydown безусловно и не
+        // распознаёт contenteditable-сток как текстовый ввод (isWritableElement
+        // не знает про него). Без stopPropagation любая буква — это шорткат
+        // инструмента, Backspace/Delete удаляет выделенную формулу, Enter
+        // включает обрезку картинки. stopPropagation (не Immediate) — наш же
+        // обработчик Enter/Esc ниже должен отработать как обычно.
+        e.stopPropagation()
         if (e.key === 'Enter') {
           e.preventDefault()
           cbRef.current.onCommit(mf.value)

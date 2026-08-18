@@ -51,7 +51,15 @@ mathjax.asyncLoad = (name: string) => {
 }
 
 const doc = mathjax.document('', {
-  InputJax: new TeX({ packages: PACKAGES }),
+  InputJax: new TeX({
+    packages: PACKAGES,
+    // convertAsciiMathToLatex (MathLive) сама вставляет \placeholder{} для
+    // недостающих аргументов (sqrt → \sqrt{\placeholder{}}). MathJax не
+    // считает это ошибкой макроса, а рисует буквально «\placeholder»
+    // красным текстом — макрос делает его прозрачным: голая подстановка
+    // аргумента, ничего не выводящая при пустом содержимом.
+    macros: { placeholder: ['{#1}', 1, ''] },
+  }),
   // local — глифы уезжают в <defs> ЭТОГО же SVG. global вынес бы их в общий
   // documentwide defs, и картинка перестала бы быть самодостаточной.
   OutputJax: new SVG({ fontCache: 'local' }),

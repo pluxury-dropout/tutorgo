@@ -34,6 +34,20 @@ test('кириллица рендерится глифами, а не систе
   assert.ok(!r.svg.includes('<text'), 'SVG перестал быть самодостаточным')
 })
 
+test('\\placeholder{} от convertAsciiMathToLatex не рисуется красным текстом', async () => {
+  // MathLive сама вставляет \placeholder{} для недостающих аргументов
+  // (sqrt → \sqrt{\placeholder{}}). Пакет noundefined не считает
+  // неизвестный макрос ошибкой ввода (error остаётся undefined), а рисует
+  // его имя буквами (глифами, не <text>) с fill="red"/stroke="red" — без
+  // макроса в конфиге TeX «p-l-a-c-e-h-o-l-d-e-r» уехало бы на доску красным.
+  const r = await latexToSvg('\\sqrt{\\placeholder{}}')
+  assert.equal(r.error, undefined)
+  assert.ok(!r.svg.includes('fill="red"'), 'placeholder уехал в SVG красным (noundefined fallback)')
+  // data-latex — атрибут-эхо исходного LaTeX для accessibility, не рендер;
+  // сам макрос ничего не рисует — узел под sqrt пуст.
+  assert.ok(r.svg.includes('data-latex="{}"'), 'аргумент placeholder не подставился пустым узлом')
+})
+
 test('битый LaTeX не кидает, а возвращает error', async () => {
   const r = await latexToSvg('\\frac{1}{')
   assert.equal(r.error, 'Missing close brace')
