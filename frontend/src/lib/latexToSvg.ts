@@ -8,6 +8,7 @@ import { TeX } from '@mathjax/src/js/input/tex.js'
 import { SVG } from '@mathjax/src/js/output/svg.js'
 import { liteAdaptor } from '@mathjax/src/js/adaptors/liteAdaptor.js'
 import { RegisterHTMLHandler } from '@mathjax/src/js/handlers/html.js'
+import type { LiteElement } from '@mathjax/src/js/adaptors/lite/Element.js'
 
 import '@mathjax/src/js/input/tex/base/BaseConfiguration.js'
 import '@mathjax/src/js/input/tex/ams/AmsConfiguration.js'
@@ -69,8 +70,17 @@ export async function latexToSvg(
   latex: string,
   { fontSize = 20, color = '#1e1e1e' }: { fontSize?: number; color?: string } = {}
 ): Promise<LatexSvg> {
+  // doc.convert() типизирован как MmlNode | N (см. MathDocument.d.ts): MmlNode —
+  // промежуточное дерево до типсеттинга, N — итоговый узел адаптера. Мы зовём
+  // convert с дефолтным `end: STATE.LAST` (полный пайплайн, включая output jax),
+  // поэтому в реализации (MathDocument.js) всегда возвращается typesetRoot, то
+  // есть N. Для нашего адаптера N = LiteElement — это и есть тип, который ждёт
+  // adaptor.innerHTML(node: N). Каст точный, а не `as never`/`as any`: пакет сам
+  // типизирует mathjax.document() как MathDocument<any, any, any>, так что TS
+  // тут промолчал бы и без каста — LiteElement делает явным то, что реально
+  // проверено рантаймом.
   const raw: string = await mathjax.handleRetriesFor(() =>
-    adaptor.innerHTML(doc.convert(latex, { display: true }) as never)
+    adaptor.innerHTML(doc.convert(latex, { display: true }) as LiteElement)
   )
 
   // Размер берём из viewBox (единица = 1/1000 em) — это единственный надёжный
