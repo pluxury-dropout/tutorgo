@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: '--font-sans',
@@ -42,6 +43,7 @@ export default function RootLayout({
     <html lang="ru" className={`${plusJakartaSans.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full bg-background text-foreground">
         <Providers>{children}</Providers>
+        <SpeedInsights />
       </body>
     </html>
   )
