@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import 'mathlive/fonts.css'
 
 // Живой набор: ученик видит формулу по мере ввода. Не троттл, а debounce с
@@ -23,6 +23,9 @@ interface Props {
 
 export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
+  // Высота открытой виртуальной клавиатуры (0 — закрыта). Она fixed по низу
+  // окна, а редактор по умолчанию стоит внизу доски — то есть ровно под ней.
+  const [kbdHeight, setKbdHeight] = useState(0)
   // Колбэки в ref: эффект монтирует поле один раз, пересоздавать его на каждый
   // ре-рендер родителя нельзя — потеряется каретка и фокус. Запись — в эффекте
   // без зависимостей (после каждого рендера), а не в теле рендера: react-hooks/refs
@@ -37,6 +40,7 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
     let timer: ReturnType<typeof setTimeout> | null = null
     let firstEditAt = 0
     let field: HTMLElement | null = null
+    let unwatchKbd: (() => void) | null = null
 
     void (async () => {
       // Статический импорт нельзя: при SSR condition "node" отдаёт сборку без
@@ -57,6 +61,30 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
       // Ни одного сетевого запроса: шрифты уже пришли из fonts.css, звуки не нужны.
       MathfieldElement.fontsDirectory = null
       MathfieldElement.soundsDirectory = null
+
+      // Клавиша «спрятать клавиатуру» есть только в раскладках compact/minimalist;
+      // в дефолтных (numeric/symbols/alphabetic/greek) её нет, а закрытие по потере
+      // фокуса MathLive делает только при policy != 'manual'. Оставался единственный
+      // выход — тумблер внутри поля, который сама же клавиатура и закрывает собой
+      // (она fixed внизу экрана, поле — тоже внизу). Переопределяем [action]: ⏎
+      // шлёт commit, событие которого мы не слушаем, то есть кнопка была мёртвой.
+      const kbd = window.mathVirtualKeyboard
+      kbd.setKeycap('[action]', {
+        class: 'action',
+        command: ['hideVirtualKeyboard'],
+        width: 1.5,
+        label: '<svg class=svg-glyph-lg><use xlink:href=#svg-keyboard-down /></svg>',
+      })
+
+      // Клавиатура открыта — редактор паркуется прямо над ней, иначе набирать
+      // пришлось бы вслепую.
+      const syncKbd = () => setKbdHeight(kbd.visible ? kbd.boundingRect.height : 0)
+      kbd.addEventListener('virtual-keyboard-toggle', syncKbd)
+      kbd.addEventListener('geometrychange', syncKbd)
+      unwatchKbd = () => {
+        kbd.removeEventListener('virtual-keyboard-toggle', syncKbd)
+        kbd.removeEventListener('geometrychange', syncKbd)
+      }
 
       const mf = new MathfieldElement()
       field = mf
@@ -109,6 +137,11 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
       disposed = true
       if (timer) clearTimeout(timer)
       field?.remove()
+      unwatchKbd?.()
+      // Клавиатура — глобальный синглтон на body: без этого она переживает
+      // редактор (и оставляет за собой padding-bottom у body), а закрыть её
+      // уже нечем — поля с тумблером на экране больше нет.
+      if ('mathVirtualKeyboard' in window) window.mathVirtualKeyboard.hide()
     }
   }, [initialLatex])
 
@@ -116,13 +149,12 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
     <div
       data-board-ui
       style={{
-        position: 'absolute',
-        left: anchor.left,
-        top: anchor.top,
-        zIndex: 6,
+        // z-index клавиатуры — 105, так что в припаркованном виде надо выше.
+        ...(kbdHeight
+          ? { position: 'fixed' as const, left: '50%', transform: 'translateX(-50%)', bottom: kbdHeight + 12, zIndex: 110 }
+          : { position: 'absolute' as const, left: anchor.left, top: anchor.top, zIndex: 6 }),
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
         padding: 6,
         borderRadius: 10,
         border: '1px solid var(--border)',
@@ -132,19 +164,9 @@ export function MathEditor({ initialLatex, onDraft, onCommit, onCancel, anchor }
       // Клики по редактору не должны уходить в холст и снимать выделение.
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {/* Кнопки клавиатуры тут нет: MathLive рисует свой тумблер внутри поля,
+          и он умеет не только показать её, но и спрятать. */}
       <div ref={hostRef} />
-      <button
-        type="button"
-        onClick={() => {
-          // window.mathVirtualKeyboard регистрируется модулем 'mathlive' как
-          // побочный эффект импорта — до его резолва в эффекте (await import)
-          // свойства ещё нет, клик бросил бы TypeError.
-          if ('mathVirtualKeyboard' in window) window.mathVirtualKeyboard.show()
-        }}
-        style={{ padding: '4px 8px', fontSize: 13, cursor: 'pointer' }}
-      >
-        Символы
-      </button>
     </div>
   )
 }
