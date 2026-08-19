@@ -55,6 +55,24 @@ const MAX_ASSET_BYTES = 50 * 1024 * 1024
 
 const formatMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 
+/**
+ * Ждёт, пока браузер раскодирует картинку.
+ *
+ * Excalidraw держит в imageCache Promise до onload и всё это время рисует
+ * элемент заглушкой (drawImagePlaceholder). Свой new Image() на тот же
+ * data-URL кладёт картинку в память браузера заранее, поэтому его собственный
+ * loadHTMLImageElement получает onload ближайшей задачей — и подмена fileId
+ * успевает в тот же кадр, без пустого мига.
+ *
+ * Ошибку глотаем: битую картинку разберёт сам Excalidraw (status: 'error').
+ */
+const preloadImage = (dataURL: string) =>
+  new Promise<void>((resolve) => {
+    const img = new Image()
+    img.onload = img.onerror = () => resolve()
+    img.src = dataURL
+  })
+
 // Камера (scroll+zoom) — своя у каждого и в БД не едет (эфемерка, как курсоры),
 // поэтому запоминаем её на устройстве: вернулся на страницу — вернулся туда, где
 // был, а не в начало координат. Ключ на страницу доски.
@@ -560,14 +578,21 @@ export function ExcalidrawCanvas({
       }
 
       const fileId = fileIdForLatex(latex, color, fontSize) as FileId
-      api.addFiles([
-        {
-          id: fileId,
-          dataURL: svgToDataUrl(svg) as DataURL,
-          mimeType: 'image/svg+xml',
-          created: Date.now(),
-        },
-      ])
+      const file: BinaryFileData = {
+        id: fileId,
+        dataURL: svgToDataUrl(svg) as DataURL,
+        mimeType: 'image/svg+xml',
+        created: Date.now(),
+      }
+      // Порядок обязателен: addFiles греет imageCache только для fileId, на
+      // которые УЖЕ ссылается элемент сцены (addNewImagesToImageCache читает
+      // scene.getNonDeletedElements()). Файл, добавленный до подмены fileId,
+      // мимо кэша проходит незамеченным, и элемент висит заглушкой, пока не
+      // сработает throttle(500 мс) на scheduleImageRefresh — вот это и был
+      // мигающий провал на каждом кадре набора. Поэтому ниже сначала
+      // updateScene, потом addFiles — как в useMathFiles.ts.
+      await preloadImage(file.dataURL)
+      if (editorSessionRef.current !== session) return false
 
       const elements = api.getSceneElementsIncludingDeleted()
       const existing = elementId ? elements.find((e) => e.id === elementId) : null
@@ -604,6 +629,7 @@ export function ExcalidrawCanvas({
           }),
           captureUpdate: commit ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
         })
+        api.addFiles([file])
         return true
       }
 
@@ -635,6 +661,7 @@ export function ExcalidrawCanvas({
         // лишнего шага отмены, и Ctrl+Z на готовую формулу бил бы дважды.
         captureUpdate: commit ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER,
       })
+      api.addFiles([file])
       setMathEditor((s) => (s ? { ...s, elementId: el.id } : s))
       return true
     },
