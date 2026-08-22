@@ -61,3 +61,16 @@ func TestPresenceRemoveTargetClearsFollowers(t *testing.T) {
 	_, stillFollowing := r.following["B"]
 	assert.False(t, stillFollowing)
 }
+
+func TestPresenceFollowerCounts(t *testing.T) {
+	r := newPresenceRegistry()
+	r.follow("B", "A")
+	r.follow("C", "A")
+	assert.Equal(t, map[string]int{"A": 2}, r.followerCounts())
+
+	r.remove("B") // ушёл подписчик
+	assert.Equal(t, map[string]int{"A": 1}, r.followerCounts())
+
+	r.remove("A") // ушла цель — счётчиков не остаётся
+	assert.Empty(t, r.followerCounts())
+}

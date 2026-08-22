@@ -84,7 +84,9 @@ export function useExcalidrawSync(
   identity?: BoardIdentity,
   onMedia?: (p: MediaPayload) => void,
   onFile?: (fileId: string) => void,
-  onImportFailed?: (fileIds: string[]) => void
+  onImportFailed?: (fileIds: string[]) => void,
+  /** uid человека → сколько пиров за ним сейчас следит (только ненулевые). */
+  onFollowers?: (byUid: Record<string, number>) => void
 ): ExcalidrawSyncResult {
   const displayName = identity?.name
   const myUid = identity?.uid
@@ -96,10 +98,12 @@ export function useExcalidrawSync(
   }, [onMedia])
   const onFileRef = useRef(onFile)
   const onImportFailedRef = useRef(onImportFailed)
+  const onFollowersRef = useRef(onFollowers)
   useEffect(() => {
     onFileRef.current = onFile
     onImportFailedRef.current = onImportFailed
-  }, [onFile, onImportFailed])
+    onFollowersRef.current = onFollowers
+  }, [onFile, onImportFailed, onFollowers])
   const [status, setStatus] = useState<ConnStatus>('connecting')
   const [saveFailed, setSaveFailed] = useState(false)
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
@@ -173,6 +177,22 @@ export function useExcalidrawSync(
     )
     api.updateScene({ collaborators: merged as Map<SocketId, Collaborator> })
   }, [displayName, myUid])
+
+  // Счётчики слежки: сервер считает их по peerId, а панель участников знает
+  // людей по uid — перевод возможен только здесь, по карте коллабораторов.
+  // Свой счётчик приходит отдельным полем: собственный peerId клиенту не
+  // сообщается (SELF_ID — локальная выдумка, см. выше).
+  const followerCountsRef = useRef<Record<string, number>>({})
+  const myFollowersRef = useRef(0)
+  const emitFollowers = useCallback(() => {
+    const byUid: Record<string, number> = {}
+    for (const [peerId, n] of Object.entries(followerCountsRef.current)) {
+      const uid = collaboratorsRef.current.get(peerId as SocketId)?.id
+      if (uid) byUid[uid] = n
+    }
+    if (myUid && myFollowersRef.current) byUid[myUid] = myFollowersRef.current
+    onFollowersRef.current?.(byUid)
+  }, [myUid])
 
   // Догружаем недостающие файлы: S3 URL → blob → dataURL → addFiles.
   // Ошибка одного файла не валит остальные — элемент покажет плейсхолдер.
@@ -419,13 +439,30 @@ export function useExcalidrawSync(
         return
       }
 
+      // Кто за кем следит. Хаб шлёт это на каждое follow/unfollow/уход пира.
+      if (msg.type === 'followers') {
+        const p = msg.payload as { counts?: Record<string, number>; me?: number }
+        followerCountsRef.current = p?.counts ?? {}
+        myFollowersRef.current = p?.me ?? 0
+        emitFollowers()
+        return
+      }
+
       if (msg.type === 'cursor' && msg.peerId) {
+        // Пир, подключившийся при уже активной слежке, приезжает в счётчиках
+        // раньше, чем в карте коллабораторов (та наполняется курсорами). Узнав
+        // его uid, пересчитываем: следующего follow-события можно ждать до
+        // конца урока, а глаз должен появиться сейчас.
+        const wasUnknown = !collaboratorsRef.current.get(msg.peerId as SocketId)?.id
         collaboratorsRef.current.set(msg.peerId as SocketId, {
           pointer: { x: msg.x ?? 0, y: msg.y ?? 0, tool: 'pointer' },
           username: msg.name || 'Гость',
           id: msg.uid,
         })
         collaboratorsDirtyRef.current = true
+        if (wasUnknown && msg.uid && followerCountsRef.current[msg.peerId]) {
+          emitFollowers()
+        }
         return
       }
 
@@ -479,7 +516,15 @@ export function useExcalidrawSync(
     }
 
     ws.onerror = () => ws.close()
-  }, [pageId, token, applySnapshot, applyRemote, hydrateFiles, pushCollaborators])
+  }, [
+    pageId,
+    token,
+    emitFollowers,
+    applySnapshot,
+    applyRemote,
+    hydrateFiles,
+    pushCollaborators,
+  ])
 
   // Единый кадровый цикл: раз в кадр применяем накопленные курсоры и,
   // если следим за кем-то, подводим камеру к цели интерполяцией.

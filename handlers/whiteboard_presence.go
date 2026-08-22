@@ -72,6 +72,16 @@ func (r *presenceRegistry) remove(peerID string) {
 	}
 }
 
+// followerCounts — сколько пиров следит за каждой целью (нулевые не кладём).
+// Клиенту нужно, чтобы нарисовать «за этим человеком смотрят N».
+func (r *presenceRegistry) followerCounts() map[string]int {
+	out := map[string]int{}
+	for _, t := range r.following {
+		out[t]++
+	}
+	return out
+}
+
 func (r *presenceRegistry) followersOf(peerID string) []string {
 	var out []string
 	for f, t := range r.following {

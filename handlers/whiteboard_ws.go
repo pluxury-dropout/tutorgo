@@ -185,16 +185,39 @@ func (h *wbHub) run() {
 		return nil
 	}
 
+	// broadcastFollowers рассылает «за кем сколько следят». Каждому свой кадр:
+	// собственный peerID клиент не знает (сервер его не сообщает), поэтому его
+	// счётчик кладём отдельным полем me. Эфемерка, как курсоры: потерялось —
+	// перерисуется на следующем follow.
+	broadcastFollowers := func() {
+		counts := reg.followerCounts()
+		for c := range h.clients {
+			payload, _ := json.Marshal(struct {
+				Counts map[string]int `json:"counts"`
+				Me     int            `json:"me"`
+			}{counts, counts[c.peerID]})
+			data, _ := json.Marshal(WbMsg{Type: "followers", Payload: payload})
+			send(data, c)
+		}
+	}
+
 	for {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
 			// Сидинг делает ServeWS: он читает снапшот из БД до апгрейда и
 			// кладёт его в client.send сам. Хабу состояние знать не нужно.
+			// Новичку — текущая картина слежки. Пока никто ни за кем не
+			// следит, рассказывать нечего: не шлём пустой кадр на каждый
+			// коннект (у клиента и так дефолт «счётчиков нет»).
+			if len(reg.following) > 0 {
+				broadcastFollowers()
+			}
 
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
+				hadFollow := len(reg.following) > 0
 				reg.remove(client.peerID)
 				close(client.send)
 				// Уведомляем оставшихся, чтобы они убрали этого пира из списка
@@ -206,6 +229,12 @@ func (h *wbHub) run() {
 					case c.send <- leave:
 					default:
 					}
+				}
+				// Ушедший мог быть и подписчиком, и целью — счётчики у
+				// оставшихся протухли. Проверяем ДО remove: после него следов
+				// его связей уже нет.
+				if hadFollow {
+					broadcastFollowers()
 				}
 			}
 			if len(h.clients) == 0 {
@@ -281,6 +310,13 @@ func (h *wbHub) run() {
 				} else if snap := reg.follow(msg.sender.peerID, f.Target); snap != nil {
 					send(snap, msg.sender)
 				}
+				broadcastFollowers()
+				continue
+
+			case "followers":
+				// Тип серверный: счётчики слежки хаб считает сам. Пришедший от
+				// клиента кадр — только попытка подрисовать соседям чужие
+				// цифры, поэтому в default-ретрансляцию его не пускаем.
 				continue
 
 			case "update":

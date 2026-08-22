@@ -65,6 +65,9 @@ function CallRoomInner({ courseId, role, inviteUrl, trial, guestName }: CallRoom
   const [homeworkOpen, setHomeworkOpen] = useState(false)
   // api доски нужен панели участников (follow за коллаборатором).
   const [boardApi, setBoardApi] = useState<ExcalidrawImperativeAPI | null>(null)
+  // uid → сколько людей за ним следит. Считает сервер доски, рисует панель
+  // участников: доска и панель — соседи, общего родителя кроме этого нет.
+  const [followers, setFollowers] = useState<Record<string, number>>({})
   const { messages, send, unread } = useCallChat({ chatOpen })
 
   // Enable camera+mic once per call. Must live here (not in CallStage): CallStage
@@ -296,12 +299,17 @@ function CallRoomInner({ courseId, role, inviteUrl, trial, guestName }: CallRoom
               isGuest={role === 'guest'}
               identity={identity}
               onApi={setBoardApi}
+              onFollowers={setFollowers}
               hideUserList
             />
           )}
 
           {mode === 'board' && (
-            <CallParticipants excalidrawApi={boardApi} identity={identity} />
+            <CallParticipants
+              excalidrawApi={boardApi}
+              identity={identity}
+              followers={followers}
+            />
           )}
         </div>
 

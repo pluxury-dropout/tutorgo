@@ -70,3 +70,13 @@
 .excalidraw .popover {
   z-index: 10000;
 }
+
+/* Плашка «Following <имя>» внизу холста. Кто кого ведёт, показывает панель
+   участников (глаз со счётчиком на чипе), а выйти из follow можно повторным
+   кликом по участнику или любым кликом/паном по холсту (Excalidraw гасит
+   userToFollow в maybeUnfollowRemoteUser) — кнопка в плашке дублировала это.
+   Рамку вокруг вьюпорта (.follow-mode) оставляем: она и есть сигнал
+   «камерой сейчас управляет не ты». */
+.excalidraw .follow-mode__badge {
+  display: none !important;
+}

@@ -107,6 +107,8 @@ interface Props {
   onApi?: (api: ExcalidrawImperativeAPI) => void
   /** Скрыть встроенный список участников: его роль берёт на себя панель звонка. */
   hideUserList?: boolean
+  /** uid → сколько людей за ним следит; рисует счётчик панель участников. */
+  onFollowers?: (byUid: Record<string, number>) => void
 }
 
 export function ExcalidrawCanvas({
@@ -118,6 +120,7 @@ export function ExcalidrawCanvas({
   identity,
   onApi,
   hideUserList = false,
+  onFollowers,
 }: Props) {
   // Плееру нужен sendMedia, а синхронизации — receive плеера: хуки нужны друг
   // другу. Цикл разрываем ref'ом — плеер шлёт через актуальный sendMedia.
@@ -174,7 +177,7 @@ export function ExcalidrawCanvas({
     syncFollowTarget,
     registerFile,
     sendMedia,
-  } = useExcalidrawSync(page, token, identity, onMedia, onPdfFile, onPdfFailed)
+  } = useExcalidrawSync(page, token, identity, onMedia, onPdfFile, onPdfFailed, onFollowers)
   useEffect(() => {
     sendMediaRef.current = sendMedia
   }, [sendMedia])

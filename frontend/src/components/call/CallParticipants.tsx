@@ -12,7 +12,7 @@ import {
 import { Track } from 'livekit-client'
 import type { ExcalidrawImperativeAPI, SocketId } from '@excalidraw/excalidraw/types'
 import { uidOf, initialsOf, colorOf, peerNames, shallowEqual } from './callParticipants'
-import { MicOff } from 'lucide-react'
+import { Eye, MicOff } from 'lucide-react'
 import type { BoardIdentity } from '@/lib/hooks/useBoardDisplayName'
 
 const SPEAK_RING = '0 0 0 3px rgba(59,165,93,0.95)'
@@ -26,6 +26,8 @@ interface CallParticipantsProps {
   excalidrawApi: ExcalidrawImperativeAPI | null
   /** Своя личность: имя себя LiveKit не знает (у него только роль «Репетитор»). */
   identity?: BoardIdentity
+  /** uid → сколько людей сейчас следит за этим человеком (из хаба доски). */
+  followers?: Record<string, number>
 }
 
 /**
@@ -33,7 +35,11 @@ interface CallParticipantsProps {
  * Заменяет и круглые PIP-камеры, и встроенный UserList Excalidraw:
  * клик по участнику включает/выключает follow-режим за ним.
  */
-export function CallParticipants({ excalidrawApi, identity }: CallParticipantsProps) {
+export function CallParticipants({
+  excalidrawApi,
+  identity,
+  followers = {},
+}: CallParticipantsProps) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }], {
     onlySubscribed: false,
   })
@@ -119,6 +125,7 @@ export function CallParticipants({ excalidrawApi, identity }: CallParticipantsPr
             name={nameOf(p.identity, p.name || p.identity, p.isLocal)}
             following={followingUid !== null && followingUid === uidOf(p.identity)}
             ledByPeer={followingUid !== null}
+            watchers={followers[uidOf(p.identity) ?? ''] ?? 0}
             onToggleFollow={toggleFollow}
           />
         )
@@ -134,10 +141,41 @@ interface ParticipantRowProps {
   following: boolean
   /** Follow включён вообще (за кем угодно) — метка на своём чипе. */
   ledByPeer: boolean
+  /** Сколько людей смотрит его глазами прямо сейчас. */
+  watchers: number
   onToggleFollow: (identity: string, name: string) => void
 }
 
-function ParticipantRow({ trackRef, name, following, ledByPeer, onToggleFollow }: ParticipantRowProps) {
+/** Глаз со счётчиком: «за этим участником сейчас следят N человек». */
+function Watchers({ count, light }: { count: number; light?: boolean }) {
+  if (count === 0) return null
+  return (
+    <span
+      title={`Следят: ${count}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 3,
+        flex: 'none',
+        fontSize: 12,
+        fontWeight: 600,
+        color: light ? '#F1F1F0' : FOLLOW,
+      }}
+    >
+      <Eye size={14} strokeWidth={1.9} />
+      {count}
+    </span>
+  )
+}
+
+function ParticipantRow({
+  trackRef,
+  name,
+  following,
+  ledByPeer,
+  watchers,
+  onToggleFollow,
+}: ParticipantRowProps) {
   const participant = trackRef.participant
   const isLocal = participant.isLocal
   const speaking = useIsSpeaking(participant)
@@ -204,6 +242,7 @@ function ParticipantRow({ trackRef, name, following, ledByPeer, onToggleFollow }
             <MicOff size={12} color="#E9898C" strokeWidth={1.8} style={{ flex: 'none' }} />
           )}
           <span style={{ color: '#F1F1F0', fontSize: 12.5, fontWeight: 500 }}>{name}</span>
+          <Watchers count={watchers} light />
         </div>
       </div>
     )
@@ -258,6 +297,7 @@ function ParticipantRow({ trackRef, name, following, ledByPeer, onToggleFollow }
       >
         {name}
       </span>
+      <Watchers count={watchers} />
       {isMuted && (
         <MicOff
           size={15}
