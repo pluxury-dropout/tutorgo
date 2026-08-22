@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 	"tutorgo/handlers"
@@ -39,7 +40,78 @@ func newCallRouterWithStudentSvc(svc *mockLessonService, studentSvc *mockStudent
 	student := r.Group("/")
 	student.Use(withStudentID(testStudentID))
 	student.POST("/student/lessons/:id/room-token", h.GetStudentToken)
+	auth.POST("/calls/quick", h.StartQuickRoom)
+	r.GET("/public/quick/:id/guest-token", h.GetQuickGuestToken)
 	return r
+}
+
+// startQuickRoom поднимает пробную комнату и отдаёт её id (комнаты живут в памяти
+// хендлера, поэтому гостевой токен без этого шага получить не у кого).
+func startQuickRoom(t *testing.T, r *gin.Engine) string {
+	t.Helper()
+	w := makeRequest(t, r, http.MethodPost, "/calls/quick", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("start quick room: got %d", w.Code)
+	}
+	var body map[string]string
+	decodeJSON(t, w, &body)
+	return body["room_id"]
+}
+
+func quickGuestName(t *testing.T, r *gin.Engine, roomID, query string) string {
+	t.Helper()
+	w := makeRequest(t, r, http.MethodGet, "/public/quick/"+roomID+"/guest-token"+query, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("guest token: got %d", w.Code)
+	}
+	var body map[string]string
+	decodeJSON(t, w, &body)
+	verifier, err := lkauth.ParseAPIToken(body["token"])
+	if err != nil {
+		t.Fatalf("failed to parse token: %v", err)
+	}
+	_, grants, err := verifier.Verify("secret")
+	if err != nil {
+		t.Fatalf("failed to verify token: %v", err)
+	}
+	return grants.Name
+}
+
+// Без canUpdateOwnMetadata LiveKit отклоняет setMetadata, которым препод
+// анонсирует открытую доску, — гость, зашедший позже, её не увидит.
+func TestQuickRoomToken_AllowsMetadataUpdate(t *testing.T) {
+	tutorSvc := new(mockTutorService)
+	tutorSvc.On("GetByID", mock.Anything, testTutorID).Return(models.Tutor{ID: testTutorID}, nil)
+	r := newCallRouterWithStudentSvc(new(mockLessonService), new(mockStudentService), tutorSvc)
+
+	w := makeRequest(t, r, http.MethodPost, "/calls/quick", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var body map[string]string
+	decodeJSON(t, w, &body)
+
+	verifier, err := lkauth.ParseAPIToken(body["token"])
+	if err != nil {
+		t.Fatalf("failed to parse token: %v", err)
+	}
+	_, grants, err := verifier.Verify("secret")
+	if err != nil {
+		t.Fatalf("failed to verify token: %v", err)
+	}
+	if assert.NotNil(t, grants.Video.CanUpdateOwnMetadata) {
+		assert.True(t, *grants.Video.CanUpdateOwnMetadata)
+	}
+}
+
+func TestQuickGuestToken_CarriesTypedName(t *testing.T) {
+	tutorSvc := new(mockTutorService)
+	tutorSvc.On("GetByID", mock.Anything, testTutorID).Return(models.Tutor{ID: testTutorID}, nil)
+	r := newCallRouterWithStudentSvc(new(mockLessonService), new(mockStudentService), tutorSvc)
+	roomID := startQuickRoom(t, r)
+
+	assert.Equal(t, "Айгерим", quickGuestName(t, r, roomID, "?name=%D0%90%D0%B9%D0%B3%D0%B5%D1%80%D0%B8%D0%BC"))
+	assert.Equal(t, "Ученик", quickGuestName(t, r, roomID, ""), "без имени остаётся роль")
+	assert.Equal(t, "Ученик", quickGuestName(t, r, roomID, "?name=%20%20"), "пробелы — не имя")
+	assert.Len(t, []rune(quickGuestName(t, r, roomID, "?name="+strings.Repeat("a", 100))), 40, "длину режем")
 }
 
 func TestStartRoom_Success(t *testing.T) {

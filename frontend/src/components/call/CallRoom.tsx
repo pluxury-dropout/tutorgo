@@ -49,12 +49,17 @@ interface CallRoomInnerProps {
   inviteUrl?: string
   /** Пробный урок: доска берётся из общей trial-доски препода, курса нет. */
   trial?: boolean
+  /** Имя, введённое гостем на входе: у пробного урока профиля нет. */
+  guestName?: string
 }
 
-function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps) {
+function CallRoomInner({ courseId, role, inviteUrl, trial, guestName }: CallRoomInnerProps) {
   const room = useRoomContext()
 
-  const identity = useBoardDisplayName(role)
+  const profile = useBoardDisplayName(role)
+  // У гостя пробного урока аккаунта нет — профиль пуст, и подпись на доске
+  // берём из формы входа. uid при этом остаётся undefined: сшивать нечего.
+  const identity = guestName ? { ...profile, name: guestName } : profile
   const [mode, setMode] = useState<Mode>('call')
   const [chatOpen, setChatOpen] = useState(false)
   const [homeworkOpen, setHomeworkOpen] = useState(false)
@@ -101,8 +106,9 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
         setGuestBoardToken(boardToken)
         setGuestBoard(data)
         setMode('board')
-      }).catch(() => {
+      }).catch((err) => {
         openedTokenRef.current = null // дать повторить на следующем событии
+        console.error('[CallRoom] joinByInvite (metadata) error:', err)
         toast.error('Не удалось открыть доску')
       })
       break
@@ -131,7 +137,10 @@ function CallRoomInner({ courseId, role, inviteUrl, trial }: CallRoomInnerProps)
             setGuestBoardToken(boardToken)
             setGuestBoard(data)
             setMode('board')
-          }).catch(() => toast.error('Не удалось открыть доску'))
+          }).catch((err) => {
+            console.error('[CallRoom] joinByInvite (data) error:', err)
+            toast.error('Не удалось открыть доску')
+          })
         }
       } else if (msg.type === 'board-close') {
         setMode('call')
@@ -345,6 +354,8 @@ export interface CallRoomProps {
   inviteUrl?: string
   /** Пробный урок: доска берётся из общей trial-доски препода, курса нет. */
   trial?: boolean
+  /** Имя, введённое гостем на входе: у пробного урока профиля нет. */
+  guestName?: string
   onDisconnected: (reason?: DisconnectReason) => void
 }
 
@@ -356,6 +367,7 @@ export function CallRoom({
   enableMedia = false,
   inviteUrl,
   trial,
+  guestName,
   onDisconnected,
 }: CallRoomProps) {
   return (
@@ -370,7 +382,7 @@ export function CallRoom({
       style={{ height: '100%' }}
     >
       <RoomAudioRenderer />
-      <CallRoomInner courseId={courseId} role={role} inviteUrl={inviteUrl} trial={trial} />
+      <CallRoomInner courseId={courseId} role={role} inviteUrl={inviteUrl} trial={trial} guestName={guestName} />
     </LiveKitRoom>
   )
 }

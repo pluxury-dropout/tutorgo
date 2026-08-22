@@ -31,7 +31,7 @@ export default function JoinRoomPage() {
       const { status } = await callsApi.getQuickRoomStatus(id)
       if (status === 'ended') { clearPolling(); setLoading(false); setStage('ended'); return true }
       if (status !== 'active') return false
-      const data = await callsApi.getQuickGuestToken(id)
+      const data = await callsApi.getQuickGuestToken(id, name.trim())
       clearPolling(); setLoading(false); setRoom(data); setStage('in-room')
       return true
     } catch { return false }
@@ -57,6 +57,7 @@ export default function JoinRoomPage() {
       <div style={{ height: '100dvh' }}>
         <CallRoom
           trial
+          guestName={name.trim()}
           serverUrl={room.server_url}
           token={room.token}
           role="guest"

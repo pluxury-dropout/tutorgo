@@ -66,6 +66,19 @@ func displayName(first, last, role string) string {
 	return role
 }
 
+// guestDisplayName — подпись анонимного гостя пробного урока. Ввод публичный и
+// показывается другим участникам, поэтому режем по длине; пустой → роль.
+func guestDisplayName(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return "Ученик"
+	}
+	if r := []rune(name); len(r) > 40 {
+		return string(r[:40])
+	}
+	return name
+}
+
 // tutorName — имя репетитора для токена; ошибку глотаем, звонок важнее подписи.
 func (h *CallHandler) tutorName(c *gin.Context, tutorID string) string {
 	if h.tutorService == nil {
@@ -266,12 +279,17 @@ func (h *CallHandler) StartQuickRoom(c *gin.Context) {
 
 	canPublish := true
 	canSubscribe := true
+	// Тем же грантом, что и на обычном уроке: открытие доски препод анонсирует
+	// через setMetadata, а LiveKit без canUpdateOwnMetadata его отклоняет —
+	// гость, зашедший после анонса, доски не увидит.
+	canUpdateMeta := true
 	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
 	grant := &lkauth.VideoGrant{
-		RoomJoin:     true,
-		Room:         roomName,
-		CanPublish:   &canPublish,
-		CanSubscribe: &canSubscribe,
+		RoomJoin:             true,
+		Room:                 roomName,
+		CanPublish:           &canPublish,
+		CanSubscribe:         &canSubscribe,
+		CanUpdateOwnMetadata: &canUpdateMeta,
 	}
 	at.SetVideoGrant(grant).
 		SetIdentity("tutor-" + tutorID).
@@ -375,6 +393,9 @@ func (h *CallHandler) GetQuickGuestToken(c *gin.Context) {
 	canPublish := true
 	canSubscribe := true
 	identity := fmt.Sprintf("guest-%d", time.Now().UnixMilli())
+	// Имя гость ввёл в форме входа — оно единственный источник подписи: аккаунта
+	// у него нет (на то и пробный урок), профиль читать неоткуда.
+	name := guestDisplayName(c.Query("name"))
 	at := lkauth.NewAccessToken(h.apiKey, h.apiSecret)
 	grant := &lkauth.VideoGrant{
 		RoomJoin:     true,
@@ -384,7 +405,7 @@ func (h *CallHandler) GetQuickGuestToken(c *gin.Context) {
 	}
 	at.SetVideoGrant(grant).
 		SetIdentity(identity).
-		SetName("Ученик").
+		SetName(name).
 		SetValidFor(3 * time.Hour)
 
 	token, err := at.ToJWT()

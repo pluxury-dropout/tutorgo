@@ -40,7 +40,9 @@ export const callsApi = {
     fetch(`/api/quick-status/${roomId}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<RoomStatusResponse> }),
 
-  getQuickGuestToken: (roomId: string) =>
-    fetch(`/api/quick-guest-token/${roomId}`)
+  // name — то, что гость ввёл в форме входа: аккаунта у него нет, и это
+  // единственный источник его подписи в звонке и на доске.
+  getQuickGuestToken: (roomId: string, name: string) =>
+    fetch(`/api/quick-guest-token/${roomId}?name=${encodeURIComponent(name)}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() as Promise<RoomTokenResponse> }),
 }
