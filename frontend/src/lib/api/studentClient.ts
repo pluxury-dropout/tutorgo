@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios'
-import { ApiError } from '@/types/api'
+import type { ApiError } from '@/types/api'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
@@ -79,16 +79,27 @@ studentHttp.interceptors.request.use(async (config) => {
   return config
 })
 
+/**
+ * 401 на student-эндпоинте: пробовать refresh или отдать ошибку как есть.
+ *
+ * - Нет токена — запрос анонимный (гость пробного урока по ссылке): 401 значит
+ *   «я не ученик», а не «сессия протухла». Рефрешить нечего, а forceStudentLogout
+ *   увёл бы гостя прямо с урока на /student/login.
+ * - /student/auth/* и /student/password отдают 401 по делу (неверный пароль) —
+ *   refresh-retry на них зациклился бы.
+ */
+export function shouldRefreshOn401(url: string | undefined, hasToken: boolean): boolean {
+  if (!hasToken) return false
+  return !(url?.startsWith('/student/auth/') || url === '/student/password')
+}
+
 studentHttp.interceptors.response.use(
   (r) => r,
   async (error: AxiosError<{ error: string } | Record<string, string>>) => {
-    // /student/password возвращает 401 при неверном старом пароле — это НЕ
-    // протухший токен, refresh-retry зациклился бы. Отдаём 401 форме как есть.
-    const skipRefresh =
-      error.config?.url?.startsWith('/student/auth/') ||
-      error.config?.url === '/student/password'
+    const hasToken =
+      typeof window !== 'undefined' && Boolean(localStorage.getItem('tg_student_token'))
 
-    if (error.response?.status === 401 && !skipRefresh && !isRefreshing) {
+    if (error.response?.status === 401 && shouldRefreshOn401(error.config?.url, hasToken) && !isRefreshing) {
       isRefreshing = true
       const p = refreshToken()
       refreshPromise = p.then(() => undefined)
