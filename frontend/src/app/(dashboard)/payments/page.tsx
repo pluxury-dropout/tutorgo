@@ -16,6 +16,7 @@ import {
 import { Pagination } from '@/components/common/Pagination'
 import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
+import { ErrorState } from '@/components/common/ErrorState'
 import { PaymentForm } from '@/components/payments/PaymentForm'
 import { Button } from '@/components/ui/button'
 import type { Payment } from '@/types/api'
@@ -40,7 +41,7 @@ function PaymentsPageInner() {
   }
 
   const { data: courses = [] }                                    = useCourses()
-  const { data: pagedPayments, isLoading }                        = usePaymentsPaged({ page, limit: LIMIT })
+  const { data: pagedPayments, isLoading, isError, refetch }      = usePaymentsPaged({ page, limit: LIMIT })
   const { data: monthlyIncome = 0, isLoading: incomeLoading }     = useMonthlyIncome()
   const { data: monthlyExpected = 0, isLoading: expectedLoading } = useMonthlyExpected()
 
@@ -145,6 +146,8 @@ function PaymentsPageInner() {
               <div key={i} className="h-4 rounded bg-muted animate-pulse" />
             ))}
           </div>
+        ) : isError ? (
+          <ErrorState what="платежи" onRetry={() => refetch()} />
         ) : payments.length === 0 ? (
           <EmptyState
             icon={Wallet}

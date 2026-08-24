@@ -13,6 +13,7 @@ import { StudentsList } from '@/components/students/StudentsList'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
+import { ErrorState } from '@/components/common/ErrorState'
 import { Pagination } from '@/components/common/Pagination'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { CourseFormValues } from '@/schemas/course'
@@ -61,7 +62,8 @@ function CoursesPageInner() {
     router.replace(`/courses?${p}`)
   }
 
-  const { data, isLoading } = useCoursesPaged({ page, limit: LIMIT, search })
+  const { data, isLoading, isError: coursesError, refetch: refetchCourses } =
+    useCoursesPaged({ page, limit: LIMIT, search })
   const courses    = data?.data ?? []
   const total      = data?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
@@ -91,7 +93,10 @@ function CoursesPageInner() {
   const [studentPage, setStudentPage] = useState(1)
   useEffect(() => { setStudentPage(1) }, [studentSearch])
 
-  const { data: studentsData, isLoading: studentsLoading } = useStudentsPaged({
+  const {
+    data: studentsData, isLoading: studentsLoading,
+    isError: studentsError, refetch: refetchStudents,
+  } = useStudentsPaged({
     page: studentPage, limit: LIMIT, search: studentSearch,
   })
   const studentList  = studentsData?.data ?? []
@@ -124,7 +129,10 @@ function CoursesPageInner() {
     toast.success('Ученик удалён')
   }
 
-  const { data: archivedData, isLoading: archivedLoading } = useArchivedCoursesPaged({
+  const {
+    data: archivedData, isLoading: archivedLoading,
+    isError: archivedError, refetch: refetchArchived,
+  } = useArchivedCoursesPaged({
     page: archivePage, limit: LIMIT, search,
   })
   const archivedCourses = archivedData?.data ?? []
@@ -248,6 +256,8 @@ function CoursesPageInner() {
               <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
             ))}
           </div>
+        ) : studentsError ? (
+          <ErrorState what="учеников" onRetry={() => refetchStudents()} />
         ) : studentList.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -278,6 +288,8 @@ function CoursesPageInner() {
               <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
             ))}
           </div>
+        ) : coursesError ? (
+          <ErrorState what="курсы" onRetry={() => refetchCourses()} />
         ) : courses.length === 0 ? (
           <EmptyState
             icon={BookOpen}
@@ -361,6 +373,8 @@ function CoursesPageInner() {
               <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
             ))}
           </div>
+        ) : archivedError ? (
+          <ErrorState what="архив" onRetry={() => refetchArchived()} />
         ) : archivedCourses.length === 0 ? (
           <EmptyState
             icon={BookOpen}

@@ -9,6 +9,7 @@ import type { CalendarLesson } from '@/types/api'
 import { SectionCard, SectionLink, SectionRow } from '@/components/common/SectionCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { EmptyState } from '@/components/common/EmptyState'
+import { ErrorState } from '@/components/common/ErrorState'
 import { GettingStarted } from '@/components/common/GettingStarted'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
@@ -89,13 +90,22 @@ export default function DashboardPage() {
   const { todayFrom, todayTo, weekStart, weekEnd, monthStart, monthEnd, dateLabel } = useMemo(buildDateRanges, [])
   const { data: studentCount   = 0,  isPending: studentsPending } = useStudentCount()
   const { data: courseCount    = 0,  isPending: coursesPending  } = useCourseCount()
-  const { data: todayLessons   = [], isPending: todayPending    } = useCalendar(todayFrom, todayTo)
+  const {
+    data: todayLessons = [], isPending: todayPending,
+    isError: todayError, refetch: refetchToday,
+  } = useCalendar(todayFrom, todayTo)
   const { data: weekLessons    = [] } = useCalendar(weekStart, weekEnd)
   const { data: monthLessons   = [], isPending: monthPending    } = useCalendar(monthStart, monthEnd)
-  const { data: recentPayments = [], isPending: paymentsPending } = useRecentPayments()
+  const {
+    data: recentPayments = [], isPending: paymentsPending,
+    isError: paymentsError, refetch: refetchPayments,
+  } = useRecentPayments()
   const { data: monthlyIncome   = 0 } = useMonthlyIncome()
   const { data: monthlyExpected = 0 } = useMonthlyExpected()
-  const { data: currentCycles  = [], isPending: cyclesPending   } = useCurrentCycles()
+  const {
+    data: currentCycles = [], isPending: cyclesPending,
+    isError: cyclesError, refetch: refetchCycles,
+  } = useCurrentCycles()
 
   // Дефолты выше (0 / []) неотличимы от «данных правда нет», поэтому до первого
   // ответа сервера пустые состояния и онбординг не рисуем — иначе они мелькают
@@ -191,6 +201,8 @@ export default function DashboardPage() {
         <SectionCard title="Уроки сегодня" action={<SectionLink href="/calendar">Расписание →</SectionLink>}>
           {loading
             ? <RowsSkeleton />
+            : todayError
+            ? <ErrorState size="sm" what="уроки" onRetry={() => refetchToday()} />
             : sortedLessons.length === 0
             ? <EmptyState
                 size="sm"
@@ -206,6 +218,8 @@ export default function DashboardPage() {
         <SectionCard title="Текущие циклы" action={<SectionLink href="/courses">Курсы →</SectionLink>}>
           {loading
             ? <RowsSkeleton />
+            : cyclesError
+            ? <ErrorState size="sm" what="циклы" onRetry={() => refetchCycles()} />
             : currentCycles.length === 0
             ? <EmptyState
                 size="sm"
@@ -247,6 +261,8 @@ export default function DashboardPage() {
         <SectionCard title="Последние платежи" action={<SectionLink href="/payments">Все →</SectionLink>}>
           {loading
             ? <RowsSkeleton />
+            : paymentsError
+            ? <ErrorState size="sm" what="платежи" onRetry={() => refetchPayments()} />
             : recentPayments.length === 0
             ? <EmptyState
                 size="sm"

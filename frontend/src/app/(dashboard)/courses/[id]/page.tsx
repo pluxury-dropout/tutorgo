@@ -35,6 +35,7 @@ import { PaymentForm } from '@/components/payments/PaymentForm'
 import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState } from '@/components/common/EmptyState'
+import { ErrorState } from '@/components/common/ErrorState'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
 import { SeriesUpdateInput } from '@/lib/api/lessons'
@@ -120,16 +121,25 @@ export default function CourseDetailPage() {
 
   const { data: course, isLoading } = useCourse(id)
   const { data: balance }           = useCourseBalance(id)
-  const { data: enrollments = [], isPending: enrollmentsPending } = useCourseEnrollments(id)
+  const {
+    data: enrollments = [], isPending: enrollmentsPending,
+    isError: enrollmentsError, refetch: refetchEnrollments,
+  } = useCourseEnrollments(id)
   const { data: students = [] }     = useStudents()
   const [period, setPeriod] = useState(currentWeekRange)
-  const { data: lessons = [], isLoading: lessonsLoading } = useLessonsByPeriod(
+  const {
+    data: lessons = [], isLoading: lessonsLoading,
+    isError: lessonsError, refetch: refetchLessons,
+  } = useLessonsByPeriod(
     id,
     period.from.toISOString(),
     period.to.toISOString(),
   )
   const lessonsTotal = lessons.length
-  const { data: payments = [], isPending: paymentsPending } = usePayments(id)
+  const {
+    data: payments = [], isPending: paymentsPending,
+    isError: paymentsError, refetch: refetchPayments,
+  } = usePayments(id)
 
   const [courseFormOpen, setCourseFormOpen]     = useState(false)
   const [lessonFormOpen, setLessonFormOpen]     = useState(false)
@@ -379,6 +389,8 @@ export default function CourseDetailPage() {
               <div key={i} className="h-8 rounded bg-muted animate-pulse" />
             ))}
           </div>
+        ) : paymentsError ? (
+          <ErrorState size="sm" what="оплаты" onRetry={() => refetchPayments()} />
         ) : payments.length === 0 ? (
           <EmptyState
             size="sm"
@@ -455,6 +467,8 @@ export default function CourseDetailPage() {
                 <div key={i} className="h-8 rounded bg-muted animate-pulse" />
               ))}
             </div>
+          ) : enrollmentsError ? (
+            <ErrorState size="sm" what="состав группы" onRetry={() => refetchEnrollments()} />
           ) : enrollments.length === 0 ? (
             <EmptyState
               size="sm"
@@ -508,6 +522,8 @@ export default function CourseDetailPage() {
           [...Array(4)].map((_, i) => (
             <div key={i} className="h-8 rounded bg-muted animate-pulse mb-1" />
           ))
+        ) : lessonsError ? (
+          <ErrorState size="sm" what="уроки" onRetry={() => refetchLessons()} />
         ) : lessons.length === 0 ? (
           <EmptyState
             size="sm"
