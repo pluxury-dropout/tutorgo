@@ -8,8 +8,12 @@ test('uidOf: uuid тьютора и ученика — ключ склейки �
   assert.equal(uidOf(`student-${uuid}`), uuid)
 })
 
-test('uidOf: аноним по ссылке и мусор → null (follow недоступен)', () => {
-  assert.equal(uidOf('guest-1783951586596'), null)
+test('uidOf: гость пробного урока — ключ из своей же identity (follow работает)', () => {
+  assert.equal(uidOf('guest-1783951586596'), '1783951586596')
+})
+
+test('uidOf: мусор без известного префикса → null (follow недоступен)', () => {
+  assert.equal(uidOf('guest-'), null)
   assert.equal(uidOf('tutor-'), null)
   assert.equal(uidOf('bare'), null)
 })

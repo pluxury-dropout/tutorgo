@@ -64,10 +64,14 @@ async function proactiveRefresh(): Promise<void> {
   }
 }
 
-export async function getTokenAsync(fallback?: string): Promise<string | undefined> {
+// Сессионный токен репетитора, дождавшись возможного проактивного рефреша.
+// Параметра-фолбэка тут больше нет: invite-токен доски — не «запасной вариант»,
+// а адресный ключ, и подставлять его после localStorage значило отдавать
+// приоритет чужой сессии (см. useExcalidrawSync.connect).
+export async function getTokenAsync(): Promise<string | undefined> {
   if (refreshPromise) await refreshPromise
-  if (typeof window === 'undefined') return fallback
-  return localStorage.getItem('tg_token') ?? fallback ?? undefined
+  if (typeof window === 'undefined') return undefined
+  return localStorage.getItem('tg_token') ?? undefined
 }
 
 api.interceptors.request.use(async (config) => {

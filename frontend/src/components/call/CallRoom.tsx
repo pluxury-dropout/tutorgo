@@ -14,6 +14,7 @@ import '@livekit/components-styles'
 import { toast } from 'sonner'
 
 import { CallParticipants } from './CallParticipants'
+import { uidOf } from './callParticipants'
 import { CallStage } from './CallStage'
 import { CallToolbar } from './CallToolbar'
 import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
@@ -57,9 +58,14 @@ function CallRoomInner({ courseId, role, inviteUrl, trial, guestName }: CallRoom
   const room = useRoomContext()
 
   const profile = useBoardDisplayName(role)
-  // У гостя пробного урока аккаунта нет — профиль пуст, и подпись на доске
-  // берём из формы входа. uid при этом остаётся undefined: сшивать нечего.
-  const identity = guestName ? { ...profile, name: guestName } : profile
+  // У гостя пробного урока аккаунта нет — профиль пуст, подпись берём из формы
+  // входа, а ключом человека служит его же LiveKit-identity ("guest-<ts>"):
+  // другого стабильного id у него нет, а без общего с доской ключа панель
+  // участников не может включить follow за ним (uidOf вернул бы null).
+  // identity заполняется на коннекте — доска у гостя открывается уже после него.
+  const identity = guestName
+    ? { ...profile, name: guestName, uid: uidOf(room.localParticipant.identity) ?? undefined }
+    : profile
   const [mode, setMode] = useState<Mode>('call')
   const [chatOpen, setChatOpen] = useState(false)
   const [homeworkOpen, setHomeworkOpen] = useState(false)

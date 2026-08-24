@@ -3,19 +3,21 @@
 const AVATAR_COLORS = ['#5865F2', '#EB459E', '#3BA55D', '#F2924B', '#5A9BD5']
 
 /**
- * uuid человека из LiveKit identity ("tutor-<uuid>" | "student-<uuid>").
- * Это единственный общий ключ между участником звонка и коллаборатором доски
- * (Excalidraw кладёт тот же uuid в collaborator.id, см. useBoardDisplayName),
- * поэтому по нему и включается follow.
+ * Ключ человека из LiveKit identity ("tutor-<uuid>" | "student-<uuid>" |
+ * "guest-<ts>"). Единственный общий ключ между участником звонка и
+ * коллаборатором доски (Excalidraw кладёт его же в collaborator.id,
+ * см. useBoardDisplayName), поэтому по нему и включается follow.
  *
- * У анонима по ссылке ("guest-<ts>") uuid'а нет ни в звонке, ни на доске → null,
- * такой участник просто не кликабелен.
+ * У гостя пробного урока аккаунта нет, и ключом служит хвост его же identity:
+ * CallRoom кладёт ровно его в BoardIdentity.uid, так что обе стороны считают
+ * ключ из одной строки. Мусор без известного префикса → null, такой участник
+ * не кликабелен.
  */
 export function uidOf(identity: string): string | null {
   const i = identity.indexOf('-')
   if (i < 0) return null
   const prefix = identity.slice(0, i)
-  if (prefix !== 'tutor' && prefix !== 'student') return null
+  if (prefix !== 'tutor' && prefix !== 'student' && prefix !== 'guest') return null
   return identity.slice(i + 1) || null
 }
 
