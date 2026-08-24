@@ -33,6 +33,16 @@
 //      из-под указателя. Сдвигаем на полстроки вверх — на курсоре оказывается
 //      середина первой строки. Ветка снапа к центру контейнера не трогается:
 //      там позицию даёт parentCenterPosition.
+//
+//   5. Рамка выделения у Excalidraw ловит только те элементы, чей bbox лежит
+//      в ней ЦЕЛИКОМ (containment). В Miro/Figma достаточно задеть элемент
+//      краем (intersection) — иначе, чтобы забрать длинную линию или крупную
+//      картинку, приходится отдалять доску и обводить её целиком. Замена —
+//      те же четыре сравнения, только углы перекрёстные: два AABB
+//      пересекаются, когда sel.x1 ≤ el.x2 ∧ sel.x2 ≥ el.x1 и то же по Y.
+//      Тест по bbox, а не по геометрии штриха: у Excalidraw и хит-тест
+//      выделенной группы работает по общему bbox, так что рамка ведёт себя
+//      с ним согласованно.
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { PEN_SCALE, THINNING, SPEED_SCALE } from './pen-config.mjs'
 
@@ -114,6 +124,15 @@ const EDITS = [
     to: 'y: parentCenterPosition ? parentCenterPosition.elementCenterY : sceneY - fontSize * lineHeight / 2,',
   },
   { from: 'y:s?s.elementCenterY:r,', to: 'y:s?s.elementCenterY:r-u*p/2,' },
+
+  // getElementsWithinSelection: containment → intersection (см. п. 5).
+  // В prod-бандле рамка — [o,i,a,s], элемент — [l,U,p,m]; соседние `&&`
+  // держат якорь уникальным, голая цепочка сравнений слишком общая.
+  {
+    from: 'selectionX1 <= elementX1 && selectionY1 <= elementY1 && selectionX2 >= elementX2 && selectionY2 >= elementY2',
+    to: 'selectionX1 <= elementX2 && selectionX2 >= elementX1 && selectionY1 <= elementY2 && selectionY2 >= elementY1',
+  },
+  { from: '&&o<=l&&i<=U&&a>=p&&s>=m', to: '&&o<=p&&a>=l&&i<=m&&s>=U' },
 ]
 
 const count = (s, from) =>
