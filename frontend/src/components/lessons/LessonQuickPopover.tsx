@@ -10,7 +10,7 @@ import { useUpdateLessonStatus } from '@/lib/hooks/useCalendar'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
 
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTitle } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { LessonStatus } from '@/types/api'
 import { Video, Link2 } from 'lucide-react'
@@ -28,20 +28,22 @@ export interface QuickLesson {
 
 interface Props {
   lesson:  QuickLesson | null
+  /** Блок занятия в сетке — поповер встаёт рядом с ним. */
+  anchor:  Element | null
   onClose: () => void
 }
 
 type Attendance = 'present' | 'absent'
 
-export function LessonQuickDialog({ lesson, onClose }: Props) {
+export function LessonQuickPopover({ lesson, anchor, onClose }: Props) {
   return (
-    <Dialog open={!!lesson} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+    <Popover open={!!lesson} onOpenChange={(open) => !open && onClose()}>
+      <PopoverContent anchor={anchor}>
         {/* key: смена урока пересоздаёт форму, поэтому поля инициализируются
             из пропа напрямую — без синхронизирующих эффектов. */}
         {lesson && <QuickLessonForm key={lesson.id} lesson={lesson} onClose={onClose} />}
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -102,12 +104,12 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="text-base">{lesson.title}</DialogTitle>
+      <div className="flex flex-col gap-2 pr-8">
+        <PopoverTitle className="text-base">{lesson.title}</PopoverTitle>
         <p className="text-sm text-muted-foreground capitalize">
           {fmtDate}, {fmt(start)}–{fmt(end)}
         </p>
-      </DialogHeader>
+      </div>
 
       <div className="space-y-3 py-1">
         <div>

@@ -5,9 +5,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
-import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
+import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
 import type { CalendarLesson, LessonStatus } from '@/types/api'
-import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
+import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ export function MobileWeekCalendar() {
     const diff = Math.round((today.getTime() - ws.getTime()) / 86_400_000)
     return Math.max(0, Math.min(6, diff))
   })
-  const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
+  const [selectedLesson, setSelectedLesson] = useState<{ lesson: QuickLesson; el: HTMLElement } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // ─── data fetching ──────────────────────────────────────────────────────────
@@ -251,19 +251,22 @@ export function MobileWeekCalendar() {
 
   // ─── open lesson popover ────────────────────────────────────────────────────
 
-  function openLesson(l: CalendarLesson) {
+  function openLesson(l: CalendarLesson, el: HTMLElement) {
     if (dragEngagedRef.current) { dragEngagedRef.current = false; return }
     setSelectedLesson({
-      id:              l.id,
-      courseId:        l.course_id,
-      title:           l.is_group
-        ? l.subject
-        : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`,
-      status:          effectiveStatus(l),
-      notes:           l.notes,
-      isGroup:         l.is_group,
-      scheduledAt:     l.scheduled_at,
-      durationMinutes: l.duration_minutes,
+      el,
+      lesson: {
+        id:              l.id,
+        courseId:        l.course_id,
+        title:           l.is_group
+          ? l.subject
+          : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`,
+        status:          effectiveStatus(l),
+        notes:           l.notes,
+        isGroup:         l.is_group,
+        scheduledAt:     l.scheduled_at,
+        durationMinutes: l.duration_minutes,
+      },
     })
   }
 
@@ -279,7 +282,11 @@ export function MobileWeekCalendar() {
 
   return (
     <>
-      <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
+      <LessonQuickPopover
+        lesson={selectedLesson?.lesson ?? null}
+        anchor={selectedLesson?.el ?? null}
+        onClose={() => setSelectedLesson(null)}
+      />
 
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--background)', overflow: 'hidden' }}>
 
@@ -413,7 +420,7 @@ export function MobileWeekCalendar() {
                     return (
                       <div
                         key={ev.id}
-                        onClick={() => openLesson(ev)}
+                        onClick={(e) => openLesson(ev, e.currentTarget)}
                         onPointerDown={(e) => handleEventPointerDown(e, ev)}
                         onPointerMove={handleEventPointerMove}
                         onPointerUp={handleEventPointerUp}

@@ -16,11 +16,11 @@ import { useTasks, useRescheduleTask } from '@/lib/hooks/useTasks'
 import { FC_COLORS, effectiveStatus } from '@/lib/lessonStatus'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
-import { LessonQuickDialog } from '@/components/lessons/LessonQuickDialog'
-import { TaskCreateDialog } from '@/components/tasks/TaskCreateDialog'
+import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
+import { TaskCreatePopover } from '@/components/tasks/TaskCreatePopover'
 import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
 import type { LessonStatus } from '@/types/api'
-import type { QuickLesson } from '@/components/lessons/LessonQuickDialog'
+import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
 const TASK_COLORS = {
   active: { bg: 'oklch(0.86 0.06 305)', border: 'oklch(0.41 0.22 305)', text: 'oklch(0.26 0.18 305)' },
@@ -43,8 +43,10 @@ export default function CalendarPage() {
   const { mutate: reschedule } = useRescheduleLesson()
   const rescheduleTask         = useRescheduleTask()
 
-  const [selectedLesson, setSelectedLesson] = useState<QuickLesson | null>(null)
-  const [newTaskSlot, setNewTaskSlot]       = useState<{ start: Date; end: Date } | null>(null)
+  // Вместе с уроком/слотом храним якорь, у которого открыть поповер: блок
+  // события в сетке и прямоугольник выделенного слота соответственно.
+  const [selectedLesson, setSelectedLesson] = useState<{ lesson: QuickLesson; el: HTMLElement } | null>(null)
+  const [newTaskSlot, setNewTaskSlot]       = useState<{ start: Date; end: Date; rect: DOMRect } | null>(null)
   const [isMobile, setIsMobile]             = useState(false)
 
   const calendarRef       = useRef<FullCalendar>(null)
@@ -196,19 +198,25 @@ export default function CalendarPage() {
     if (arg.event.extendedProps.type === 'task') return
     const p = arg.event.extendedProps
     setSelectedLesson({
-      id:              arg.event.id,
-      courseId:        p.courseId,
-      title:           arg.event.title,
-      status:          p.status as LessonStatus,
-      notes:           p.notes ?? '',
-      isGroup:         p.isGroup,
-      scheduledAt:     p.scheduledAt,
-      durationMinutes: p.durationMinutes,
+      el: arg.el,
+      lesson: {
+        id:              arg.event.id,
+        courseId:        p.courseId,
+        title:           arg.event.title,
+        status:          p.status as LessonStatus,
+        notes:           p.notes ?? '',
+        isGroup:         p.isGroup,
+        scheduledAt:     p.scheduledAt,
+        durationMinutes: p.durationMinutes,
+      },
     })
   }
 
   function handleSelect(arg: DateSelectArg) {
-    setNewTaskSlot({ start: arg.start, end: arg.end })
+    // Прямоугольник снимаем до unselect() — подсветка слота тут же исчезнет.
+    const rect = document.querySelector('.fc-highlight')?.getBoundingClientRect()
+      ?? new DOMRect(arg.jsEvent?.clientX ?? 0, arg.jsEvent?.clientY ?? 0, 0, 0)
+    setNewTaskSlot({ start: arg.start, end: arg.end, rect })
     calendarRef.current?.getApi().unselect()
   }
 
@@ -278,10 +286,15 @@ export default function CalendarPage() {
       )}
 
       {/* Desktop: FullCalendar */}
-      <LessonQuickDialog lesson={selectedLesson} onClose={() => setSelectedLesson(null)} />
-      <TaskCreateDialog
+      <LessonQuickPopover
+        lesson={selectedLesson?.lesson ?? null}
+        anchor={selectedLesson?.el ?? null}
+        onClose={() => setSelectedLesson(null)}
+      />
+      <TaskCreatePopover
         start={newTaskSlot?.start ?? null}
         end={newTaskSlot?.end ?? null}
+        anchor={newTaskSlot?.rect ?? null}
         onClose={() => setNewTaskSlot(null)}
       />
       <div className={`${isMobile ? 'hidden' : 'flex flex-col'} h-full min-h-0 overflow-hidden`}>
