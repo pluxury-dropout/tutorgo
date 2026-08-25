@@ -1,55 +1,36 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { GraduationCap, LogOut, PenLine } from 'lucide-react'
+import { GraduationCap } from 'lucide-react'
 
 import { StudentGate } from '@/components/student/StudentGate'
+import { NextLessonActions } from '@/components/student/NextLessonActions'
 import { useStudentAuthStore } from '@/stores/studentAuth'
-import { studentApi } from '@/lib/api/student'
-import { Button } from '@/components/ui/button'
 
 export default function StudentCabinetLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
   const user = useStudentAuthStore((s) => s.user)
-  const clearAuth = useStudentAuthStore((s) => s.clearAuth)
-
-  async function handleLogout() {
-    await studentApi.logout()
-    clearAuth()
-    router.replace('/student/login')
-  }
 
   return (
     <StudentGate>
       <div className="min-h-[100dvh] bg-background">
         <header style={{ borderBottom: '1px solid var(--border)' }}>
-          <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
+          <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between">
             <Link href="/student/lessons" className="flex items-center gap-2 font-semibold">
               <GraduationCap className="h-5 w-5 text-primary" />
               Amida
             </Link>
-            <div className="flex items-center gap-3">
-              <Link
-                href="/student/board"
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <PenLine className="h-4 w-4" />
-                Доска
-              </Link>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <NextLessonActions />
               <Link
                 href="/student/profile"
-                className="text-sm text-muted-foreground hover:text-foreground"
+                className="text-sm text-muted-foreground hover:text-foreground truncate max-w-[6.5rem] sm:max-w-none"
               >
                 {user ? `${user.first_name} ${user.last_name}`.trim() : 'Профиль'}
               </Link>
-              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleLogout} title="Выйти">
-                <LogOut className="h-4 w-4" />
-              </Button>
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-3xl px-4 py-6">{children}</main>
+        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
       </div>
     </StudentGate>
   )

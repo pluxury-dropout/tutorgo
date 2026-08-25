@@ -4,7 +4,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { LogOut } from 'lucide-react'
 
 import { studentApi } from '@/lib/api/student'
 import { useStudentAuthStore } from '@/stores/studentAuth'
@@ -28,7 +30,9 @@ const changePasswordSchema = z
 type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 
 export default function StudentProfilePage() {
+  const router = useRouter()
   const setAuth = useStudentAuthStore((s) => s.setAuth)
+  const clearAuth = useStudentAuthStore((s) => s.clearAuth)
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['student-me'],
@@ -42,6 +46,14 @@ export default function StudentProfilePage() {
     setError,
     formState: { errors, isSubmitting },
   } = useForm<ChangePasswordInput>({ resolver: zodResolver(changePasswordSchema) })
+
+  // Выход живёт здесь, а не в шапке кабинета: рядом с урокам он только мешает,
+  // а искать его идут в профиль.
+  async function handleLogout() {
+    await studentApi.logout()
+    clearAuth()
+    router.replace('/student/login')
+  }
 
   async function onSubmit(values: ChangePasswordInput) {
     try {
@@ -119,6 +131,11 @@ export default function StudentProfilePage() {
           </Button>
         </form>
       </SectionCard>
+
+      <Button variant="outline" onClick={handleLogout}>
+        <LogOut className="h-4 w-4" />
+        Выйти из аккаунта
+      </Button>
     </div>
   )
 }

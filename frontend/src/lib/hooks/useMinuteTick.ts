@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 
-// Форсит ре-рендер раз в минуту, чтобы effectiveStatus пересчитал бейджи
-// без действий пользователя (урок «проведён» в момент окончания).
-export function useMinuteTick() {
-  const [, force] = useState(0)
+// Отдаёт «сейчас» и обновляет его раз в минуту, чтобы производные от времени
+// вещи (effectiveStatus, окно входа в урок, подсветка сегодняшнего дня)
+// пересчитывались без действий пользователя. Возвращаемое значение можно
+// игнорировать — тогда хук работает просто как форс ре-рендера.
+export function useMinuteTick(): number {
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const id = setInterval(() => force(n => n + 1), 60_000)
+    const id = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(id)
   }, [])
+  return now
 }

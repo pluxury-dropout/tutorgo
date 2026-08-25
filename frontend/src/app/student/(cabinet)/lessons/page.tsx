@@ -1,48 +1,38 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { CalendarDays } from 'lucide-react'
 
-import { studentApi, LessonsFilter } from '@/lib/api/student'
+import { studentApi } from '@/lib/api/student'
+import { useStudentLessons } from '@/lib/hooks/useStudentLessons'
+import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
+import { cycleProgress } from '@/lib/cycleProgress'
+import { effectiveStatus, STATUS_LABELS } from '@/lib/lessonStatus'
 import { SectionCard, SectionRow } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Markdown } from '@/components/common/Markdown'
-import { PeriodPicker } from '@/components/lessons/PeriodPicker'
+import { LessonsCalendar } from '@/components/student/LessonsCalendar'
+import { isSameLocalDay } from '@/lib/monthGrid'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { CalendarLesson } from '@/types/api'
 
-// Неделя (Пн–Пн+7), содержащая переданную дату
-function weekRangeOf(d: Date): { from: Date; to: Date } {
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const from = new Date(d)
-  from.setDate(d.getDate() + diff)
-  from.setHours(0, 0, 0, 0)
-  const to = new Date(from)
-  to.setDate(from.getDate() + 7)
-  return { from, to }
-}
-
-const dateFmt = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'short',
+const dayTitleFmt = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'long',
   day: 'numeric',
   month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
 })
+// Без опции timeZone — Intl рисует в поясе браузера, а scheduled_at приходит
+// как TIMESTAMPTZ со смещением. Ученик видит своё локальное время.
+const timeFmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: 'Запланирован',
-  completed: 'Проведён',
-  cancelled: 'Отменён',
-}
+function LessonRow({ lesson, isFirst }: { lesson: CalendarLesson; isFirst: boolean }) {
+  const status = effectiveStatus(lesson)
 
-function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFirst: boolean; upcoming: boolean }) {
-  // Вкладку открываем синхронно по клику, иначе popup-блокировщик зарубит window.open после await.
+  // Вкладку открываем синхронно по клику, иначе popup-блокировщик зарубит
+  // window.open после await.
   const openBoard = () => {
     const w = window.open('', '_blank')
     studentApi
@@ -72,11 +62,11 @@ function LessonRow({ lesson, isFirst, upcoming }: { lesson: CalendarLesson; isFi
             {lesson.paid === false && <Badge variant="outline">Не оплачен</Badge>}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 2 }}>
-            {dateFmt.format(new Date(lesson.scheduled_at))} · {lesson.duration_minutes} мин
-            {!upcoming && ` · ${STATUS_LABELS[lesson.status] ?? lesson.status}`}
+            {timeFmt.format(new Date(lesson.scheduled_at))} · {lesson.duration_minutes} мин
+            {status !== 'scheduled' && ` · ${STATUS_LABELS[status]}`}
           </div>
         </div>
-        {upcoming && lesson.status === 'scheduled' && (
+        {status === 'scheduled' && (
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={openBoard}>
               Доска
@@ -111,115 +101,113 @@ function HomeworkSection() {
   )
 }
 
-function LessonsInner() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const tab: LessonsFilter = searchParams.get('tab') === 'past' ? 'past' : 'upcoming'
-
-  const { data: lessons, isLoading, error, refetch } = useQuery({
-    queryKey: ['student-lessons', tab],
-    queryFn: () => studentApi.lessons(tab),
-  })
-
-  // Недельный срез. Дефолт — неделя ближайшего/последнего урока (список уже отсортирован),
-  // чтобы не открывать пустой экран. Сбрасывается один раз на вкладку.
-  const [period, setPeriod] = useState(() => weekRangeOf(new Date()))
-  const initedTab = useRef<string | null>(null)
-  useEffect(() => {
-    if (!lessons || initedTab.current === tab) return
-    initedTab.current = tab
-    setPeriod(weekRangeOf(lessons[0] ? new Date(lessons[0].scheduled_at) : new Date()))
-  }, [lessons, tab])
-
-  const visible = (lessons ?? []).filter((l) => {
-    const t = new Date(l.scheduled_at)
-    return t >= period.from && t < period.to
-  })
-
-  const cur = lessons?.find((l) => l.cycle_position != null && l.cycle_size != null)
-  const cycleSummary =
-    cur && cur.cycle_position != null && cur.cycle_size != null
-      ? `Оплачено ${cur.cycle_position} из ${cur.cycle_size}, осталось ${cur.cycle_size - cur.cycle_position}`
-      : null
+/** Полоска «пройдено N из M» по каждому курсу. */
+function CycleProgress({ lessons, now }: { lessons: CalendarLesson[]; now: number }) {
+  const rows = useMemo(() => cycleProgress(lessons, now), [lessons, now])
+  if (rows.length === 0) return null
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Button
-          variant={tab === 'upcoming' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => router.replace('/student/lessons')}
-        >
-          Ближайшие
-        </Button>
-        <Button
-          variant={tab === 'past' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => router.replace('/student/lessons?tab=past')}
-        >
-          Прошедшие
-        </Button>
-      </div>
-
-      {tab === 'upcoming' && <HomeworkSection />}
-
-      {tab === 'upcoming' && cycleSummary && (
-        <div style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{cycleSummary}</div>
-      )}
-
-      <SectionCard
-        title={tab === 'upcoming' ? 'Ближайшие уроки' : 'История уроков'}
-        action={<PeriodPicker from={period.from} to={period.to} onChange={(f, t) => setPeriod({ from: f, to: t })} />}
-        style={{ overflow: 'visible' }}
-      >
-        {isLoading && (
-          <SectionRow isFirst>
-            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Загрузка...</span>
-          </SectionRow>
-        )}
-        {error != null && !isLoading && (
-          <SectionRow isFirst>
-            <div className="flex items-center justify-between gap-4">
-              <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
-                Не удалось загрузить уроки
-              </span>
-              <Button size="sm" variant="outline" onClick={() => refetch()}>
-                Повторить
-              </Button>
-            </div>
-          </SectionRow>
-        )}
-        {lessons && !isLoading && error == null && visible.length === 0 && (
-          lessons.length === 0 ? (
-            <EmptyState
-              size="sm"
-              icon={CalendarDays}
-              title={tab === 'upcoming' ? 'Ближайших уроков нет' : 'Прошедших уроков нет'}
-              description={tab === 'upcoming'
-                ? 'Как только преподаватель поставит урок, он появится здесь — с датой, предметом и кнопкой входа в звонок'
-                : 'Здесь будет история проведённых уроков вместе с домашними заданиями к ним'}
+    <div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12 }} className="space-y-2">
+      {rows.map((r) => (
+        <div key={r.courseId}>
+          <div className="flex items-baseline justify-between gap-2" style={{ fontSize: 12 }}>
+            <span style={{ fontWeight: 600 }}>{r.subject}</span>
+            <span style={{ color: 'var(--muted-foreground)' }}>
+              пройдено {r.done} из {r.size} · осталось {Math.max(0, r.size - r.done)}
+            </span>
+          </div>
+          <div
+            style={{ height: 5, borderRadius: 999, background: 'var(--muted)', marginTop: 4, overflow: 'hidden' }}
+          >
+            <div
+              style={{
+                height: '100%',
+                borderRadius: 999,
+                background: 'var(--primary)',
+                width: `${Math.min(100, (r.done / r.size) * 100)}%`,
+              }}
             />
-          ) : (
-            <EmptyState
-              size="sm"
-              icon={CalendarDays}
-              title="На выбранной неделе уроков нет"
-              description="Уроки есть в другие недели — пролистай период выше"
-            />
-          )
-        )}
-        {visible.map((l, i) => (
-          <LessonRow key={l.id} lesson={l} isFirst={i === 0} upcoming={tab === 'upcoming'} />
-        ))}
-      </SectionCard>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
 
 export default function StudentLessonsPage() {
+  const now = useMinuteTick() // статусы уроков в сетке протухают сами по себе
+  const { lessons, nextLesson, isLoading, error, refetch } = useStudentLessons()
+
+  const [selected, setSelected] = useState(() => new Date())
+
+  // Один раз после загрузки прыгаем на день ближайшего урока (а если впереди
+  // пусто — на последний прошедший), чтобы не открывать пустой месяц.
+  const anchored = useRef(false)
+  useEffect(() => {
+    if (anchored.current || lessons.length === 0) return
+    anchored.current = true
+    const anchor = nextLesson ?? lessons[lessons.length - 1]
+    setSelected(new Date(anchor.scheduled_at))
+  }, [lessons, nextLesson])
+
+  const dayLessons = lessons.filter((l) => isSameLocalDay(new Date(l.scheduled_at), selected))
+
   return (
-    <Suspense>
-      <LessonsInner />
-    </Suspense>
+    // Календарь — вторая колонка на десктопе, но первый блок на мобиле: он
+    // управляет тем, что показано ниже, поэтому идёт в разметке раньше.
+    <div className="grid gap-4 items-start md:grid-cols-[minmax(0,1fr)_372px]">
+      <aside className="md:col-start-2 md:row-start-1">
+        {/* Боковые падинги ужаты: каждый пиксель здесь идёт в ширину клетки,
+            а в клетке должно читаться время. */}
+        <SectionCard bodyPadding="14px 12px">
+          {isLoading && (
+            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Загрузка...</span>
+          )}
+          {error != null && !isLoading && (
+            <div className="flex items-center justify-between gap-4">
+              <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
+                Не удалось загрузить уроки
+              </span>
+              <Button size="sm" variant="outline" onClick={refetch}>
+                Повторить
+              </Button>
+            </div>
+          )}
+          {!isLoading && error == null && (
+            <>
+              <LessonsCalendar lessons={lessons} selected={selected} onSelect={setSelected} now={now} />
+              <CycleProgress lessons={lessons} now={now} />
+            </>
+          )}
+        </SectionCard>
+      </aside>
+
+      <div className="md:col-start-1 md:row-start-1 space-y-4">
+        <HomeworkSection />
+
+        {!isLoading && error == null && (
+          <SectionCard title={dayTitleFmt.format(selected)}>
+            {dayLessons.length === 0 ? (
+              lessons.length === 0 ? (
+                <EmptyState
+                  size="sm"
+                  icon={CalendarDays}
+                  title="Уроков пока нет"
+                  description="Как только преподаватель поставит урок, он появится в календаре — с датой, предметом и кнопкой входа в звонок"
+                />
+              ) : (
+                <SectionRow isFirst>
+                  <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
+                    В этот день уроков нет — выбери день с меткой в календаре
+                  </span>
+                </SectionRow>
+              )
+            ) : (
+              dayLessons.map((l, i) => <LessonRow key={l.id} lesson={l} isFirst={i === 0} />)
+            )}
+          </SectionCard>
+        )}
+      </div>
+    </div>
   )
 }
