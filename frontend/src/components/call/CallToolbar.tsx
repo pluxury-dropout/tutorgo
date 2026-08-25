@@ -31,7 +31,8 @@ interface Props {
   showHomework?: boolean
   onToggleBoard: () => void
   onToggleChat: () => void
-  onHomework: () => void
+  /** Отдаёт саму кнопку: у неё всплывает поповер с ДЗ. */
+  onHomework: (anchor: HTMLElement) => void
   onLeave: () => void
 }
 
@@ -172,7 +173,7 @@ export function CallToolbar({
           </button>
         )}
         {showHomework && (
-          <button className="lesson-btn" onClick={() => { setMoreOpen(false); onHomework() }} title="Домашнее задание" style={btnBase({})}>
+          <button className="lesson-btn" onClick={(e) => { setMoreOpen(false); onHomework(e.currentTarget) }} title="Домашнее задание" style={btnBase({})}>
             <BookOpen {...icon} />
           </button>
         )}

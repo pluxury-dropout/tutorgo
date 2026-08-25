@@ -32,7 +32,7 @@ import { LessonForm, RecurrenceOptions } from '@/components/lessons/LessonForm'
 import { AttendanceDialog } from '@/components/lessons/AttendanceDialog'
 import { SeriesDialog } from '@/components/lessons/SeriesDialog'
 import { PaymentForm } from '@/components/payments/PaymentForm'
-import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
+import { HomeworkEditPopover } from '@/components/homework/HomeworkEditPopover'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
@@ -147,7 +147,7 @@ export default function CourseDetailPage() {
   const [seriesLesson, setSeriesLesson]         = useState<Lesson | undefined>()
   const [attendanceLesson, setAttendanceLesson] = useState<string | null>(null)
   const [paymentFormOpen, setPaymentFormOpen]   = useState(false)
-  const [homeworkOpen, setHomeworkOpen]         = useState(false)
+  const [homeworkAnchor, setHomeworkAnchor]     = useState<Element | null>(null)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
   const [selectedStudent, setSelected]          = useState('')
 
@@ -324,7 +324,7 @@ export default function CourseDetailPage() {
             >
               Доска
             </Link>
-            <Button size="sm" variant="outline" onClick={() => setHomeworkOpen(true)}>
+            <Button size="sm" variant="outline" onClick={(e) => setHomeworkAnchor(e.currentTarget)}>
               Домашнее задание
             </Button>
             <Button size="sm" variant="outline" onClick={() => setCourseFormOpen(true)}>
@@ -603,7 +603,13 @@ export default function CourseDetailPage() {
         courseEndAt={course.ended_at ?? undefined}
       />
 
-      <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={id} />
+      <HomeworkEditPopover
+        anchor={homeworkAnchor}
+        onClose={() => setHomeworkAnchor(null)}
+        courseId={id}
+        side="bottom"
+        align="end"
+      />
 
 
       <PaymentForm

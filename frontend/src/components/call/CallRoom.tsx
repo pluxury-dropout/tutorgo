@@ -17,8 +17,8 @@ import { CallParticipants } from './CallParticipants'
 import { uidOf } from './callParticipants'
 import { CallStage } from './CallStage'
 import { CallToolbar } from './CallToolbar'
-import { HomeworkEditDialog } from '@/components/homework/HomeworkEditDialog'
-import { HomeworkViewDialog } from '@/components/homework/HomeworkViewDialog'
+import { HomeworkEditPopover } from '@/components/homework/HomeworkEditPopover'
+import { HomeworkViewPopover } from '@/components/homework/HomeworkViewPopover'
 import { CallChat } from './CallChat'
 import { useCallChat } from './useCallChat'
 import { CALL_THEME } from './callTheme'
@@ -68,7 +68,7 @@ function CallRoomInner({ courseId, role, inviteUrl, trial, guestName }: CallRoom
     : profile
   const [mode, setMode] = useState<Mode>('call')
   const [chatOpen, setChatOpen] = useState(false)
-  const [homeworkOpen, setHomeworkOpen] = useState(false)
+  const [homeworkAnchor, setHomeworkAnchor] = useState<Element | null>(null)
   // api доски нужен панели участников (follow за коллаборатором).
   const [boardApi, setBoardApi] = useState<ExcalidrawImperativeAPI | null>(null)
   // uid → сколько людей за ним следит. Считает сервер доски, рисует панель
@@ -337,15 +337,19 @@ function CallRoomInner({ courseId, role, inviteUrl, trial, guestName }: CallRoom
           showHomework={!trial}
           onToggleBoard={handleToggle}
           onToggleChat={() => setChatOpen((v) => !v)}
-          onHomework={() => setHomeworkOpen(true)}
+          onHomework={setHomeworkAnchor}
           onLeave={() => room.disconnect()}
         />
 
         {role === 'tutor' && courseId && (
-          <HomeworkEditDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} courseId={courseId} />
+          <HomeworkEditPopover
+            anchor={homeworkAnchor}
+            onClose={() => setHomeworkAnchor(null)}
+            courseId={courseId}
+          />
         )}
         {role === 'guest' && !trial && (
-          <HomeworkViewDialog open={homeworkOpen} onClose={() => setHomeworkOpen(false)} />
+          <HomeworkViewPopover anchor={homeworkAnchor} onClose={() => setHomeworkAnchor(null)} />
         )}
       </div>
   )
