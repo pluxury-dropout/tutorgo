@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 
@@ -9,6 +9,9 @@ import { lessonSchema, LessonFormValues } from '@/schemas/lesson'
 import { Lesson, ApiError } from '@/types/api'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
 import { generateDates, lessonsPlural, RecurrenceOptions, RecurrenceType } from '@/lib/recurrence'
+import { useConflicts } from '@/lib/hooks/useEvents'
+import { formatTimeRange } from '@/lib/eventKind'
+import { AlertTriangle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -117,6 +120,21 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
     ? new Date(preview[preview.length - 1]).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
     : ''
 
+  // Занятость слота. Предупреждение не блокирует сохранение: наложение бывает
+  // осознанным, а решает репетитор. При правке урок исключает сам себя.
+  // useWatch, а не watch(): watch() возвращает функцию, из-за которой React
+  // Compiler отключает мемоизацию всего компонента.
+  const durationMinutes = useWatch({ control, name: 'duration_minutes' })
+  const { data: conflicts = [] } = useConflicts(
+    dateVal && durationMinutes > 0
+      ? {
+          starts_at:        new Date(`${dateVal}T${timeStr}`).toISOString(),
+          duration_minutes: durationMinutes,
+          ...(initial ? { exclude_type: 'lesson' as const, exclude_id: initial.id } : {}),
+        }
+      : null,
+  )
+
   function toggleDay(iso: number) {
     setRecDays((prev) =>
       prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso]
@@ -176,6 +194,16 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
               <p className="text-xs text-destructive">{errors.duration_minutes.message}</p>
             )}
           </div>
+
+          {conflicts.length > 0 && (
+            <p className="flex items-start gap-1.5 rounded-md bg-[var(--cal-missed-bg)] px-2 py-1.5 text-xs text-[var(--cal-missed-text)]">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" />
+              <span>
+                Пересекается с{' '}
+                {conflicts.map((c) => `«${c.title}» ${formatTimeRange(c.starts_at, c.duration_minutes)}`).join(', ')}
+              </span>
+            </p>
+          )}
 
           {initial && (
             <div className="space-y-1.5">

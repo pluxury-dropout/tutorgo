@@ -114,6 +114,33 @@ export interface Task {
   created_at: string
 }
 
+export type EventKind = 'personal' | 'work' | 'trial'
+
+export interface Event {
+  id: string
+  tutor_id: string
+  title: string
+  kind: EventKind
+  starts_at: string
+  duration_minutes: number
+  all_day: boolean
+  color: string
+  location: string
+  notes: string
+}
+
+/** Строка единой ленты календаря: общие поля наверху, специфика — по типу. */
+export type CalendarItem = {
+  id: string
+  title: string
+  starts_at: string
+  duration_minutes: number
+} & (
+  | { type: 'lesson'; lesson: CalendarLesson; event?: never; task?: never }
+  | { type: 'event';  event: Event;           lesson?: never; task?: never }
+  | { type: 'task';   task: Task;             lesson?: never; event?: never }
+)
+
 export type ApiValidationError = Record<string, string>
 export interface ApiError {
   message: string

@@ -127,6 +127,18 @@
   --cal-missed-border:     #F5C9C9;
   --cal-missed-text:       #C92A2A;
 
+  /* События: личное — нейтральный сланец, работа — бирюза, пробный — акцент.
+     Синий и фиолетовый заняты уроками и задачами. */
+  --cal-personal-bg:       #E7E9EE;
+  --cal-personal-border:   #D3D7E0;
+  --cal-personal-text:     #3B4252;
+  --cal-work-bg:           #D6EEF3;
+  --cal-work-border:       #BBDFE9;
+  --cal-work-text:         #12414F;
+  --cal-trial-bg:          #FDECD2;
+  --cal-trial-border:      #F8DCB0;
+  --cal-trial-text:        #7A4A06;
+
   /* Charts */
   --chart-1: #1D4ED8;   /* blue */
   --chart-2: #D97706;   /* amber */
@@ -207,6 +219,15 @@
   --cal-missed-bg:         #3a201a;
   --cal-missed-border:     #4f2d24;
   --cal-missed-text:       #e8b8a8;
+  --cal-personal-bg:       #2a2c30;
+  --cal-personal-border:   #3a3d43;
+  --cal-personal-text:     #b9bcc4;
+  --cal-work-bg:           #17323a;
+  --cal-work-border:       #204651;
+  --cal-work-text:         #a7d0dc;
+  --cal-trial-bg:          #3a2c17;
+  --cal-trial-border:      #513f20;
+  --cal-trial-text:        #e0c08d;
 }
 
 /* Экран урока светлый при любой теме приложения: холст Excalidraw белый по
