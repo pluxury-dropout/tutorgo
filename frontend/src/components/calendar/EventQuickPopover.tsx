@@ -50,7 +50,6 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
           kind,
           starts_at:        event.starts_at,
           duration_minutes: event.duration_minutes,
-          all_day:          event.all_day,
           color:            event.color,
           location:         location.trim(),
           notes:            notes.trim(),
@@ -71,7 +70,7 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
       <PopoverTitle className="pr-8">Событие</PopoverTitle>
       <p className="text-xs text-muted-foreground -mt-2">
         {new Date(event.starts_at).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}
-        {event.all_day ? ' · весь день' : ` · ${formatTimeRange(event.starts_at, event.duration_minutes)}`}
+        {` · ${formatTimeRange(event.starts_at, event.duration_minutes)}`}
       </p>
 
       <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название" />

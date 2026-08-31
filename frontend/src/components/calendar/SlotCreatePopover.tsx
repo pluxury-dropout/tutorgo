@@ -91,9 +91,8 @@ function SlotForm({ start, end, onClose }: { start: Date; end: Date; onClose: ()
 }
 
 function EventFields({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
-  const [title, setTitle]   = useState('')
-  const [kind, setKind]     = useState<EventKind>('personal')
-  const [allDay, setAllDay] = useState(false)
+  const [title, setTitle] = useState('')
+  const [kind, setKind]   = useState<EventKind>('personal')
   const createEvent = useCreateEvent()
 
   function handleSave() {
@@ -104,7 +103,6 @@ function EventFields({ start, end, onClose }: { start: Date; end: Date; onClose:
         kind,
         starts_at:        start.toISOString(),
         duration_minutes: slotMinutes(start, end),
-        all_day:          allDay,
       },
       { onError: () => toast.error('Не удалось создать событие') },
     )
@@ -133,10 +131,6 @@ function EventFields({ start, end, onClose }: { start: Date; end: Date; onClose:
           </button>
         ))}
       </div>
-      <label className="flex items-center gap-2 text-xs cursor-pointer">
-        <input type="checkbox" className="rounded" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-        Весь день
-      </label>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
         <Button size="sm" onClick={handleSave} disabled={!title.trim()}>Создать</Button>

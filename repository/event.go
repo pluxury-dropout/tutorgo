@@ -10,7 +10,7 @@ import (
 
 var ErrEventNotFound = errors.New("event not found")
 
-const eventColumns = `id, tutor_id, title, kind, starts_at, duration_minutes, all_day, color, location, notes`
+const eventColumns = `id, tutor_id, title, kind, starts_at, duration_minutes, color, location, notes`
 
 type EventRepository interface {
 	Create(ctx context.Context, tutorID string, req models.CreateEventRequest) (models.Event, error)
@@ -19,7 +19,7 @@ type EventRepository interface {
 	Update(ctx context.Context, id, tutorID string, req models.UpdateEventRequest) (models.Event, error)
 	Delete(ctx context.Context, id, tutorID string) error
 	// GetOccupiedInRange отдаёт всё, что занимает время в пересечении с [from, to):
-	// уроки в статусе scheduled и события, кроме all_day. Задачи занятостью не считаются.
+	// уроки в статусе scheduled и все события. Задачи занятостью не считаются.
 	GetOccupiedInRange(ctx context.Context, tutorID, from, to string, excludeType string, excludeID *string) ([]models.CalendarItem, error)
 }
 
@@ -34,17 +34,17 @@ func NewEventRepository(conn *pgxpool.Pool) EventRepository {
 func scanEvent(row interface{ Scan(...any) error }) (models.Event, error) {
 	var e models.Event
 	err := row.Scan(&e.ID, &e.TutorID, &e.Title, &e.Kind, &e.StartsAt, &e.DurationMinutes,
-		&e.AllDay, &e.Color, &e.Location, &e.Notes)
+		&e.Color, &e.Location, &e.Notes)
 	return e, err
 }
 
 func (r *eventRepository) Create(ctx context.Context, tutorID string, req models.CreateEventRequest) (models.Event, error) {
 	return scanEvent(r.conn.QueryRow(ctx,
-		`INSERT INTO events (tutor_id, title, kind, starts_at, duration_minutes, all_day, color, location, notes)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO events (tutor_id, title, kind, starts_at, duration_minutes, color, location, notes)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING `+eventColumns,
 		tutorID, req.Title, req.Kind, req.StartsAt, req.DurationMinutes,
-		req.AllDay, req.Color, req.Location, req.Notes,
+		req.Color, req.Location, req.Notes,
 	))
 }
 
@@ -80,11 +80,11 @@ func (r *eventRepository) GetByRange(ctx context.Context, tutorID, from, to stri
 func (r *eventRepository) Update(ctx context.Context, id, tutorID string, req models.UpdateEventRequest) (models.Event, error) {
 	return scanEvent(r.conn.QueryRow(ctx,
 		`UPDATE events
-		 SET title=$1, kind=$2, starts_at=$3, duration_minutes=$4, all_day=$5,
-		     color=$6, location=$7, notes=$8, updated_at=NOW()
-		 WHERE id=$9 AND tutor_id=$10
+		 SET title=$1, kind=$2, starts_at=$3, duration_minutes=$4,
+		     color=$5, location=$6, notes=$7, updated_at=NOW()
+		 WHERE id=$8 AND tutor_id=$9
 		 RETURNING `+eventColumns,
-		req.Title, req.Kind, req.StartsAt, req.DurationMinutes, req.AllDay,
+		req.Title, req.Kind, req.StartsAt, req.DurationMinutes,
 		req.Color, req.Location, req.Notes, id, tutorID,
 	))
 }
@@ -121,7 +121,6 @@ func (r *eventRepository) GetOccupiedInRange(ctx context.Context, tutorID, from,
 		 SELECT 'event' AS type, e.id::text, e.title, e.starts_at, e.duration_minutes
 		 FROM events e
 		 WHERE e.tutor_id = $1
-		   AND NOT e.all_day
 		   AND e.starts_at < $3::timestamptz
 		   AND e.starts_at + e.duration_minutes * interval '1 minute' > $2::timestamptz
 		   AND ($4 <> 'event' OR e.id IS DISTINCT FROM $5::uuid)

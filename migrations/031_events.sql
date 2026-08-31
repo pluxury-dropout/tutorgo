@@ -10,7 +10,6 @@ CREATE TABLE events (
                                  CHECK (kind IN ('personal','work','trial')),
     starts_at        TIMESTAMPTZ NOT NULL,
     duration_minutes INT         NOT NULL CHECK (duration_minutes > 0),
-    all_day          BOOLEAN     NOT NULL DEFAULT FALSE,
     color            TEXT        NOT NULL DEFAULT '',
     location         TEXT        NOT NULL DEFAULT '',
     notes            TEXT        NOT NULL DEFAULT '',

@@ -123,7 +123,6 @@ export interface Event {
   kind: EventKind
   starts_at: string
   duration_minutes: number
-  all_day: boolean
   color: string
   location: string
   notes: string

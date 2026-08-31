@@ -62,34 +62,6 @@ func TestEventService_Create_DefaultsKind(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-func TestEventService_Create_AllDayGetsFullDay(t *testing.T) {
-	repo := new(mockEventRepo)
-	svc := service.NewEventService(repo)
-
-	repo.On("Create", mock.Anything, "tutor-1", mock.MatchedBy(func(r models.CreateEventRequest) bool {
-		return r.DurationMinutes == 24*60
-	})).Return(models.Event{ID: "e1"}, nil)
-
-	_, err := svc.Create(context.Background(), "tutor-1", models.CreateEventRequest{
-		Title: "Отпуск", StartsAt: time.Now(), AllDay: true,
-	})
-
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
-func TestEventService_Create_RequiresDuration(t *testing.T) {
-	repo := new(mockEventRepo)
-	svc := service.NewEventService(repo)
-
-	_, err := svc.Create(context.Background(), "tutor-1", models.CreateEventRequest{
-		Title: "Врач", StartsAt: time.Now(),
-	})
-
-	assert.ErrorIs(t, err, service.ErrBadRequest)
-	repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything, mock.Anything)
-}
-
 func TestEventService_Delete_NotFound(t *testing.T) {
 	repo := new(mockEventRepo)
 	svc := service.NewEventService(repo)

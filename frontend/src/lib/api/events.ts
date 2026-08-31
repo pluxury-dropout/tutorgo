@@ -5,8 +5,7 @@ export interface EventInput {
   title: string
   kind?: EventKind
   starts_at: string
-  duration_minutes?: number
-  all_day?: boolean
+  duration_minutes: number
   color?: string
   location?: string
   notes?: string

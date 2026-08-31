@@ -25,9 +25,11 @@ import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
 import type { Event as TutorEvent, LessonStatus, Task } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
+// Значения — в globals.css (--cal-task-*), рядом с цветами уроков и событий:
+// одна тема, одно место правки, тёмная тема не забывается.
 const TASK_COLORS = {
-  active: { bg: 'oklch(0.86 0.06 305)', border: 'oklch(0.41 0.22 305)', text: 'oklch(0.26 0.18 305)' },
-  done:   { bg: 'oklch(0.92 0.03 305)', border: 'oklch(0.65 0.08 305)', text: 'oklch(0.50 0.10 305)' },
+  active: { bg: 'var(--cal-task-bg)',      border: 'var(--cal-task-border)',      text: 'var(--cal-task-text)' },
+  done:   { bg: 'var(--cal-task-done-bg)', border: 'var(--cal-task-done-border)', text: 'var(--cal-task-done-text)' },
 }
 
 function roundToNearest30(date: Date): Date {
@@ -76,6 +78,10 @@ export default function CalendarPage() {
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem(PERSONAL_KEY, showPersonal ? '1' : '0')
+  }, [showPersonal])
 
   // Listen for navigation requests from the sidebar mini-calendar
   useEffect(() => {
@@ -140,7 +146,6 @@ export default function CalendarPage() {
         title:           item.title,
         start:           item.starts_at,
         end,
-        allDay:          e.all_day,
         backgroundColor: e.color || colors.bg,
         borderColor:     e.color || colors.border,
         textColor:       colors.text,
@@ -266,9 +271,8 @@ export default function CalendarPage() {
           data: {
             title:            e.title,
             kind:             e.kind,
-            starts_at:        (e.all_day ? start : snapped).toISOString(),
-            duration_minutes: e.all_day ? e.duration_minutes : duration,
-            all_day:          e.all_day,
+            starts_at:        snapped.toISOString(),
+            duration_minutes: duration,
             color:            e.color,
             location:         e.location,
             notes:            e.notes,
@@ -374,18 +378,6 @@ export default function CalendarPage() {
             Уроки пока ставятся на странице курса.
           </div>
         )}
-        <label className="mb-2 flex shrink-0 items-center justify-end gap-2 text-xs text-muted-foreground cursor-pointer">
-          <input
-            type="checkbox"
-            className="rounded"
-            checked={showPersonal}
-            onChange={(e) => {
-              setShowPersonal(e.target.checked)
-              localStorage.setItem(PERSONAL_KEY, e.target.checked ? '1' : '0')
-            }}
-          />
-          Показывать личные события
-        </label>
         <div className="min-h-0 flex-1">
         <FullCalendar
           ref={calendarRef}
@@ -394,7 +386,15 @@ export default function CalendarPage() {
           headerToolbar={{
             left:   'prev,next today',
             center: 'title',
-            right:  'dayGridMonth,timeGridWeek,timeGridDay',
+            right:  'togglePersonal dayGridMonth,timeGridWeek,timeGridDay',
+          }}
+          // Тумблер живёт в тулбаре календаря, а не отдельной строкой над сеткой:
+          // своя строка съедала высоту и висела без хозяина.
+          customButtons={{
+            togglePersonal: {
+              text:  showPersonal ? 'Личные: вкл' : 'Личные: выкл',
+              click: () => setShowPersonal((v) => !v),
+            },
           }}
           locale={ruLocale}
           firstDay={1}
@@ -482,7 +482,7 @@ export default function CalendarPage() {
           height="100%"
           expandRows={false}
           eventLongPressDelay={300}
-          allDaySlot={true}
+          allDaySlot={false}
           slotDuration="00:30:00"
           slotLabelInterval="01:00:00"
           scrollTime="08:00:00"
