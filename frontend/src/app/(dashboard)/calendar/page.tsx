@@ -9,13 +9,15 @@ import type { DatesSetArg, EventClickArg, EventDropArg, DateSelectArg, EventInpu
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import ruLocale from '@fullcalendar/core/locales/ru'
 import { Circle, CheckCircle2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { stripHtml } from '@/lib/stripHtml'
 import { useCalendarFeed, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { useRescheduleTask } from '@/lib/hooks/useTasks'
 import { useUpdateEvent } from '@/lib/hooks/useEvents'
+import { calendarApi, type ConflictQuery } from '@/lib/api/calendar'
 import { FC_COLORS, effectiveStatus } from '@/lib/lessonStatus'
-import { KIND_COLORS } from '@/lib/eventKind'
+import { KIND_COLORS, TASK_COLORS, formatTimeRange } from '@/lib/eventKind'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
@@ -24,13 +26,6 @@ import { EventQuickPopover } from '@/components/calendar/EventQuickPopover'
 import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
 import type { Event as TutorEvent, LessonStatus, Task } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
-
-// Значения — в globals.css (--cal-task-*), рядом с цветами уроков и событий:
-// одна тема, одно место правки, тёмная тема не забывается.
-const TASK_COLORS = {
-  active: { bg: 'var(--cal-task-bg)',      border: 'var(--cal-task-border)',      text: 'var(--cal-task-text)' },
-  done:   { bg: 'var(--cal-task-done-bg)', border: 'var(--cal-task-done-border)', text: 'var(--cal-task-done-text)' },
-}
 
 function roundToNearest30(date: Date): Date {
   const ms = 30 * 60 * 1000
@@ -44,6 +39,22 @@ function roundToNearest15(n: number): number {
 const EDGE_ZONE = 50
 
 const PERSONAL_KEY = 'tg_cal_show_personal'
+
+// Перенос уже сохранён — это предупреждение постфактум, без отката: наложение
+// бывает осознанным, решает репетитор. Сама проверка необязательна, поэтому
+// упавший запрос молчит, а не роняет промис.
+function warnOnConflict(q: ConflictQuery) {
+  calendarApi
+    .conflicts(q)
+    .then((conflicts) => {
+      if (conflicts.length === 0) return
+      const list = conflicts
+        .map((c) => `«${c.title}» ${formatTimeRange(c.starts_at, c.duration_minutes)}`)
+        .join(', ')
+      toast.warning(`Пересекается с ${list}`)
+    })
+    .catch(() => {})
+}
 
 export default function CalendarPage() {
   useMinuteTick()
@@ -278,11 +289,20 @@ export default function CalendarPage() {
             notes:            e.notes,
           },
         },
-        { onError: () => arg.revert() },
+        {
+          onError:   () => arg.revert(),
+          onSuccess: () => warnOnConflict({
+            starts_at:        snapped.toISOString(),
+            duration_minutes: duration,
+            exclude_type:     'event',
+            exclude_id:       e.id,
+          }),
+        },
       )
       return
     }
 
+    // Задачи занятостью не считаются — для них проверки нет.
     if (arg.event.extendedProps.type === 'task') {
       rescheduleTask.mutate(
         {
@@ -309,7 +329,15 @@ export default function CalendarPage() {
           notes:            arg.event.extendedProps.notes ?? '',
         },
       },
-      { onError: () => arg.revert() },
+      {
+        onError:   () => arg.revert(),
+        onSuccess: () => warnOnConflict({
+          starts_at:        snapped.toISOString(),
+          duration_minutes: duration,
+          exclude_type:     'lesson',
+          exclude_id:       arg.event.id,
+        }),
+      },
     )
   }
 
@@ -347,7 +375,10 @@ export default function CalendarPage() {
       {/* Mobile: full-screen compact week */}
       {isMobile && (
         <div className="h-full">
-          <MobileWeekCalendar />
+          <MobileWeekCalendar
+            showPersonal={showPersonal}
+            onTogglePersonal={() => setShowPersonal(v => !v)}
+          />
         </div>
       )}
 

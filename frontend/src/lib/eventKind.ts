@@ -15,6 +15,13 @@ export const KIND_COLORS: Record<EventKind, { bg: string; border: string; text: 
 
 export const EVENT_KINDS: EventKind[] = ['personal', 'work', 'trial']
 
+// Значения — в globals.css (--cal-task-*), рядом с цветами уроков и событий:
+// одна тема, одно место правки, тёмная тема не забывается.
+export const TASK_COLORS = {
+  active: { bg: 'var(--cal-task-bg)',      border: 'var(--cal-task-border)',      text: 'var(--cal-task-text)' },
+  done:   { bg: 'var(--cal-task-done-bg)', border: 'var(--cal-task-done-border)', text: 'var(--cal-task-done-text)' },
+}
+
 /** «17:00 – 18:30» — подпись пересечения в предупреждении о занятости. */
 export function formatTimeRange(startsAt: string, durationMinutes: number): string {
   const start = new Date(startsAt)

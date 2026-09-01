@@ -21,9 +21,10 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/lib/api/auth'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
-import { useCalendar } from '@/lib/hooks/useCalendar'
+import { useCalendarFeed } from '@/lib/hooks/useCalendar'
+import { KIND_COLORS } from '@/lib/eventKind'
 import { pickActiveLesson } from './nextLesson'
-import type { LessonStatus, CalendarLesson } from '@/types/api'
+import type { LessonStatus, CalendarItem } from '@/types/api'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,16 @@ const STATUS_DOT: Record<LessonStatus, string> = {
   completed: 'var(--cal-completed-text)',
   cancelled: 'var(--cal-cancelled-text)',
   missed:    'var(--cal-missed-text)',
+}
+
+type BusyItem = Extract<CalendarItem, { type: 'lesson' | 'event' }>
+
+/** Занятость: уроки и события. Задачи из ленты отбрасываем — «сделать
+ *  когда-нибудь» не занимает время (см. спеку календаря, раздел 2).
+ *  Предикат в filter обязателен: без него тип остаётся полным union,
+ *  и сужение по it.type ниже не работает. */
+function busyOnly(items: CalendarItem[]): BusyItem[] {
+  return items.filter((it): it is BusyItem => it.type !== 'task')
 }
 
 function getWeekStart(d: Date): Date {
@@ -89,13 +100,16 @@ function MiniCalendar({
 
   const monthFrom = useMemo(() => new Date(year, month, 1).toISOString(), [year, month])
   const monthTo   = useMemo(() => new Date(year, month + 1, 1).toISOString(), [year, month])
-  const { data: monthLessons = [] } = useCalendar(monthFrom, monthTo)
+  const { data: monthItems = [] } = useCalendarFeed(monthFrom, monthTo)
 
-  const lessonDays = useMemo(() => {
+  // Точка значит «день занят», поэтому её ставят и урок, и событие: врач и
+  // спортзал — такая же занятость, иначе по сетке нельзя планировать. Задачи
+  // не в счёт: у задачи слот условный и двигается свободно.
+  const busyDays = useMemo(() => {
     const s = new Set<string>()
-    monthLessons.forEach(l => s.add(toDateKey(new Date(l.scheduled_at))))
+    busyOnly(monthItems).forEach(it => s.add(toDateKey(new Date(it.starts_at))))
     return s
-  }, [monthLessons])
+  }, [monthItems])
 
   const cells: (number | null)[] = Array(offset).fill(null)
   for (let d = 1; d <= totalDays; d++) cells.push(d)
@@ -137,7 +151,7 @@ function MiniCalendar({
 
       <div className="grid grid-cols-7 gap-y-0.5">
         {cells.map((d, i) => {
-          const hasDot = d ? lessonDays.has(toDateKey(new Date(year, month, d))) : false
+          const hasDot = d ? busyDays.has(toDateKey(new Date(year, month, d))) : false
           const todayCell = d ? isToday(d) : false
           return (
             <button
@@ -173,14 +187,52 @@ function MiniCalendar({
 
 // ─── TodayList ────────────────────────────────────────────────────────────────
 
-function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
+/** Строка списка «Сегодня» — одна разметка на урок и на событие; различия
+ *  вычисляет вызывающий, где тип уже сужен. */
+function BusyRow({ startsAt, accent, title, subtitle, struck }: {
+  startsAt: string
+  accent:   string
+  title:    string
+  subtitle: string
+  struck?:  boolean
+}) {
+  return (
+    <div className="flex gap-2 px-2 py-1.5 rounded-md mx-1 hover:bg-[var(--sidebar-hover-bg)] cursor-pointer transition-colors items-start">
+      <div
+        className="w-[3px] self-stretch rounded-full shrink-0 mt-[3px]"
+        style={{ background: accent }}
+      />
+      <div className="min-w-0">
+        <div className="text-[10px] text-[var(--sidebar-text)] tabular-nums leading-tight">
+          {formatTime(startsAt)}
+        </div>
+        <div className={cn(
+          'text-[12px] font-medium leading-snug truncate',
+          struck ? 'line-through text-[var(--sidebar-text)]' : 'text-foreground',
+        )}>
+          {title}
+        </div>
+        {/* У события место указано не всегда — тогда второй строки нет. */}
+        {subtitle && (
+          <div className="text-[11px] text-[var(--sidebar-text)] truncate leading-tight">
+            {subtitle}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TodayList({ items }: { items: CalendarItem[] }) {
   const today = useMemo(() => new Date(), [])
 
-  const todayLessons = useMemo(
-    () => lessons
-      .filter(l => isSameLocalDay(l.scheduled_at, today))
-      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
-    [lessons, today],
+  // Уроки и события в одном списке: это ответ на вопрос «чем занят день»,
+  // а не «сколько у меня уроков».
+  const todayItems = useMemo(
+    () => busyOnly(items)
+      .filter(it => isSameLocalDay(it.starts_at, today))
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
+    [items, today],
   )
 
   const label = today.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -191,41 +243,33 @@ function TodayList({ lessons }: { lessons: CalendarLesson[] }) {
         <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-text)]">
           Сегодня · {label}
         </span>
-        {todayLessons.length > 0 && (
-          <span className="text-[10px] text-[var(--sidebar-text)]/60">{todayLessons.length}</span>
+        {todayItems.length > 0 && (
+          <span className="text-[10px] text-[var(--sidebar-text)]/60">{todayItems.length}</span>
         )}
       </div>
 
       <div className="overflow-y-auto flex-1 pb-2">
-        {todayLessons.length === 0 ? (
-          <p className="px-3 py-1 text-[11.5px] text-[var(--sidebar-text)]/60">Занятий нет</p>
+        {todayItems.length === 0 ? (
+          <p className="px-3 py-1 text-[11.5px] text-[var(--sidebar-text)]/60">День свободен</p>
         ) : (
-          todayLessons.map(l => (
-            <div
-              key={l.id}
-              className="flex gap-2 px-2 py-1.5 rounded-md mx-1 hover:bg-[var(--sidebar-hover-bg)] cursor-pointer transition-colors items-start"
-            >
-              <div
-                className="w-[3px] self-stretch rounded-full shrink-0 mt-[3px]"
-                style={{ background: STATUS_DOT[l.status] }}
-              />
-              <div className="min-w-0">
-                <div className="text-[10px] text-[var(--sidebar-text)] tabular-nums leading-tight">
-                  {formatTime(l.scheduled_at)}
-                </div>
-                <div className={cn(
-                  'text-[12px] font-medium leading-snug truncate',
-                  l.status === 'cancelled'
-                    ? 'line-through text-[var(--sidebar-text)]'
-                    : 'text-foreground',
-                )}>
-                  {l.subject}
-                </div>
-                <div className="text-[11px] text-[var(--sidebar-text)] truncate leading-tight">
-                  {l.is_group ? 'Групповой урок' : (l.student_name ?? '—')}
-                </div>
-              </div>
-            </div>
+          todayItems.map(it => it.type === 'lesson' ? (
+            <BusyRow
+              key={`lesson:${it.id}`}
+              startsAt={it.starts_at}
+              // Полоска слева у урока — его статус, у события — вид.
+              accent={STATUS_DOT[it.lesson.status]}
+              title={it.lesson.subject}
+              subtitle={it.lesson.is_group ? 'Групповой урок' : (it.lesson.student_name ?? '—')}
+              struck={it.lesson.status === 'cancelled'}
+            />
+          ) : (
+            <BusyRow
+              key={`event:${it.id}`}
+              startsAt={it.starts_at}
+              accent={it.event.color || KIND_COLORS[it.event.kind].border}
+              title={it.title}
+              subtitle={it.event.location}
+            />
           ))
         )}
       </div>
@@ -248,7 +292,7 @@ function CalendarSidebarPanel() {
     return { from: start.toISOString(), to: end.toISOString() }
   }, [])
 
-  const { data: todayLessons = [] } = useCalendar(todayRange.from, todayRange.to)
+  const { data: todayItems = [] } = useCalendarFeed(todayRange.from, todayRange.to)
 
   // Тикер: без него кнопка не появится сама на уже открытой вкладке.
   const [now, setNow] = useState(() => new Date())
@@ -257,7 +301,18 @@ function CalendarSidebarPanel() {
     return () => clearInterval(t)
   }, [])
 
-  const activeLesson = useMemo(() => pickActiveLesson(todayLessons, now), [todayLessons, now])
+  // Кнопка «Начать урок» — только про уроки, событию начинать нечего. Время
+  // берём с верхнего уровня ленты: оптимистичный патч переноса правит его,
+  // а не вложенный урок.
+  const activeLesson = useMemo(
+    () => pickActiveLesson(
+      todayItems.flatMap(it => it.type === 'lesson'
+        ? [{ ...it.lesson, scheduled_at: it.starts_at, duration_minutes: it.duration_minutes }]
+        : []),
+      now,
+    ),
+    [todayItems, now],
+  )
   const started = activeLesson
     ? now.getTime() >= new Date(activeLesson.scheduled_at).getTime()
     : false
@@ -298,7 +353,7 @@ function CalendarSidebarPanel() {
         />
       </div>
       <div className="rounded-[12px] border border-border bg-card flex flex-col min-h-0 overflow-hidden">
-        <TodayList lessons={todayLessons} />
+        <TodayList items={todayItems} />
       </div>
       <div className="flex-1 min-h-0" />
       {activeLesson && (
