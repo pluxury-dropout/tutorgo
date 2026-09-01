@@ -1,13 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 
 import { lessonSchema, LessonFormValues } from '@/schemas/lesson'
 import { Lesson, ApiError } from '@/types/api'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
+import { generateDates, lessonsPlural, RecurrenceOptions, RecurrenceType } from '@/lib/recurrence'
+import { useConflicts } from '@/lib/hooks/useEvents'
+import { formatTimeRange } from '@/lib/eventKind'
+import { AlertTriangle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,19 +30,10 @@ const WEEK_DAYS = [
   { label: 'Вс', iso: 7 },
 ]
 
-export type RecurrenceType = 'weekly_same' | 'weekly_custom' | 'every_n_weeks'
-
 const REC_TYPE_LABELS: Record<RecurrenceType, string> = {
   weekly_same:   'Каждую неделю в этот день',
   weekly_custom: 'Каждую неделю по выбранным дням',
   every_n_weeks: 'Каждые N недель',
-}
-
-export interface RecurrenceOptions {
-  type:    RecurrenceType
-  days?:   number[]   // ISO weekdays: 1=Mon … 7=Sun (for weekly_custom)
-  n?:      number     // interval in weeks (for every_n_weeks)
-  count?:  number     // if undefined — generate until courseEndAt or 52 weeks
 }
 
 interface LessonFormProps {
@@ -101,9 +96,44 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
     setRecCount('')
   }, [initial, open, reset])
 
+  const timeStr = `${String(Number(hourVal)).padStart(2,'0')}:${String(Number(minVal)).padStart(2,'0')}`
+
   useEffect(() => {
-    if (dateVal) setValue('scheduled_at', `${dateVal}T${String(Number(hourVal)).padStart(2,'0')}:${String(Number(minVal)).padStart(2,'0')}`)
-  }, [dateVal, hourVal, minVal, setValue])
+    if (dateVal) setValue('scheduled_at', `${dateVal}T${timeStr}`)
+  }, [dateVal, timeStr, setValue])
+
+  const recurrence: RecurrenceOptions | undefined = recEnabled && !initial
+    ? {
+        type:  recType,
+        days:  recType === 'weekly_custom' ? recDays : undefined,
+        n:     recType === 'every_n_weeks' ? recN : undefined,
+        count: recCount !== '' ? recCount : undefined,
+      }
+    : undefined
+
+  // Превью считаем той же функцией, что потом раскатает серию, — иначе кнопка врёт.
+  const daysMissing = recurrence?.type === 'weekly_custom' && recDays.length === 0
+  const preview = recurrence && dateVal && !daysMissing
+    ? generateDates(new Date(`${dateVal}T${timeStr}`).toISOString(), recurrence, courseEndAt)
+    : []
+  const lastDate = preview.length
+    ? new Date(preview[preview.length - 1]).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+    : ''
+
+  // Занятость слота. Предупреждение не блокирует сохранение: наложение бывает
+  // осознанным, а решает репетитор. При правке урок исключает сам себя.
+  // useWatch, а не watch(): watch() возвращает функцию, из-за которой React
+  // Compiler отключает мемоизацию всего компонента.
+  const durationMinutes = useWatch({ control, name: 'duration_minutes' })
+  const { data: conflicts = [] } = useConflicts(
+    dateVal && durationMinutes > 0
+      ? {
+          starts_at:        new Date(`${dateVal}T${timeStr}`).toISOString(),
+          duration_minutes: durationMinutes,
+          ...(initial ? { exclude_type: 'lesson' as const, exclude_id: initial.id } : {}),
+        }
+      : null,
+  )
 
   function toggleDay(iso: number) {
     setRecDays((prev) =>
@@ -113,15 +143,6 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
 
   async function submit(values: LessonFormValues) {
     try {
-      let recurrence: RecurrenceOptions | undefined
-      if (recEnabled && !initial) {
-        recurrence = {
-          type:  recType,
-          days:  recType === 'weekly_custom' ? recDays : undefined,
-          n:     recType === 'every_n_weeks' ? recN : undefined,
-          count: recCount !== '' ? recCount : undefined,
-        }
-      }
       await onSubmit(values, recurrence)
       onClose()
     } catch (err) {
@@ -173,6 +194,16 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
               <p className="text-xs text-destructive">{errors.duration_minutes.message}</p>
             )}
           </div>
+
+          {conflicts.length > 0 && (
+            <p className="flex items-start gap-1.5 rounded-md bg-[var(--cal-missed-bg)] px-2 py-1.5 text-xs text-[var(--cal-missed-text)]">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" />
+              <span>
+                Пересекается с{' '}
+                {conflicts.map((c) => `«${c.title}» ${formatTimeRange(c.starts_at, c.duration_minutes)}`).join(', ')}
+              </span>
+            </p>
+          )}
 
           {initial && (
             <div className="space-y-1.5">
@@ -251,6 +282,9 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                           </button>
                         ))}
                       </div>
+                      {daysMissing && (
+                        <p className="text-xs text-destructive">Выберите хотя бы один день недели</p>
+                      )}
                     </div>
                   )}
 
@@ -293,11 +327,13 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || daysMissing}>
               {isSubmitting
                 ? 'Создание...'
-                : recEnabled && !initial
-                  ? recCount !== '' ? `Создать ${recCount} уроков` : 'Создать уроки'
+                : recurrence
+                  ? preview.length
+                    ? `Создать ${lessonsPlural(preview.length)} (до ${lastDate})`
+                    : 'Создать уроки'
                   : 'Сохранить'}
             </Button>
           </div>

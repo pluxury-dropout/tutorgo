@@ -5,26 +5,31 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import type { DatesSetArg, EventClickArg, EventDropArg, DateSelectArg } from '@fullcalendar/core'
+import type { DatesSetArg, EventClickArg, EventDropArg, DateSelectArg, EventInput } from '@fullcalendar/core'
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import ruLocale from '@fullcalendar/core/locales/ru'
 import { Circle, CheckCircle2 } from 'lucide-react'
 
 import { stripHtml } from '@/lib/stripHtml'
-import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
-import { useTasks, useRescheduleTask } from '@/lib/hooks/useTasks'
+import { useCalendarFeed, useRescheduleLesson } from '@/lib/hooks/useCalendar'
+import { useRescheduleTask } from '@/lib/hooks/useTasks'
+import { useUpdateEvent } from '@/lib/hooks/useEvents'
 import { FC_COLORS, effectiveStatus } from '@/lib/lessonStatus'
+import { KIND_COLORS } from '@/lib/eventKind'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
-import { TaskCreatePopover } from '@/components/tasks/TaskCreatePopover'
+import { SlotCreatePopover } from '@/components/calendar/SlotCreatePopover'
+import { EventQuickPopover } from '@/components/calendar/EventQuickPopover'
 import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
-import type { LessonStatus } from '@/types/api'
+import type { Event as TutorEvent, LessonStatus, Task } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
+// Значения — в globals.css (--cal-task-*), рядом с цветами уроков и событий:
+// одна тема, одно место правки, тёмная тема не забывается.
 const TASK_COLORS = {
-  active: { bg: 'oklch(0.86 0.06 305)', border: 'oklch(0.41 0.22 305)', text: 'oklch(0.26 0.18 305)' },
-  done:   { bg: 'oklch(0.92 0.03 305)', border: 'oklch(0.65 0.08 305)', text: 'oklch(0.50 0.10 305)' },
+  active: { bg: 'var(--cal-task-bg)',      border: 'var(--cal-task-border)',      text: 'var(--cal-task-text)' },
+  done:   { bg: 'var(--cal-task-done-bg)', border: 'var(--cal-task-done-border)', text: 'var(--cal-task-done-text)' },
 }
 
 function roundToNearest30(date: Date): Date {
@@ -38,16 +43,25 @@ function roundToNearest15(n: number): number {
 
 const EDGE_ZONE = 50
 
+const PERSONAL_KEY = 'tg_cal_show_personal'
+
 export default function CalendarPage() {
   useMinuteTick()
   const { mutate: reschedule } = useRescheduleLesson()
   const rescheduleTask         = useRescheduleTask()
+  const updateEvent            = useUpdateEvent()
 
-  // Вместе с уроком/слотом храним якорь, у которого открыть поповер: блок
-  // события в сетке и прямоугольник выделенного слота соответственно.
+  // Вместе с уроком/событием/слотом храним якорь, у которого открыть поповер:
+  // блок в сетке и прямоугольник выделенного слота соответственно.
   const [selectedLesson, setSelectedLesson] = useState<{ lesson: QuickLesson; el: HTMLElement } | null>(null)
+  const [selectedEvent, setSelectedEvent]   = useState<{ event: TutorEvent; el: HTMLElement } | null>(null)
   const [newTaskSlot, setNewTaskSlot]       = useState<{ start: Date; end: Date; rect: DOMRect } | null>(null)
   const [isMobile, setIsMobile]             = useState(false)
+  // Тумблер «показывать личное»: нужен, когда репетитор показывает расписание
+  // ученику. Читаем localStorage лениво с window-guard — как в stores/auth.
+  const [showPersonal, setShowPersonal] = useState(
+    () => typeof window === 'undefined' || localStorage.getItem(PERSONAL_KEY) !== '0',
+  )
 
   const calendarRef       = useRef<FullCalendar>(null)
   const edgeTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -64,6 +78,10 @@ export default function CalendarPage() {
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem(PERSONAL_KEY, showPersonal ? '1' : '0')
+  }, [showPersonal])
 
   // Listen for navigation requests from the sidebar mini-calendar
   useEffect(() => {
@@ -87,52 +105,67 @@ export default function CalendarPage() {
     return { from: start.toISOString(), to: end.toISOString() }
   })
 
-  const { data: lessons = [], isPending: lessonsPending } = useCalendar(range.from, range.to)
-  const { data: tasks   = [], isPending: tasksPending   } = useTasks(range.from, range.to)
-  const eventsLoading = lessonsPending || tasksPending
+  const { data: items = [], isPending: eventsLoading } = useCalendarFeed(range.from, range.to)
 
-  const lessonEvents = lessons.map((l) => {
-    const status = effectiveStatus(l)
-    return {
-    id:              l.id,
-    title:           l.is_group ? l.subject : `${l.subject}${l.student_name ? ` — ${l.student_name}` : ''}`,
-    start:           l.scheduled_at,
-    end:             new Date(new Date(l.scheduled_at).getTime() + l.duration_minutes * 60_000).toISOString(),
-    backgroundColor: FC_COLORS[status].bg,
-    borderColor:     FC_COLORS[status].border,
-    textColor:       FC_COLORS[status].text,
-    extendedProps: {
-      type:            'lesson',
-      courseId:        l.course_id,
-      status:          status,
-      notes:           l.notes,
-      isGroup:         l.is_group,
-      scheduledAt:     l.scheduled_at,
-      durationMinutes: l.duration_minutes,
-      cyclePosition:   l.cycle_position ?? null,
-      cycleSize:       l.cycle_size ?? null,
-    },
-  }})
+  // Одна лента — один проход. Общие поля дают сетку, вложенный объект по типу —
+  // цвета и то, что читают поповеры.
+  const events = items.flatMap((item): EventInput[] => {
+    const end = new Date(new Date(item.starts_at).getTime() + item.duration_minutes * 60_000).toISOString()
 
-  const taskEvents = tasks.filter((t) => t.scheduled_at).map((t) => {
+    if (item.type === 'lesson') {
+      const l = item.lesson
+      const status = effectiveStatus(l)
+      return [{
+        id:              item.id,
+        title:           item.title,
+        start:           item.starts_at,
+        end,
+        backgroundColor: FC_COLORS[status].bg,
+        borderColor:     FC_COLORS[status].border,
+        textColor:       FC_COLORS[status].text,
+        extendedProps: {
+          type:            'lesson',
+          courseId:        l.course_id,
+          status:          status,
+          notes:           l.notes,
+          isGroup:         l.is_group,
+          scheduledAt:     item.starts_at,
+          durationMinutes: item.duration_minutes,
+          cyclePosition:   l.cycle_position ?? null,
+          cycleSize:       l.cycle_size ?? null,
+        },
+      }]
+    }
+
+    if (item.type === 'event') {
+      const e = item.event
+      if (e.kind === 'personal' && !showPersonal) return []
+      const colors = KIND_COLORS[e.kind]
+      return [{
+        id:              item.id,
+        title:           item.title,
+        start:           item.starts_at,
+        end,
+        backgroundColor: e.color || colors.bg,
+        borderColor:     e.color || colors.border,
+        textColor:       colors.text,
+        extendedProps: { type: 'event', event: e },
+      }]
+    }
+
+    const t = item.task
     const colors = t.status === 'done' ? TASK_COLORS.done : TASK_COLORS.active
-    return {
-      id:              t.id,
-      title:           stripHtml(t.title),
-      start:           t.scheduled_at!,
-      end:             new Date(new Date(t.scheduled_at!).getTime() + t.duration_minutes! * 60_000).toISOString(),
+    return [{
+      id:              item.id,
+      title:           stripHtml(item.title),
+      start:           item.starts_at,
+      end,
       backgroundColor: colors.bg,
       borderColor:     colors.border,
       textColor:       colors.text,
-      extendedProps: {
-        type:   'task',
-        status: t.status,
-        title:  t.title,
-      },
-    }
+      extendedProps: { type: 'task', status: t.status, title: t.title, task: t },
+    }]
   })
-
-  const events = [...lessonEvents, ...taskEvents]
 
   function refreshCalendarRect() {
     const el = document.querySelector('.fc-view-harness')
@@ -196,6 +229,10 @@ export default function CalendarPage() {
 
   function handleEventClick(arg: EventClickArg) {
     if (arg.event.extendedProps.type === 'task') return
+    if (arg.event.extendedProps.type === 'event') {
+      setSelectedEvent({ el: arg.el, event: arg.event.extendedProps.event as TutorEvent })
+      return
+    }
     const p = arg.event.extendedProps
     setSelectedLesson({
       el: arg.el,
@@ -222,9 +259,29 @@ export default function CalendarPage() {
 
   function handleEventDrop(arg: EventDropArg) {
     const start    = arg.event.start!
-    const end      = arg.event.end!
+    const end      = arg.event.end ?? new Date(start.getTime() + 60 * 60_000)
     const snapped  = roundToNearest30(start)
     const duration = Math.round((end.getTime() - start.getTime()) / 60_000)
+
+    if (arg.event.extendedProps.type === 'event') {
+      const e = arg.event.extendedProps.event as TutorEvent
+      updateEvent.mutate(
+        {
+          id:   e.id,
+          data: {
+            title:            e.title,
+            kind:             e.kind,
+            starts_at:        snapped.toISOString(),
+            duration_minutes: duration,
+            color:            e.color,
+            location:         e.location,
+            notes:            e.notes,
+          },
+        },
+        { onError: () => arg.revert() },
+      )
+      return
+    }
 
     if (arg.event.extendedProps.type === 'task') {
       rescheduleTask.mutate(
@@ -262,6 +319,15 @@ export default function CalendarPage() {
     const rawDur   = Math.round((end.getTime() - start.getTime()) / 60_000)
     const duration = roundToNearest15(rawDur)
 
+    if (arg.event.extendedProps.type === 'event') {
+      const e = arg.event.extendedProps.event as TutorEvent
+      updateEvent.mutate(
+        { id: e.id, data: { ...e, duration_minutes: duration } },
+        { onError: () => arg.revert() },
+      )
+      return
+    }
+
     reschedule(
       {
         id:   arg.event.id,
@@ -291,11 +357,16 @@ export default function CalendarPage() {
         anchor={selectedLesson?.el ?? null}
         onClose={() => setSelectedLesson(null)}
       />
-      <TaskCreatePopover
+      <SlotCreatePopover
         start={newTaskSlot?.start ?? null}
         end={newTaskSlot?.end ?? null}
         anchor={newTaskSlot?.rect ?? null}
         onClose={() => setNewTaskSlot(null)}
+      />
+      <EventQuickPopover
+        event={selectedEvent?.event ?? null}
+        anchor={selectedEvent?.el ?? null}
+        onClose={() => setSelectedEvent(null)}
       />
       <div className={`${isMobile ? 'hidden' : 'flex flex-col'} h-full min-h-0 overflow-hidden`}>
         {/* Подсказка вместо пустой сетки: новичок не догадывается, что урок
@@ -303,8 +374,8 @@ export default function CalendarPage() {
             и не показывается, пока запросы периода ещё в полёте. */}
         {events.length === 0 && !eventsLoading && (
           <div className="mb-2 shrink-0 rounded-lg border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
-            Уроков в этом периоде нет. Кликни по свободному слоту, чтобы поставить урок или задачу —
-            урок привязывается к курсу, так что сначала заведи курс с учеником.
+            В этом периоде пусто. Кликни по свободному слоту, чтобы добавить событие или задачу.
+            Уроки пока ставятся на странице курса.
           </div>
         )}
         <div className="min-h-0 flex-1">
@@ -315,7 +386,15 @@ export default function CalendarPage() {
           headerToolbar={{
             left:   'prev,next today',
             center: 'title',
-            right:  'dayGridMonth,timeGridWeek,timeGridDay',
+            right:  'togglePersonal dayGridMonth,timeGridWeek,timeGridDay',
+          }}
+          // Тумблер живёт в тулбаре календаря, а не отдельной строкой над сеткой:
+          // своя строка съедала высоту и висела без хозяина.
+          customButtons={{
+            togglePersonal: {
+              text:  showPersonal ? 'Личные: вкл' : 'Личные: выкл',
+              click: () => setShowPersonal((v) => !v),
+            },
           }}
           locale={ruLocale}
           firstDay={1}
@@ -350,7 +429,7 @@ export default function CalendarPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      const task = tasks?.find(t => t.id === arg.event.id)
+                      const task = arg.event.extendedProps.task as Task | undefined
                       if (task) {
                         rescheduleTask.mutate({
                           id: task.id,

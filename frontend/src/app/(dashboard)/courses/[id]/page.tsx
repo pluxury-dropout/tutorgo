@@ -28,7 +28,7 @@ import {
 import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment } from '@/lib/hooks/usePayments'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
-import { LessonForm, RecurrenceOptions } from '@/components/lessons/LessonForm'
+import { LessonForm } from '@/components/lessons/LessonForm'
 import { AttendanceDialog } from '@/components/lessons/AttendanceDialog'
 import { SeriesDialog } from '@/components/lessons/SeriesDialog'
 import { PaymentForm } from '@/components/payments/PaymentForm'
@@ -39,6 +39,7 @@ import { ErrorState } from '@/components/common/ErrorState'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
 import { SeriesUpdateInput } from '@/lib/api/lessons'
+import { generateDates, lessonsPlural, RecurrenceOptions } from '@/lib/recurrence'
 import { PaymentFormValues } from '@/schemas/payment'
 import { Lesson, Payment } from '@/types/api'
 
@@ -60,59 +61,6 @@ function currentWeekRange(): { from: Date; to: Date } {
   const to = new Date(from)
   to.setDate(from.getDate() + 7)
   return { from, to }
-}
-
-function generateDates(baseISO: string, opts: RecurrenceOptions, courseEndAt?: string | null): string[] {
-  const base    = new Date(baseISO)
-  const limit   = opts.count ?? 200                          // hard cap
-  const endDate = opts.count === undefined && courseEndAt
-    ? new Date(courseEndAt)
-    : null
-
-  function within(d: Date) {
-    if (endDate && d > endDate) return false
-    return true
-  }
-
-  const results: Date[] = []
-
-  if (opts.type === 'weekly_same') {
-    for (let i = 0; i < limit; i++) {
-      const d = new Date(base)
-      d.setDate(base.getDate() + 7 * i)
-      if (!within(d)) break
-      results.push(d)
-    }
-  } else if (opts.type === 'every_n_weeks') {
-    const n = opts.n ?? 2
-    for (let i = 0; i < limit; i++) {
-      const d = new Date(base)
-      d.setDate(base.getDate() + 7 * n * i)
-      if (!within(d)) break
-      results.push(d)
-    }
-  } else if (opts.type === 'weekly_custom') {
-    const days = (opts.days ?? []).slice().sort((a, b) => a - b)
-    if (days.length === 0) return [base.toISOString()]
-    const jsDay  = base.getDay()
-    const toMon  = jsDay === 0 ? -6 : 1 - jsDay
-    const monday = new Date(base)
-    monday.setDate(base.getDate() + toMon)
-    monday.setHours(base.getHours(), base.getMinutes(), 0, 0)
-
-    for (let week = 0; results.length < limit; week++) {
-      for (const isoDay of days) {
-        if (results.length >= limit) break
-        const d = new Date(monday)
-        d.setDate(monday.getDate() + 7 * week + (isoDay - 1))
-        if (!within(d)) { week = 9999; break }
-        if (d >= base) results.push(d)
-      }
-      if (week > 200) break
-    }
-  }
-
-  return results.map((d) => d.toISOString())
 }
 
 export default function CourseDetailPage() {
@@ -210,7 +158,7 @@ export default function CourseDetailPage() {
     } else if (recurrence) {
       const dates = generateDates(baseISO, recurrence, course?.ended_at)
       if (dates.length === 0) {
-        toast.error('Дата урока позже даты окончания курса — продлите курс или выберите более раннюю дату')
+        toast.error('Не из чего собрать серию: проверьте дни недели и дату окончания курса')
         return
       }
       await createLessons.mutateAsync({
@@ -219,7 +167,7 @@ export default function CourseDetailPage() {
         duration_minutes: values.duration_minutes,
         notes:            values.notes,
       })
-      toast.success(`Создано ${dates.length} уроков`)
+      toast.success(`Создано ${lessonsPlural(dates.length)}`)
     } else {
       await createLesson.mutateAsync({ ...values, scheduled_at: baseISO, course_id: id })
       toast.success('Урок добавлен')

@@ -127,6 +127,26 @@
   --cal-missed-border:     #F5C9C9;
   --cal-missed-text:       #C92A2A;
 
+  /* События: личное — нейтральный сланец, работа — бирюза, пробный — акцент.
+     Синий и фиолетовый заняты уроками и задачами. */
+  --cal-personal-bg:       #E7E9EE;
+  --cal-personal-border:   #D3D7E0;
+  --cal-personal-text:     #3B4252;
+  --cal-work-bg:           #D6EEF3;
+  --cal-work-border:       #BBDFE9;
+  --cal-work-text:         #12414F;
+  --cal-trial-bg:          #FDECD2;
+  --cal-trial-border:      #F8DCB0;
+  --cal-trial-text:        #7A4A06;
+
+  /* Задачи в календаре */
+  --cal-task-bg:           oklch(0.86 0.06 305);
+  --cal-task-border:       oklch(0.41 0.22 305);
+  --cal-task-text:         oklch(0.26 0.18 305);
+  --cal-task-done-bg:      oklch(0.92 0.03 305);
+  --cal-task-done-border:  oklch(0.65 0.08 305);
+  --cal-task-done-text:    oklch(0.50 0.10 305);
+
   /* Charts */
   --chart-1: #1D4ED8;   /* blue */
   --chart-2: #D97706;   /* amber */
@@ -207,6 +227,23 @@
   --cal-missed-bg:         #3a201a;
   --cal-missed-border:     #4f2d24;
   --cal-missed-text:       #e8b8a8;
+  /* Тёмная тема: фон холста #141414, muted #2a2a2a — блок светлее muted,
+     иначе событие читается как пустая ячейка. */
+  --cal-personal-bg:       #343945;
+  --cal-personal-border:   #49505f;
+  --cal-personal-text:     #d3d8e4;
+  --cal-work-bg:           #1d4351;
+  --cal-work-border:       #2c6377;
+  --cal-work-text:         #b8dfeb;
+  --cal-trial-bg:          #4d3719;
+  --cal-trial-border:      #6f5024;
+  --cal-trial-text:        #f2d199;
+  --cal-task-bg:           #3a2857;
+  --cal-task-border:       #503872;
+  --cal-task-text:         #d9c6f0;
+  --cal-task-done-bg:      #292233;
+  --cal-task-done-border:  #382c46;
+  --cal-task-done-text:    #948aa8;
 }
 
 /* Экран урока светлый при любой теме приложения: холст Excalidraw белый по

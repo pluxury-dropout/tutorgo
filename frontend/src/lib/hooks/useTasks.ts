@@ -4,6 +4,12 @@ import { Task } from '@/types/api'
 
 const BOARD_KEY = ['tasks', 'board'] as const
 
+// Задача видна в двух местах: канбан (['tasks']) и лента календаря (['calendar']).
+function invalidateTaskViews(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['tasks'] })
+  qc.invalidateQueries({ queryKey: ['calendar'] })
+}
+
 export function useTasks(from: string, to: string) {
   return useQuery({
     queryKey:        ['tasks', from, to],
@@ -42,7 +48,7 @@ export function useCreateTask() {
       return { prev }
     },
     onError:   (_e, _v, ctx) => ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data)),
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSettled: () => invalidateTaskViews(qc),
   })
 }
 
@@ -60,7 +66,7 @@ export function useRescheduleTask() {
       return { prev }
     },
     onError:   (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(BOARD_KEY, ctx.prev) },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSettled: () => invalidateTaskViews(qc),
   })
 }
 
@@ -77,6 +83,6 @@ export function useDeleteTask() {
       return { prev }
     },
     onError:   (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(BOARD_KEY, ctx.prev) },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+    onSettled: () => invalidateTaskViews(qc),
   })
 }

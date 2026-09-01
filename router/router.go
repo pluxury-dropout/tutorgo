@@ -37,6 +37,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentRepo := repository.NewEnrollmentRepository(pool)
 	attendanceRepo := repository.NewAttendanceRepository(pool)
 	taskRepo := repository.NewTaskRepository(pool)
+	eventRepo := repository.NewEventRepository(pool)
 	whiteboardRepo := repository.NewWhiteboardRepository(pool)
 	subscriptionRepo := repository.NewSubscriptionRepository(pool)
 	studentRefreshRepo := repository.NewStudentRefreshTokenRepository(pool)
@@ -57,6 +58,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
+	eventService := service.NewEventService(eventRepo)
+	calendarService := service.NewCalendarService(lessonService, eventRepo, taskRepo)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
 	materialService := service.NewMaterialService(materialRepo)
@@ -83,6 +86,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	enrollmentHandler := handlers.NewEnrollmentHandler(enrollmentService, log)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceService, log)
 	taskHandler := handlers.NewTaskHandler(taskService, log)
+	eventHandler := handlers.NewEventHandler(eventService, log)
+	calendarHandler := handlers.NewCalendarHandler(calendarService, log)
 	callHandler := handlers.NewCallHandler(lessonService, log, cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, studentService, tutorService)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 	studentAuthHandler := handlers.NewStudentAuthHandler(studentService, studentRefreshService, log, cfg.JWTSecret, cfg.Env == "production")
@@ -221,8 +226,17 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.DELETE("/lessons/series/:seriesId", lessonHandler.DeleteSeries)
 		auth.PATCH("/lessons/series/:seriesId", lessonHandler.UpdateSeries)
 
+		// /calendar — только уроки (дашборд, сайдбар), /calendar/feed — единая лента.
 		auth.GET("/calendar", lessonHandler.GetCalendar)
+		auth.GET("/calendar/feed", calendarHandler.GetFeed)
+		auth.GET("/calendar/conflicts", calendarHandler.GetConflicts)
 		auth.GET("/dashboard/cycles", lessonHandler.GetCurrentCycles)
+
+		auth.GET("/events", eventHandler.GetByRange)
+		auth.POST("/events", eventHandler.Create)
+		auth.GET("/events/:id", eventHandler.GetByID)
+		auth.PUT("/events/:id", eventHandler.Update)
+		auth.DELETE("/events/:id", eventHandler.Delete)
 
 		auth.GET("/courses/:id/enrollments", enrollmentHandler.GetByCourse)
 		auth.POST("/courses/:id/enrollments", enrollmentHandler.Add)
