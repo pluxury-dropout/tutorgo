@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useCalendar, useRescheduleLesson } from '@/lib/hooks/useCalendar'
+import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { useCalendarFeed, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { effectiveStatus } from '@/lib/lessonStatus'
+import { KIND_COLORS, TASK_COLORS } from '@/lib/eventKind'
+import { stripHtml } from '@/lib/stripHtml'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
-import type { CalendarLesson, LessonStatus } from '@/types/api'
+import { EventQuickPopover } from '@/components/calendar/EventQuickPopover'
+import type { CalendarItem, CalendarLesson, Event as TutorEvent, LessonStatus } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -62,9 +65,33 @@ function toMinutes(iso: string, durationMinutes?: number): number {
     : d.getHours() * 60 + d.getMinutes()
 }
 
+/** Цвет блока: у урока — статус, у события — вид (свой цвет перекрывает), у задачи — готовность. */
+function itemStyle(item: CalendarItem): { bg: string; text: string } {
+  if (item.type === 'lesson') return STATUS_STYLE[effectiveStatus(item.lesson)]
+  if (item.type === 'event') {
+    const kind = KIND_COLORS[item.event.kind]
+    return { bg: item.event.color || kind.bg, text: kind.text }
+  }
+  return item.task.status === 'done' ? TASK_COLORS.done : TASK_COLORS.active
+}
+
+/** Запись ленты плюс её колонка в кластере пересечений. */
+type PlacedItem = CalendarItem & { _col: number; _cols: number }
+
 // ─── MobileWeekCalendar ───────────────────────────────────────────────────────
 
-export function MobileWeekCalendar() {
+/** showPersonal приходит пропом от страницы: она владеет состоянием и пишет его
+ *  в localStorage. Своё чтение ключа не перерисовало бы сетку при переключении,
+ *  а тулбар FullCalendar с тем же тумблером на телефоне скрыт — отсюда своя
+ *  кнопка в шапке: показать расписание ученику с экрана телефона вероятнее,
+ *  чем с десктопа. */
+export function MobileWeekCalendar({
+  showPersonal,
+  onTogglePersonal,
+}: {
+  showPersonal: boolean
+  onTogglePersonal: () => void
+}) {
   useMinuteTick()
   const today = useMemo(() => new Date(), [])
 
@@ -75,6 +102,7 @@ export function MobileWeekCalendar() {
     return Math.max(0, Math.min(6, diff))
   })
   const [selectedLesson, setSelectedLesson] = useState<{ lesson: QuickLesson; el: HTMLElement } | null>(null)
+  const [selectedEvent, setSelectedEvent]   = useState<{ event: TutorEvent; el: HTMLElement } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // ─── data fetching ──────────────────────────────────────────────────────────
@@ -86,7 +114,7 @@ export function MobileWeekCalendar() {
     return d.toISOString()
   }, [weekStart])
 
-  const { data: lessons = [] } = useCalendar(rangeFrom, rangeTo)
+  const { data: items = [] } = useCalendarFeed(rangeFrom, rangeTo)
   const reschedule = useRescheduleLesson()
 
   // ─── drag-to-reschedule (touch long-press) ─────────────────────────────────
@@ -184,22 +212,25 @@ export function MobileWeekCalendar() {
   // ─── layout: overlap columns per day ───────────────────────────────────────
 
   const layoutByDay = useMemo(() => {
-    const result: Record<number, (CalendarLesson & { _col: number; _cols: number })[]> = {}
+    const result: Record<number, PlacedItem[]> = {}
+    const visible = items.filter(
+      it => !(it.type === 'event' && it.event.kind === 'personal' && !showPersonal),
+    )
 
     for (let d = 0; d < 7; d++) {
       const dayDate = new Date(weekStart)
       dayDate.setDate(dayDate.getDate() + d)
 
-      const dayLessons = lessons
-        .filter(l => isSameLocalDay(new Date(l.scheduled_at), dayDate))
-        .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
-        .map(l => ({ ...l, _col: 0, _cols: 1 }))
+      const dayItems: PlacedItem[] = visible
+        .filter(it => isSameLocalDay(new Date(it.starts_at), dayDate))
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+        .map(it => ({ ...it, _col: 0, _cols: 1 }))
 
       // pack into columns, but only within connected overlap clusters —
-      // a lesson with no overlap anywhere that day must stay full-width
-      const out: typeof dayLessons = []
-      let cluster: typeof dayLessons = []
-      let clusterCols: (typeof dayLessons)[] = []
+      // an item with no overlap anywhere that day must stay full-width
+      const out: PlacedItem[] = []
+      let cluster: PlacedItem[] = []
+      let clusterCols: PlacedItem[][] = []
       let clusterEnd = -Infinity
 
       const flushCluster = () => {
@@ -209,9 +240,9 @@ export function MobileWeekCalendar() {
         clusterCols = []
       }
 
-      for (const ev of dayLessons) {
-        const startMin = toMinutes(ev.scheduled_at)
-        const endMin   = toMinutes(ev.scheduled_at, ev.duration_minutes)
+      for (const ev of dayItems) {
+        const startMin = toMinutes(ev.starts_at)
+        const endMin   = toMinutes(ev.starts_at, ev.duration_minutes)
 
         if (startMin >= clusterEnd) flushCluster()
         clusterEnd = Math.max(clusterEnd, endMin)
@@ -219,7 +250,7 @@ export function MobileWeekCalendar() {
         let placed = false
         for (let c = 0; c < clusterCols.length; c++) {
           const last    = clusterCols[c][clusterCols[c].length - 1]
-          const lastEnd = toMinutes(last.scheduled_at, last.duration_minutes)
+          const lastEnd = toMinutes(last.starts_at, last.duration_minutes)
           if (lastEnd <= startMin) {
             clusterCols[c].push(ev)
             ev._col = c
@@ -238,7 +269,7 @@ export function MobileWeekCalendar() {
       result[d] = out
     }
     return result
-  }, [lessons, weekStart])
+  }, [items, weekStart, showPersonal])
 
   // ─── week navigation ────────────────────────────────────────────────────────
 
@@ -287,6 +318,11 @@ export function MobileWeekCalendar() {
         anchor={selectedLesson?.el ?? null}
         onClose={() => setSelectedLesson(null)}
       />
+      <EventQuickPopover
+        event={selectedEvent?.event ?? null}
+        anchor={selectedEvent?.el ?? null}
+        onClose={() => setSelectedEvent(null)}
+      />
 
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--background)', overflow: 'hidden' }}>
 
@@ -305,8 +341,14 @@ export function MobileWeekCalendar() {
               {weekStart.getDate()} – {weekEnd.getDate()} {MONTHS_GEN[weekEnd.getMonth()]}
             </div>
           </div>
-          <IconBtn onClick={prevWeek}><ChevronLeft size={16} /></IconBtn>
-          <IconBtn onClick={nextWeek}><ChevronRight size={16} /></IconBtn>
+          <IconBtn
+            onClick={onTogglePersonal}
+            label={showPersonal ? 'Скрыть личные события' : 'Показать личные события'}
+          >
+            {showPersonal ? <Eye size={16} /> : <EyeOff size={16} />}
+          </IconBtn>
+          <IconBtn onClick={prevWeek} label="Предыдущая неделя"><ChevronLeft size={16} /></IconBtn>
+          <IconBtn onClick={nextWeek} label="Следующая неделя"><ChevronRight size={16} /></IconBtn>
         </header>
 
         {/* ── Day strip ── */}
@@ -407,24 +449,37 @@ export function MobileWeekCalendar() {
 
                   {/* Events */}
                   {layout?.map(ev => {
-                    const startMin = toMinutes(ev.scheduled_at)
+                    const startMin = toMinutes(ev.starts_at)
                     const endMin   = startMin + ev.duration_minutes
                     const top      = (startMin - HOURS[0] * 60) / 60 * HOUR_PX
                     const height   = Math.max(20, (endMin - startMin) / 60 * HOUR_PX - 2)
                     const colW     = 100 / ev._cols
                     const left     = colW * ev._col
-                    const style    = STATUS_STYLE[effectiveStatus(ev)]
-                    const isPast    = new Date(ev.scheduled_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
+                    const style    = itemStyle(ev)
+                    const isPast    = new Date(ev.starts_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
                     const isDragged = drag?.lesson.id === ev.id
+                    // Перетаскивание пока только для уроков: long-press-механика
+                    // завязана на reschedule урока, обобщать её — отдельная задача.
+                    // Время берём с верхнего уровня ленты: оптимистичный патч
+                    // переноса правит его, а не вложенный урок, — иначе второй
+                    // подряд перенос отсчитывался бы от старого слота.
+                    const lesson    = ev.type === 'lesson'
+                      ? { ...ev.lesson, scheduled_at: ev.starts_at, duration_minutes: ev.duration_minutes }
+                      : null
+                    const struck    = (ev.type === 'lesson' && ev.lesson.status === 'cancelled')
+                      || (ev.type === 'task' && ev.task.status === 'done')
 
                     return (
                       <div
-                        key={ev.id}
-                        onClick={(e) => openLesson(ev, e.currentTarget)}
-                        onPointerDown={(e) => handleEventPointerDown(e, ev)}
-                        onPointerMove={handleEventPointerMove}
-                        onPointerUp={handleEventPointerUp}
-                        onPointerCancel={handleEventPointerCancel}
+                        key={`${ev.type}:${ev.id}`}
+                        onClick={(e) => {
+                          if (lesson) openLesson(lesson, e.currentTarget)
+                          else if (ev.type === 'event') setSelectedEvent({ event: ev.event, el: e.currentTarget })
+                        }}
+                        onPointerDown={lesson ? (e) => handleEventPointerDown(e, lesson) : undefined}
+                        onPointerMove={lesson ? handleEventPointerMove : undefined}
+                        onPointerUp={lesson ? handleEventPointerUp : undefined}
+                        onPointerCancel={lesson ? handleEventPointerCancel : undefined}
                         style={{
                           position: 'absolute',
                           top, height,
@@ -440,19 +495,23 @@ export function MobileWeekCalendar() {
                           zIndex:    isDragged ? 6 : 2,
                           userSelect: 'none',
                           WebkitUserSelect: 'none',
-                          touchAction: 'none', // ponytail: must be static — see handleEventPointerDown
-                          filter:          isPast              ? 'brightness(0.9)'    : undefined,
-                          textDecoration:  ev.status === 'cancelled' ? 'line-through' : undefined,
+                          // ponytail: must be static — see handleEventPointerDown.
+                          // Блокируем скролл только там, где есть drag, — на уроках.
+                          touchAction: lesson ? 'none' : undefined,
+                          filter:          isPast ? 'brightness(0.9)' : undefined,
+                          textDecoration:  struck ? 'line-through'    : undefined,
                           transform:  isDragged ? `translate(${drag.deltaX}px,${drag.deltaY}px) scale(1.03)` : undefined,
                           boxShadow:  isDragged ? '0 6px 16px -4px rgba(0,0,0,0.35)' : undefined,
                         }}
                       >
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {ev.subject}
+                          {/* У урока имя ученика уходит во вторую строку, поэтому
+                              берём предмет, а не готовый title ленты. */}
+                          {lesson ? lesson.subject : ev.type === 'task' ? stripHtml(ev.title) : ev.title}
                         </div>
-                        {height > 30 && !ev.is_group && ev.student_name && (
+                        {height > 30 && lesson && !lesson.is_group && lesson.student_name && (
                           <div style={{ fontSize: 9, opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {ev.student_name}
+                            {lesson.student_name}
                           </div>
                         )}
                       </div>
@@ -471,10 +530,12 @@ export function MobileWeekCalendar() {
 
 // ─── small helper ─────────────────────────────────────────────────────────────
 
-function IconBtn({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
+function IconBtn({ onClick, label, children }: { onClick?: () => void; label?: string; children: ReactNode }) {
   return (
     <button
       onClick={onClick}
+      aria-label={label}
+      title={label}
       style={{
         width: 30, height: 30,
         display: 'flex', alignItems: 'center', justifyContent: 'center',

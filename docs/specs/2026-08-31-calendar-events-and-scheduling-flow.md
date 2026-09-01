@@ -1,7 +1,7 @@
 # Календарь как единая рабочая поверхность + переработка флоу планирования
 
 **Дата:** 2026-08-31
-**Статус:** Черновик
+**Статус:** Фазы 0–1 реализованы (ветка `feat/recurrence-fixes`), фаза 2 следующая
 **Область:** `migrations/`, `models/`, `repository/`, `service/`, `handlers/`, `router/`, `jobs/`, `worker/`, `frontend/src/app/(dashboard)/calendar`, `frontend/src/components/{lessons,tasks,events,calendar}`
 
 > Спека разбита на фазы. **Реализуй по одной фазе за раз**, каждая фаза самодостаточна и деплоится отдельно. Не начинай следующую, пока предыдущая не смержена.
@@ -89,6 +89,11 @@
 
 ## 4. Фаза 0 — багфиксы повторений
 
+> **Реализовано** (коммит `aee49f8`). Раскатка дат вынесена из страницы курса в
+> `frontend/src/lib/recurrence.ts` (`MAX_HORIZON_MONTHS`, `MAX_OCCURRENCES`,
+> `generateDates`, `lessonsPlural`) — она нужна и форме для превью, и странице
+> для сабмита; рядом `recurrence.test.ts` на `node:test`.
+
 **Без миграций. Только `frontend/src/app/(dashboard)/courses/[id]/page.tsx` и `frontend/src/components/lessons/LessonForm.tsx`.**
 
 1. В `generateDates()` ввести жёсткий предел по дате, а не только по числу: если `opts.count` не задан и `courseEndAt` пуст — генерировать не более чем на 12 месяцев вперёд от `base`. Константа `MAX_HORIZON_MONTHS = 12`, `MAX_OCCURRENCES = 200` оставить как второй предохранитель.
@@ -105,6 +110,10 @@
 
 ## 5. Фаза 1 — сущность `events` и единая лента календаря
 
+> **Реализовано** (коммиты `373d0b6`, `c1c0c0a`): миграция, CRUD `/events`,
+> лента, конфликты, десктопный календарь. Перевод `MobileWeekCalendar` на ленту
+> и предупреждение о пересечении при drag-and-drop доделываются в этой же ветке.
+
 ### 5.1. Миграция `031_events.sql`
 
 ```sql
@@ -117,7 +126,6 @@ CREATE TABLE events (
                                  CHECK (kind IN ('personal','work','trial')),
     starts_at        TIMESTAMPTZ NOT NULL,
     duration_minutes INT         NOT NULL CHECK (duration_minutes > 0),
-    all_day          BOOLEAN     NOT NULL DEFAULT FALSE,
     color            TEXT        NOT NULL DEFAULT '',
     location         TEXT        NOT NULL DEFAULT '',
     notes            TEXT        NOT NULL DEFAULT '',
@@ -138,6 +146,10 @@ DROP TABLE IF EXISTS events;
 ```
 
 Поля `busy` нет намеренно: любое событие занимает время (см. раздел 2).
+Поля `all_day` нет по той же причине: событие «на весь день» не отвечает на
+вопрос «когда я занят», а в сетке уезжает в отдельную полосу FullCalendar,
+которая съедает высоту и выпадает из проверки занятости. Календарь рисуется с
+`allDaySlot={false}`.
 
 ### 5.2. Что означает `kind`
 
@@ -168,7 +180,6 @@ type Event struct {
     Kind            string    `json:"kind"`
     StartsAt        time.Time `json:"starts_at"`
     DurationMinutes int       `json:"duration_minutes"`
-    AllDay          bool      `json:"all_day"`
     Color           string    `json:"color"`
     Location        string    `json:"location"`
     Notes           string    `json:"notes"`
@@ -179,20 +190,22 @@ type CreateEventRequest struct {
     Kind            string    `json:"kind"             validate:"omitempty,oneof=personal work trial"`
     StartsAt        time.Time `json:"starts_at"        validate:"required"`
     DurationMinutes int       `json:"duration_minutes" validate:"required,gt=0"`
-    AllDay          bool      `json:"all_day"`
     Color           string    `json:"color"            validate:"omitempty,max=32"`
     Location        string    `json:"location"         validate:"omitempty,max=200"`
     Notes           string    `json:"notes"            validate:"omitempty,max=2000"`
 }
 
-type UpdateEventRequest struct { /* те же поля, Title/StartsAt/DurationMinutes обязательны */ }
+// Правка события — полная замена тех же полей, отдельного типа заводить незачем.
+type UpdateEventRequest = CreateEventRequest
 ```
 
 ### 5.4. Слои
 
 По существующей схеме проекта:
 
-- `repository/event.go` — `Create`, `GetByID`, `GetByRange(ctx, tutorID, from, to)`, `Update`, `Delete`, `GetOccupiedInRange(ctx, tutorID, from, to)`.
+- `repository/event.go` — `Create`, `GetByID`, `GetByRange(ctx, tutorID, from, to)`, `Update`, `Delete`,
+  `GetOccupiedInRange(ctx, tutorID, from, to, excludeType string, excludeID *string)`. Исключение
+  самого себя нужно при переносе: иначе элемент конфликтует с собственным старым слотом.
 - `service/event.go` — проверка принадлежности тьютору, дефолт `Kind = "personal"`.
 - `handlers/event.go` — стандартный набор, `tutorID` из контекста как везде.
 - `router/router.go`:
@@ -207,9 +220,9 @@ auth.DELETE("/events/:id", eventHandler.Delete)
 
 ### 5.5. Единая лента календаря
 
-Заменить два запроса фронта (`useCalendar` + `useTasks`) одним.
+Заменить два запроса страницы календаря (`useCalendar` + `useTasks`) одним.
 
-`GET /calendar?from=&to=&kinds=lesson,event,task` →
+`GET /calendar/feed?from=&to=&kinds=lesson,event,task` →
 
 ```json
 {
@@ -220,7 +233,7 @@ auth.DELETE("/events/:id", eventHandler.Delete)
                   "cycle_position": 3, "cycle_size": 8, "paid": true } },
     { "type": "event", "id": "...", "title": "Спортзал", "starts_at": "...",
       "duration_minutes": 90,
-      "event": { "kind": "personal", "all_day": false, "color": "", "location": "" } },
+      "event": { "kind": "personal", "color": "", "location": "" } },
     { "type": "task", "id": "...", "title": "Проверить ДЗ", "starts_at": "...",
       "duration_minutes": 30,
       "task": { "status": "urgent" } }
@@ -232,7 +245,16 @@ auth.DELETE("/events/:id", eventHandler.Delete)
 
 `kinds` — опциональный фильтр, по умолчанию все три.
 
-Реализация: `service/calendar.go`, который параллельно (`errgroup`) дёргает три репозитория и сливает результат, отсортированный по `starts_at`. Старый `GET /calendar` не ломать сразу: оставить отвечающим как раньше до конца фазы 2, чтобы фронт мигрировал отдельным PR.
+Реализация: `service/calendar.go`, который параллельно (`errgroup`) дёргает три источника и сливает результат, отсортированный по `starts_at`. Зависимости объявлены узкими интерфейсами на один метод (`lessonFeedSource` и т.д.), а не целыми сервисами: и связность меньше, и мок в тесте короче.
+
+Старый `GET /calendar` остаётся **навсегда**, это не переходный костыль. Два эндпоинта живут по назначению:
+
+| эндпоинт | что отдаёт | кто читает |
+|---|---|---|
+| `GET /calendar` | только уроки (`CalendarLesson[]`) | дашборд и мини-календарь в сайдбаре — события и задачи им там только мешают |
+| `GET /calendar/feed` | единая лента из трёх источников | страница календаря |
+
+На фронте это две функции в `useCalendar.ts`: `useCalendar()` и `useCalendarFeed()`. Ключ кэша у обеих начинается с `['calendar']`, поэтому одна инвалидация чинит оба.
 
 ### 5.6. Проверка занятости
 
@@ -249,16 +271,18 @@ auth.DELETE("/events/:id", eventHandler.Delete)
 
 Используется в трёх местах: при создании урока, при создании события и при drag-and-drop в календаре. **Конфликт не блокирует сохранение** — показывается предупреждение «Пересекается со „Спортзал" 17:00–18:30» с кнопками «Всё равно создать» / «Отмена». Жёсткая блокировка раздражает: репетитор сам знает, когда наложение осознанное.
 
-В `SlotCreatePopover` (фаза 2) проверка вызывается сразу при открытии поповера, ещё до заполнения полей: репетитор видит «Занято: Спортзал» в момент выбора слота, а не после сабмита.
+В `SlotCreatePopover` (создан уже в фазе 1, см. 5.7) проверка вызывается сразу при открытии поповера, ещё до заполнения полей: репетитор видит «Занято: Спортзал» в момент выбора слота, а не после сабмита. То же предупреждение — в `LessonForm`.
 
 ### 5.7. Фронт
 
-- `frontend/src/types/api.ts` — типы `CalendarItem`, `Event`.
-- `frontend/src/lib/api/events.ts`, `frontend/src/lib/hooks/useEvents.ts` по образцу `useTasks`.
-- `frontend/src/lib/hooks/useCalendar.ts` — перевести на единую ленту.
-- `calendar/page.tsx` — строить события FullCalendar из одной ленты. Цвета: уроки как сейчас (`FC_COLORS`), задачи как сейчас (`TASK_COLORS`), события — по `kind`: `personal` серо-синий, `work` синий, `trial` акцентный; непустой `event.color` перекрывает.
-- События с `all_day = true` рендерить в all-day-полосе FullCalendar (`allDay: true`).
-- Тумблер «Показывать личные события» в шапке календаря, состояние в `localStorage`, по умолчанию включён. Скрывает только `kind = 'personal'`.
+- `frontend/src/types/api.ts` — типы `CalendarItem` (размеченное объединение по `type`), `Event`, `EventKind`.
+- `frontend/src/lib/api/events.ts`, `frontend/src/lib/hooks/useEvents.ts` по образцу `useTasks`. Отдельного кэша под события нет: они видны только в ленте, поэтому мутации просто инвалидируют `['calendar']`. Там же `useConflicts()` — запрос из 5.6.
+- `frontend/src/lib/api/calendar.ts` — рядом с `list()` появляются `feed()` и `conflicts()`; в `frontend/src/lib/hooks/useCalendar.ts` — `useCalendarFeed()` рядом с `useCalendar()` (см. таблицу в 5.5).
+- `frontend/src/lib/eventKind.ts` — подписи `kind`, сопоставление `kind` → цвет и `formatTimeRange()` для строки «Занято: … 17:00 – 18:30».
+- `frontend/src/components/calendar/SlotCreatePopover.tsx` — заменяет удалённый `TaskCreatePopover`; в этой фазе два таба, «Событие» и «Задача», плюс строка занятости под шапкой. Таб «Урок» добавляет фаза 2 (6.1).
+- `frontend/src/components/calendar/EventQuickPopover.tsx` — правка и удаление события по клику на блок.
+- `calendar/page.tsx` — строить события FullCalendar из одной ленты, `allDaySlot={false}`. Цвета уроков (`FC_COLORS`), задач и событий — CSS-переменные `--cal-*` в `globals.css`, чтобы тёмная тема правилась в одном месте; событию цвет выбирает `kind`, непустой `event.color` перекрывает.
+- Тумблер «Показывать личные события» — `customButton` в тулбаре FullCalendar, а не отдельная строка над сеткой (строка съедала высоту и висела без хозяина). Состояние в `localStorage` (`tg_cal_show_personal`), по умолчанию включён. Скрывает только `kind = 'personal'`.
 
 **Критерии приёмки**
 
@@ -273,7 +297,7 @@ auth.DELETE("/events/:id", eventHandler.Delete)
 
 ### 6.1. `SlotCreatePopover`
 
-Заменяет `TaskCreatePopover` в `calendar/page.tsx:handleSelect`. Один поповер, сегмент типа сверху, **дефолт — «Урок»**:
+Компонент уже стоит в `calendar/page.tsx:handleSelect` с фазы 1, но умеет только «Событие» и «Задача», дефолт — «Событие». Фаза 2 добавляет третий таб и переносит дефолт: **«Урок»**.
 
 ```
 ┌──────────────────────────────────────┐
@@ -350,6 +374,27 @@ type CreateLessonRequest struct {
 создать урок в этом курсе
 ```
 
+**Миграция `032_courses_student_subject_unique.sql` обязательна.** Транзакция от гонки
+здесь не спасает: под `READ COMMITTED` два параллельных запроса (двойной клик, две
+вкладки) оба увидят пустой `SELECT` до чужого `INSERT` и создадут два одинаковых курса.
+Уникальности на эту тройку в схеме сейчас нет — значит, её надо завести:
+
+```sql
+CREATE UNIQUE INDEX idx_courses_tutor_student_subject ON courses(tutor_id, student_id, subject)
+    WHERE deleted_at IS NULL AND student_id IS NOT NULL;
+```
+
+Индекс частичный по двум причинам: у группового курса `student_id IS NULL` и одинаковых
+групп по одному предмету может быть сколько угодно, а архивный курс (`deleted_at IS NOT
+NULL`) не должен мешать завести новый с тем же предметом.
+
+Вставка курса — `INSERT ... ON CONFLICT DO NOTHING` с повторным `SELECT`: проигравший
+гонку получает ноль строк и читает чужой курс вместо ошибки.
+
+Перед накаткой на прод проверить, что дублей нет (`GROUP BY tutor_id, student_id, subject
+HAVING count(*) > 1` по живым индивидуальным курсам) — иначе `CREATE UNIQUE INDEX` упадёт
+на существующих данных.
+
 Снять `gt=0` с `price_per_cycle` в `CreateCourseRequest` (заменить на `gte=0`), иначе неявное создание с нулевой ценой невозможно. Дать `started_at` дефолт «сегодня», если не передан.
 
 То же самое для `POST /lessons/bulk`.
@@ -378,7 +423,7 @@ type CreateLessonRequest struct {
 
 ## 7. Фаза 3 — общая машинерия повторений
 
-### 7.1. Миграция `032_recurrence.sql`
+### 7.1. Миграция `033_recurrence.sql`
 
 ```sql
 -- +goose Up
@@ -507,9 +552,9 @@ DELETE /events/:id?scope=one|following|all
 
 ### 7.6. Перенос существующих серий
 
-Отдельная одноразовая миграция данных `033_series_to_rules.sql`: для каждого различного `lessons.series_id` восстановить правило по фактическим строкам (частота = медианный интервал между соседними уроками, `time_local` = время первого урока в `Asia/Almaty`, `starts_on` = дата первого, `ends_on` = дата последнего, `materialized_until` = дата последнего), проставить `rule_id` и `occurrence_date`, оставить `is_override = FALSE`.
+Отдельная одноразовая миграция данных `034_series_to_rules.sql`: для каждого различного `lessons.series_id` восстановить правило по фактическим строкам (частота = медианный интервал между соседними уроками, `time_local` = время первого урока в `Asia/Almaty`, `starts_on` = дата первого, `ends_on` = дата последнего, `materialized_until` = дата последнего), проставить `rule_id` и `occurrence_date`, оставить `is_override = FALSE`.
 
-После проверки на проде — миграция `034`, удаляющая `lessons.series_id`, `UpdateSeriesRequest`, `DELETE /lessons/series/:seriesId`, `PATCH /lessons/series/:seriesId` и клиентский `generateDates()`.
+После проверки на проде — миграция `035`, удаляющая `lessons.series_id`, `UpdateSeriesRequest`, `DELETE /lessons/series/:seriesId`, `PATCH /lessons/series/:seriesId` и клиентский `generateDates()`.
 
 **Критерии приёмки**
 
@@ -627,13 +672,15 @@ DELETE /events/:id?scope=one|following|all
 
 ## 11. Порядок работ
 
-| Фаза | Содержание | Миграции | Оценка |
-|---|---|---|---|
-| 0 | Багфиксы повторений | нет | полдня |
-| 1 | `events`, единая лента, конфликты | 031 | 2–3 дня |
-| 2 | `SlotCreatePopover`, комбобоксы, неявный курс, раздел «Ученики» | нет | 3–4 дня |
-| 3 | `recurrence_rules`, материализация, джоба, семантика правок | 032–034 | 4–5 дней |
-| 4 | `POST /onboarding/student`, модалка | нет | 2 дня |
-| 5 | Кнопка «Начать пробный» на событии, ICS | 035 | 1–2 дня |
+| Фаза | Содержание | Миграции | Оценка | Статус |
+|---|---|---|---|---|
+| 0 | Багфиксы повторений | нет | полдня | ✅ `aee49f8` |
+| 1 | `events`, единая лента, конфликты | 031 | 2–3 дня | ✅ `373d0b6`, `c1c0c0a`; мобильный календарь и предупреждение при drag-and-drop доделываются |
+| 2 | `SlotCreatePopover`, комбобоксы, неявный курс, раздел «Ученики» | 032 | 3–4 дня | следующая |
+| 3 | `recurrence_rules`, материализация, джоба, семантика правок | 033–035 | 4–5 дней | |
+| 4 | `POST /onboarding/student`, модалка | нет | 2 дня | |
+| 5 | Кнопка «Начать пробный» на событии, ICS | 036 | 1–2 дня | |
 
-Фаза 0 — прямо сейчас, это чистый багфикс. Фазы 1 и 2 дают основной эффект для активации и могут идти в таком порядке. Фаза 3 — самая объёмная, но без неё «спортзал каждый понедельник» работать не будет.
+Всё сделанное — в ветке `feat/recurrence-fixes`.
+
+Фазы 1 и 2 дают основной эффект для активации и идут в таком порядке. Фаза 3 — самая объёмная, но без неё «спортзал каждый понедельник» работать не будет.
