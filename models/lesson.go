@@ -23,6 +23,11 @@ type Lesson struct {
 	SeriesID        *string   `json:"series_id,omitempty"`
 	CyclePosition   *int      `json:"cycle_position,omitempty"`
 	CycleSize       *int      `json:"cycle_size,omitempty"`
+
+	// Заполнены только у вхождения правила: по ним фронт понимает, что правка
+	// затрагивает серию, и спрашивает область.
+	RuleID         *string    `json:"rule_id,omitempty"`
+	OccurrenceDate *time.Time `json:"occurrence_date,omitempty"`
 }
 
 // CreateLessonRequest принимает либо CourseID (урок в существующем курсе), либо

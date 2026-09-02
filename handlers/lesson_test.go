@@ -144,7 +144,7 @@ func TestLessonUpdate_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID).Return(testLesson, nil)
+	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID, "one").Return(testLesson, nil)
 
 	w := makeRequest(t, r, http.MethodPut, "/lessons/"+testLessonID, testUpdateLessonReq)
 
@@ -156,7 +156,7 @@ func TestLessonUpdate_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID).Return(models.Lesson{}, fmt.Errorf("lesson: %w", service.ErrNotFound))
+	svc.On("Update", mock.Anything, testLessonID, testUpdateLessonReq, testTutorID, "one").Return(models.Lesson{}, fmt.Errorf("lesson: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodPut, "/lessons/"+testLessonID, testUpdateLessonReq)
 
@@ -170,7 +170,7 @@ func TestLessonDelete_Success(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Delete", mock.Anything, testLessonID, testTutorID).Return(nil)
+	svc.On("Delete", mock.Anything, testLessonID, testTutorID, "one").Return(nil)
 
 	w := makeRequest(t, r, http.MethodDelete, "/lessons/"+testLessonID, nil)
 
@@ -182,7 +182,7 @@ func TestLessonDelete_NotFound(t *testing.T) {
 	svc := new(mockLessonService)
 	r := newLessonRouter(svc, testTutorID)
 
-	svc.On("Delete", mock.Anything, testLessonID, testTutorID).Return(fmt.Errorf("lesson: %w", service.ErrNotFound))
+	svc.On("Delete", mock.Anything, testLessonID, testTutorID, "one").Return(fmt.Errorf("lesson: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodDelete, "/lessons/"+testLessonID, nil)
 

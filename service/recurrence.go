@@ -24,6 +24,28 @@ type RecurrenceService interface {
 	// берутся оттуда, а не спрашиваются вторично.
 	CreateRule(ctx context.Context, in models.RecurrenceInput, firstAt time.Time, durationMinutes int, tutorID string) (models.RecurrenceRule, error)
 	DeleteRule(ctx context.Context, ruleID string) error
+	GetRule(ctx context.Context, ruleID string) (models.RecurrenceRule, error)
+	// SplitRule закрывает правило днём раньше `at` и начинает с этой даты копию
+	// с новым временем — это «изменить это и все следующие».
+	SplitRule(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error)
+	UpdateRuleTiming(ctx context.Context, ruleID, timeLocal string, duration int) error
+	CloseRule(ctx context.Context, ruleID string, at time.Time) error
+}
+
+// Область правки вхождения серии.
+const (
+	scopeOne       = "one"
+	scopeFollowing = "following"
+	scopeAll       = "all"
+)
+
+// localTimeIn — «17:00» в зоне правила: правило хранит стенные часы, а не UTC.
+func localTimeIn(at time.Time, tz string) (string, error) {
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return "", fmt.Errorf("timezone %q: %w", tz, ErrBadRequest)
+	}
+	return at.In(loc).Format("15:04"), nil
 }
 
 type recurrenceService struct {
@@ -66,6 +88,28 @@ func (s *recurrenceService) CreateRule(ctx context.Context, in models.Recurrence
 
 func (s *recurrenceService) DeleteRule(ctx context.Context, ruleID string) error {
 	return s.repo.Delete(ctx, ruleID)
+}
+
+func (s *recurrenceService) GetRule(ctx context.Context, ruleID string) (models.RecurrenceRule, error) {
+	rule, err := s.repo.GetByID(ctx, ruleID)
+	if err != nil {
+		return models.RecurrenceRule{}, fmt.Errorf("rule: %w", ErrNotFound)
+	}
+	return rule, nil
+}
+
+func (s *recurrenceService) SplitRule(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error) {
+	return s.repo.Split(ctx, ruleID, at, timeLocal, duration)
+}
+
+func (s *recurrenceService) UpdateRuleTiming(ctx context.Context, ruleID, timeLocal string, duration int) error {
+	return s.repo.UpdateTiming(ctx, ruleID, timeLocal, duration)
+}
+
+// CloseRule обрывает серию на дате `at`: всё, что дальше, серии больше не
+// принадлежит. Само вхождение отменяет вызывающий — здесь только правило.
+func (s *recurrenceService) CloseRule(ctx context.Context, ruleID string, at time.Time) error {
+	return s.repo.SetEndsOn(ctx, ruleID, at.AddDate(0, 0, -1))
 }
 
 func (s *recurrenceService) Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error) {

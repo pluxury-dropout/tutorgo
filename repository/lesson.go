@@ -22,6 +22,9 @@ type LessonRepository interface {
 	GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
 	Delete(ctx context.Context, id string) error
+	Cancel(ctx context.Context, id string) error
+	ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error
+	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
 	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
 	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
@@ -143,14 +146,45 @@ func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesso
 	return lesson, err
 }
 
+// Cancel вместо Delete для вхождения серии: удали строку целиком — и ночная
+// материализация создаст урок заново, потому что дата снова свободна.
+// is_override заодно защищает отмену от «изменить все следующие».
+func (r *lessonRepository) Cancel(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE lessons SET status = 'cancelled', is_override = TRUE WHERE id = $1`, id)
+	return err
+}
+
+// ReassignToRule переводит вхождение в другое правило — используется при
+// «это и все следующие», где урок становится первым вхождением новой ветки.
+func (r *lessonRepository) ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE lessons SET rule_id = $2::uuid, occurrence_date = $3::date, is_override = FALSE
+		 WHERE id = $1`, lessonID, ruleID, occurrenceDate)
+	return err
+}
+
+// DeleteFutureByRule убирает будущие вхождения правила, кроме вручную
+// перенесённых: is_override — это то, что не даёт «изменить все следующие»
+// затереть урок, который репетитор уже подвинул руками.
+func (r *lessonRepository) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM lessons
+		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
+		   AND is_override = FALSE AND status = 'scheduled'`, ruleID, after)
+	return err
+}
+
 func (r *lessonRepository) GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error) {
 	var lesson models.Lesson
 	err := r.pool.QueryRow(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes, l.series_id
+		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes, l.series_id,
+		        l.rule_id, l.occurrence_date
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID,
+		&lesson.RuleID, &lesson.OccurrenceDate)
 	return lesson, err
 }
 

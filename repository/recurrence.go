@@ -15,6 +15,9 @@ type RecurrenceRepository interface {
 	DueForMaterialization(ctx context.Context, horizon time.Time) ([]models.RecurrenceRule, error)
 	SetMaterializedUntil(ctx context.Context, id string, until time.Time) error
 	InsertOccurrences(ctx context.Context, ruleID string, starts []time.Time) (int, error)
+	Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error)
+	UpdateTiming(ctx context.Context, ruleID, timeLocal string, duration int) error
+	SetEndsOn(ctx context.Context, ruleID string, endsOn time.Time) error
 }
 
 type recurrenceRepository struct {
@@ -80,6 +83,42 @@ func (r *recurrenceRepository) DueForMaterialization(ctx context.Context, horizo
 		rules = append(rules, rule)
 	}
 	return rules, rows.Err()
+}
+
+// Split — «это и все следующие»: старое правило закрывается днём раньше
+// вхождения, а с него начинается копия с новым временем и длительностью.
+// Ветвление, а не правка на месте: прошедшие вхождения должны остаться такими,
+// какими были, иначе история занятий начнёт врать.
+func (r *recurrenceRepository) Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error) {
+	if _, err := r.pool.Exec(ctx,
+		`UPDATE recurrence_rules SET ends_on = $2::date - 1 WHERE id = $1`, ruleID, at,
+	); err != nil {
+		return models.RecurrenceRule{}, err
+	}
+
+	return scanRule(r.pool.QueryRow(ctx,
+		`INSERT INTO recurrence_rules
+		     (tutor_id, freq, interval_n, byweekday, time_local, tz, duration_minutes,
+		      starts_on, ends_on, max_count, materialized_until)
+		 SELECT tutor_id, freq, interval_n, byweekday, $3::time, tz, $4,
+		        $2::date, NULL, max_count, $2::date
+		 FROM recurrence_rules WHERE id = $1
+		 RETURNING `+ruleCols,
+		ruleID, at, timeLocal, duration,
+	))
+}
+
+func (r *recurrenceRepository) SetEndsOn(ctx context.Context, ruleID string, endsOn time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE recurrence_rules SET ends_on = $2::date WHERE id = $1`, ruleID, endsOn)
+	return err
+}
+
+func (r *recurrenceRepository) UpdateTiming(ctx context.Context, ruleID, timeLocal string, duration int) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE recurrence_rules SET time_local = $2::time, duration_minutes = $3 WHERE id = $1`,
+		ruleID, timeLocal, duration)
+	return err
 }
 
 func (r *recurrenceRepository) SetMaterializedUntil(ctx context.Context, id string, until time.Time) error {

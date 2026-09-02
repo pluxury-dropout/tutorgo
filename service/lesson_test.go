@@ -318,7 +318,7 @@ func TestLessonUpdate_Success(t *testing.T) {
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(expectedLesson, nil)
 	lessonRepo.On("Update", mock.Anything, lessonID, updateLessonReq).Return(updated, nil)
 
-	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID)
+	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "one")
 
 	assert.NoError(t, err)
 	assert.Equal(t, updated, lesson)
@@ -332,7 +332,7 @@ func TestLessonUpdate_NotFound(t *testing.T) {
 
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(models.Lesson{}, errors.New("not found"))
 
-	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID)
+	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "one")
 
 	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, lesson)
@@ -348,7 +348,7 @@ func TestLessonUpdate_RepoError(t *testing.T) {
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(expectedLesson, nil)
 	lessonRepo.On("Update", mock.Anything, lessonID, updateLessonReq).Return(models.Lesson{}, errors.New("db error"))
 
-	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID)
+	lesson, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "one")
 
 	assert.Error(t, err)
 	assert.Empty(t, lesson)
@@ -365,7 +365,7 @@ func TestLessonDelete_Success(t *testing.T) {
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(expectedLesson, nil)
 	lessonRepo.On("Delete", mock.Anything, lessonID).Return(nil)
 
-	err := svc.Delete(context.Background(), lessonID, tutorID)
+	err := svc.Delete(context.Background(), lessonID, tutorID, "one")
 
 	assert.NoError(t, err)
 	lessonRepo.AssertExpectations(t)
@@ -378,7 +378,7 @@ func TestLessonDelete_NotFound(t *testing.T) {
 
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(models.Lesson{}, errors.New("not found"))
 
-	err := svc.Delete(context.Background(), lessonID, tutorID)
+	err := svc.Delete(context.Background(), lessonID, tutorID, "one")
 
 	assert.ErrorIs(t, err, service.ErrNotFound)
 	lessonRepo.AssertNotCalled(t, "Delete")
@@ -393,7 +393,7 @@ func TestLessonDelete_RepoError(t *testing.T) {
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(expectedLesson, nil)
 	lessonRepo.On("Delete", mock.Anything, lessonID).Return(errors.New("db error"))
 
-	err := svc.Delete(context.Background(), lessonID, tutorID)
+	err := svc.Delete(context.Background(), lessonID, tutorID, "one")
 
 	assert.Error(t, err)
 	lessonRepo.AssertExpectations(t)

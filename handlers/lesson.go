@@ -146,7 +146,10 @@ func (h *LessonHandler) Update(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	lesson, err := h.service.Update(c.Request.Context(), id, req, tutorID)
+	// ?scope=one|following|all — область правки вхождения серии; для урока вне
+	// серии значения не имеет. Дефолт «one» намеренный: перенос мышью не должен
+	// незаметно сдвигать всю серию.
+	lesson, err := h.service.Update(c.Request.Context(), id, req, tutorID, c.DefaultQuery("scope", "one"))
 	if err != nil {
 		h.log.Error("Failed to update lesson", slog.String("id", id), slog.String("error", err.Error()))
 		handleServiceError(c, err)
@@ -163,7 +166,7 @@ func (h *LessonHandler) Delete(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
+	if err := h.service.Delete(c.Request.Context(), id, tutorID, c.DefaultQuery("scope", "one")); err != nil {
 		h.log.Error("Failed to delete lesson", slog.String("id", id), slog.String("error", err.Error()))
 		handleServiceError(c, err)
 		return
