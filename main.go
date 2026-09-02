@@ -11,6 +11,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	// Правила повторений считают локальное время в IANA-зоне, а рантайм-образ —
+	// голый alpine без пакета tzdata: без этого импорта LoadLocation в проде
+	// вернёт «unknown time zone Asia/Almaty». ~450 КБ в бинаре дешевле, чем
+	// зависимость от базового образа.
+	_ "time/tzdata"
 
 	"tutorgo/config"
 	"tutorgo/database"
