@@ -367,7 +367,7 @@ type CreateLessonRequest struct {
 В `service/lesson.go` — get-or-create в одной транзакции:
 
 ```
-найти активный курс по (tutor_id, student_id, subject, deleted_at IS NULL)
+найти активный курс по (tutor_id, student_id, subject, is_active)
 если нет — создать курс с дефолтами:
     price_per_cycle   = самая частая цена этого тьютора, иначе 0
     lessons_per_cycle = самое частое значение, иначе 1
@@ -382,12 +382,15 @@ type CreateLessonRequest struct {
 
 ```sql
 CREATE UNIQUE INDEX idx_courses_tutor_student_subject ON courses(tutor_id, student_id, subject)
-    WHERE deleted_at IS NULL AND student_id IS NOT NULL;
+    WHERE is_active AND student_id IS NOT NULL;
 ```
 
 Индекс частичный по двум причинам: у группового курса `student_id IS NULL` и одинаковых
-групп по одному предмету может быть сколько угодно, а архивный курс (`deleted_at IS NOT
-NULL`) не должен мешать завести новый с тем же предметом.
+групп по одному предмету может быть сколько угодно, а архивный курс (`is_active = FALSE`)
+не должен мешать завести новый с тем же предметом.
+
+> Soft-delete курса в схеме сделан через `is_active` (миграция `013`), колонки
+> `deleted_at` у `courses` нет — все условия ниже читать соответственно.
 
 Вставка курса — `INSERT ... ON CONFLICT DO NOTHING` с повторным `SELECT`: проигравший
 гонку получает ноль строк и читает чужой курс вместо ошибки.
@@ -677,7 +680,7 @@ DELETE /events/:id?scope=one|following|all
 |---|---|---|---|---|
 | 0 | Багфиксы повторений | нет | полдня | ✅ `aee49f8` |
 | 1 | `events`, единая лента, конфликты | 031 | 2–3 дня | ✅ `373d0b6`, `c1c0c0a`, `b2ac186`, `055a724` |
-| 2 | `SlotCreatePopover`, комбобоксы, неявный курс, раздел «Ученики» | 032 | 3–4 дня | следующая |
+| 2 | `SlotCreatePopover`, комбобоксы, неявный курс, раздел «Ученики» | 032 | 3–4 дня | backend готов (`bff8ff5`, ветка `feat/implicit-course`, 032 на проде); фронт — следующий |
 | 3 | `recurrence_rules`, материализация, джоба, семантика правок | 033–035 | 4–5 дней | |
 | 4 | `POST /onboarding/student`, модалка | нет | 2 дня | |
 | 5 | Кнопка «Начать пробный» на событии, ICS | 036 | 1–2 дня | |
