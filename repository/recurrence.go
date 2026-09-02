@@ -1,0 +1,115 @@
+package repository
+
+import (
+	"context"
+	"time"
+	"tutorgo/models"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type RecurrenceRepository interface {
+	GetByID(ctx context.Context, id string) (models.RecurrenceRule, error)
+	DueForMaterialization(ctx context.Context, horizon time.Time) ([]models.RecurrenceRule, error)
+	SetMaterializedUntil(ctx context.Context, id string, until time.Time) error
+	InsertOccurrences(ctx context.Context, ruleID string, starts []time.Time) (int, error)
+}
+
+type recurrenceRepository struct {
+	pool *pgxpool.Pool
+}
+
+func NewRecurrenceRepository(pool *pgxpool.Pool) RecurrenceRepository {
+	return &recurrenceRepository{pool: pool}
+}
+
+// time_local читаем как text: pgx отдаёт TIME микросекундами, а генератору
+// нужны стенные часы «17:00».
+const ruleCols = `id, tutor_id, freq, interval_n, byweekday, time_local::text,
+                  tz, duration_minutes, starts_on, ends_on, max_count, materialized_until`
+
+func scanRule(row interface{ Scan(...any) error }) (models.RecurrenceRule, error) {
+	var r models.RecurrenceRule
+	err := row.Scan(&r.ID, &r.TutorID, &r.Freq, &r.IntervalN, &r.ByWeekday, &r.TimeLocal,
+		&r.TZ, &r.DurationMinutes, &r.StartsOn, &r.EndsOn, &r.MaxCount, &r.MaterializedUntil)
+	return r, err
+}
+
+func (r *recurrenceRepository) GetByID(ctx context.Context, id string) (models.RecurrenceRule, error) {
+	return scanRule(r.pool.QueryRow(ctx, `SELECT `+ruleCols+` FROM recurrence_rules WHERE id = $1`, id))
+}
+
+// DueForMaterialization — активные правила, чей горизонт короче требуемого.
+func (r *recurrenceRepository) DueForMaterialization(ctx context.Context, horizon time.Time) ([]models.RecurrenceRule, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+ruleCols+` FROM recurrence_rules
+		 WHERE materialized_until < $1::date
+		   AND (ends_on IS NULL OR ends_on > CURRENT_DATE)`, horizon)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	rules := []models.RecurrenceRule{}
+	for rows.Next() {
+		rule, err := scanRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, rule)
+	}
+	return rules, rows.Err()
+}
+
+func (r *recurrenceRepository) SetMaterializedUntil(ctx context.Context, id string, until time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE recurrence_rules SET materialized_until = $2::date WHERE id = $1`, id, until)
+	return err
+}
+
+// InsertOccurrences создаёт недостающие вхождения правила. Шаблон — первая
+// строка серии: у урока из неё берутся курс, длительность и заметки, у события
+// — заголовок, вид и место. Поэтому отдельного «типа правила» в схеме нет:
+// правило про уроки просто не найдёт шаблона в events, и наоборот.
+//
+// occurrence_date считается в зоне правила: в UTC урок 1 сентября 00:30 по
+// Алматы был бы записан на 31 августа, и «одно вхождение в день» поехало бы.
+func (r *recurrenceRepository) InsertOccurrences(ctx context.Context, ruleID string, starts []time.Time) (int, error) {
+	lessons, err := r.pool.Exec(ctx,
+		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status, rule_id, occurrence_date)
+		 SELECT t.course_id, d.at, t.duration_minutes, t.notes,
+		        CASE WHEN d.at + t.duration_minutes * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END,
+		        $1::uuid, (d.at AT TIME ZONE r.tz)::date
+		 FROM recurrence_rules r
+		 JOIN LATERAL (
+		     SELECT course_id, duration_minutes, notes FROM lessons
+		     WHERE rule_id = $1::uuid ORDER BY scheduled_at LIMIT 1
+		 ) t ON TRUE
+		 CROSS JOIN unnest($2::timestamptz[]) AS d(at)
+		 WHERE r.id = $1::uuid
+		 ON CONFLICT DO NOTHING`,
+		ruleID, starts,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	events, err := r.pool.Exec(ctx,
+		`INSERT INTO events (tutor_id, title, kind, starts_at, duration_minutes, color, location, notes, rule_id, occurrence_date)
+		 SELECT t.tutor_id, t.title, t.kind, d.at, t.duration_minutes, t.color, t.location, t.notes,
+		        $1::uuid, (d.at AT TIME ZONE r.tz)::date
+		 FROM recurrence_rules r
+		 JOIN LATERAL (
+		     SELECT tutor_id, title, kind, duration_minutes, color, location, notes FROM events
+		     WHERE rule_id = $1::uuid ORDER BY starts_at LIMIT 1
+		 ) t ON TRUE
+		 CROSS JOIN unnest($2::timestamptz[]) AS d(at)
+		 WHERE r.id = $1::uuid
+		 ON CONFLICT DO NOTHING`,
+		ruleID, starts,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return int(lessons.RowsAffected() + events.RowsAffected()), nil
+}

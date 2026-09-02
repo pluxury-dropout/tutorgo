@@ -1,11 +1,85 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 	"tutorgo/models"
+	"tutorgo/repository"
 )
+
+// RecurrenceHorizon — насколько вперёд держим материализованные вхождения.
+// «Спортзал каждый понедельник» не имеет конца, а строки в БД имеют, поэтому
+// горизонт скользящий: ночная джоба дотягивает его для активных правил.
+const RecurrenceHorizon = 6 * 30 * 24 * time.Hour
+
+type RecurrenceService interface {
+	// Materialize добивает вхождения правила до horizon и двигает границу.
+	Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error)
+	// ExtendAll — то же для всех правил, чей горизонт короче: точка входа джобы.
+	ExtendAll(ctx context.Context, horizon time.Time) (int, error)
+}
+
+type recurrenceService struct {
+	repo repository.RecurrenceRepository
+	log  *slog.Logger
+}
+
+func NewRecurrenceService(repo repository.RecurrenceRepository) RecurrenceService {
+	return &recurrenceService{repo: repo, log: slog.Default()}
+}
+
+func (s *recurrenceService) Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error) {
+	rule, err := s.repo.GetByID(ctx, ruleID)
+	if err != nil {
+		return 0, fmt.Errorf("rule: %w", ErrNotFound)
+	}
+	if !rule.MaterializedUntil.Before(horizon) {
+		return 0, nil // горизонт уже дальше — двигать назад нечего
+	}
+
+	// Считаем от уже материализованной границы; повторно попавшие даты отсечёт
+	// уникальный индекс (rule_id, occurrence_date), поэтому граница включительная.
+	starts, err := Occurrences(rule, rule.MaterializedUntil, horizon)
+	if err != nil {
+		return 0, err
+	}
+
+	var n int
+	if len(starts) > 0 {
+		if n, err = s.repo.InsertOccurrences(ctx, rule.ID, starts); err != nil {
+			return 0, err
+		}
+	}
+	// Границу двигаем и когда вхождений нет: закончившееся правило иначе будет
+	// вечно возвращаться в выборку джобы.
+	if err := s.repo.SetMaterializedUntil(ctx, rule.ID, horizon); err != nil {
+		return n, err
+	}
+	return n, nil
+}
+
+func (s *recurrenceService) ExtendAll(ctx context.Context, horizon time.Time) (int, error) {
+	rules, err := s.repo.DueForMaterialization(ctx, horizon)
+	if err != nil {
+		return 0, err
+	}
+
+	var total int
+	for _, rule := range rules {
+		// Битое правило (например, неизвестная зона) не должно ронять всю
+		// ночную догрузку — логируем и идём дальше.
+		n, err := s.Materialize(ctx, rule.ID, horizon)
+		if err != nil {
+			s.log.Error("materialize rule", slog.String("rule_id", rule.ID), slog.String("error", err.Error()))
+			continue
+		}
+		total += n
+	}
+	return total, nil
+}
 
 // maxScannedDates — предохранитель от бесконечного цикла, если правило и окно
 // заданы так, что подходящих дат не находится (например, monthly 31-го и узкое
