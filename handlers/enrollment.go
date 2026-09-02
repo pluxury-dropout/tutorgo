@@ -40,6 +40,27 @@ func (h *EnrollmentHandler) Add(c *gin.Context) {
 	c.JSON(http.StatusCreated, enrollment)
 }
 
+func (h *EnrollmentHandler) AddBulk(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	courseID := c.Param("id")
+	var req models.EnrollStudentsBulkRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	enrollments, err := h.service.AddBulk(c.Request.Context(), courseID, req, tutorID)
+	if err != nil {
+		h.log.Error("Failed to enroll students", slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	h.log.Info("Students enrolled", slog.String("course_id", courseID), slog.Int("count", len(enrollments)))
+	c.JSON(http.StatusCreated, enrollments)
+}
+
 func (h *EnrollmentHandler) Remove(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

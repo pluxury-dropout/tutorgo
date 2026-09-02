@@ -17,7 +17,7 @@ interface GettingStartedProps {
  */
 export function GettingStarted({ hasStudents, hasCourses, hasLessons, hasPayments }: GettingStartedProps) {
   const steps = [
-    { done: hasStudents, label: 'Добавить ученика',           hint: 'Карточка с контактами — к ней привяжутся курсы и оплаты', href: '/courses?tab=students', cta: 'Добавить' },
+    { done: hasStudents, label: 'Добавить ученика',           hint: 'Карточка с контактами — к ней привяжутся курсы и оплаты', href: '/students', cta: 'Добавить' },
     { done: hasCourses,  label: 'Создать курс',               hint: 'Предмет и цена за урок: из курса растут расписание и деньги', href: '/courses',              cta: 'Создать'  },
     { done: hasLessons,  label: 'Поставить урок в расписание', hint: 'Кликни по свободному слоту в календаре',                   href: '/calendar',             cta: 'В календарь' },
     { done: hasPayments, label: 'Отметить оплату',            hint: 'Приложение само посчитает, на сколько уроков хватит баланса', href: '/payments',             cta: 'К оплатам' },

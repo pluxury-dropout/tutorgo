@@ -14,9 +14,20 @@ type Event struct {
 	Color           string    `json:"color"`
 	Location        string    `json:"location"`
 	Notes           string    `json:"notes"`
+
+	// Заполнены только у вхождения правила — по ним фронт понимает, что правка
+	// затрагивает серию, и спрашивает область.
+	RuleID         *string    `json:"rule_id,omitempty"`
+	OccurrenceDate *time.Time `json:"occurrence_date,omitempty"`
 }
 
+// Recurrence превращает событие в серию — «спортзал каждый понедельник».
+// RuleID и OccurrenceDate заполняет сервис, не клиент.
 type CreateEventRequest struct {
+	Recurrence     *RecurrenceInput `json:"recurrence" validate:"omitempty"`
+	RuleID         string           `json:"-"`
+	OccurrenceDate *time.Time       `json:"-"`
+
 	Title           string    `json:"title"            validate:"required,max=200"`
 	Kind            string    `json:"kind"             validate:"omitempty,oneof=personal work trial"`
 	StartsAt        time.Time `json:"starts_at"        validate:"required"`

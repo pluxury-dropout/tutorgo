@@ -3,6 +3,8 @@
 // превью для кнопки, страница курса шлёт результат в POST /lessons/bulk.
 // Временная механика — в фазе 3 правило переезжает в БД (recurrence_rules).
 
+import type { RecurrenceInput } from '@/types/api'
+
 export type RecurrenceType = 'weekly_same' | 'weekly_custom' | 'every_n_weeks'
 
 export interface RecurrenceOptions {
@@ -10,6 +12,22 @@ export interface RecurrenceOptions {
   days?:   number[]   // ISO weekdays: 1=Пн … 7=Вс (для weekly_custom)
   n?:      number     // интервал в неделях (для every_n_weeks)
   count?:  number     // не задан — генерируем до конца курса либо до горизонта
+}
+
+/** Дни недели в ISO-нумерации — нужны и форме урока, и поповеру календаря. */
+export const WEEK_DAYS = [
+  { label: 'Пн', iso: 1 },
+  { label: 'Вт', iso: 2 },
+  { label: 'Ср', iso: 3 },
+  { label: 'Чт', iso: 4 },
+  { label: 'Пт', iso: 5 },
+  { label: 'Сб', iso: 6 },
+  { label: 'Вс', iso: 7 },
+]
+
+/** ISO-день даты: 1=Пн … 7=Вс (Date.getDay() считает с воскресенья). */
+export function isoWeekday(d: Date): number {
+  return ((d.getDay() + 6) % 7) + 1
 }
 
 /** Потолок по датам, когда не заданы ни count, ни ended_at курса. */
@@ -79,6 +97,18 @@ export function generateDates(baseISO: string, opts: RecurrenceOptions, courseEn
   }
 
   return results.map((d) => d.toISOString())
+}
+
+/** UI-режим повтора → правило для сервера. Раскатку дат делает бэкенд: правило
+ *  хранится в БД, поэтому бессрочную серию есть чем продлевать. generateDates
+ *  остаётся для превью в форме курса, пока та не переехала на правила. */
+export function toRecurrenceInput(opts: RecurrenceOptions): RecurrenceInput {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const base = { freq: 'weekly' as const, tz, max_count: opts.count }
+
+  if (opts.type === 'weekly_custom') return { ...base, byweekday: opts.days }
+  if (opts.type === 'every_n_weeks') return { ...base, interval_n: opts.n ?? 2 }
+  return base
 }
 
 const LESSON_PLURAL: Record<Intl.LDMLPluralRule, string> = {

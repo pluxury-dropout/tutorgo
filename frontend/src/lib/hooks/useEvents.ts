@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { eventsApi, EventInput } from '@/lib/api/events'
 import { calendarApi, ConflictQuery } from '@/lib/api/calendar'
+import type { RecurrenceScope } from '@/types/api'
 
 // События живут только в ленте календаря — отдельного кэша под них нет,
 // поэтому любая мутация просто инвалидирует ['calendar'].
@@ -20,15 +21,16 @@ export function useCreateEvent() {
 export function useUpdateEvent() {
   const invalidate = useInvalidateCalendar()
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: EventInput }) => eventsApi.update(id, data),
-    onSuccess:  invalidate,
+    mutationFn: ({ id, data, scope }: { id: string; data: EventInput; scope?: RecurrenceScope }) =>
+      eventsApi.update(id, data, scope),
+    onSuccess: invalidate,
   })
 }
 
 export function useDeleteEvent() {
   const invalidate = useInvalidateCalendar()
   return useMutation({
-    mutationFn: (id: string) => eventsApi.delete(id),
+    mutationFn: ({ id, scope }: { id: string; scope?: RecurrenceScope }) => eventsApi.delete(id, scope),
     onSuccess:  invalidate,
   })
 }

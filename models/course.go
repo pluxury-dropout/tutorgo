@@ -38,12 +38,15 @@ type CourseBalance struct {
 	LessonsRemaining int `json:"lessons_remaining"`
 }
 
+// PricePerCycle допускает 0: бесплатный или ещё не оценённый курс — нормальный
+// случай, цена ставится позже. StartedAt без required: пустое поле сервис
+// заполняет сегодняшней датой.
 type CreateCourseRequest struct {
 	StudentID       *string    `json:"student_id"        validate:"omitempty,uuid"`
 	Subject         string     `json:"subject"           validate:"required,min=2"`
-	PricePerCycle   float64    `json:"price_per_cycle"   validate:"required,gt=0"`
+	PricePerCycle   float64    `json:"price_per_cycle"   validate:"gte=0"`
 	LessonsPerCycle int        `json:"lessons_per_cycle" validate:"required,min=1"`
-	StartedAt       time.Time  `json:"started_at"        validate:"required"`
+	StartedAt       time.Time  `json:"started_at"`
 	EndedAt         *time.Time `json:"ended_at"`
 }
 

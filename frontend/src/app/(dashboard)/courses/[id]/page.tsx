@@ -18,7 +18,6 @@ import {
 import {
   useLessonsByPeriod,
   useCreateLesson,
-  useCreateLessons,
   useUpdateLesson,
   useDeleteLesson,
   useDeleteLessonsByCourse,
@@ -38,10 +37,11 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
-import { SeriesUpdateInput } from '@/lib/api/lessons'
-import { generateDates, lessonsPlural, RecurrenceOptions } from '@/lib/recurrence'
+import { SeriesUpdateInput, LessonUpdateInput } from '@/lib/api/lessons'
+import { RecurrenceScopeDialog } from '@/components/calendar/RecurrenceScopeDialog'
+import { toRecurrenceInput, RecurrenceOptions } from '@/lib/recurrence'
 import { PaymentFormValues } from '@/schemas/payment'
-import { Lesson, Payment } from '@/types/api'
+import { Lesson, Payment, RecurrenceScope } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
@@ -97,6 +97,10 @@ export default function CourseDetailPage() {
   const [paymentFormOpen, setPaymentFormOpen]   = useState(false)
   const [homeworkAnchor, setHomeworkAnchor]     = useState<Element | null>(null)
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
+  // Отложенное действие над вхождением серии: ждёт ответа об области.
+  const [scopeAsk, setScopeAsk] = useState<
+    { action: 'edit' | 'delete'; lesson: Lesson; values?: LessonUpdateInput } | null
+  >(null)
   const [selectedStudent, setSelected]          = useState('')
 
   const updateCourse         = useUpdateCourse(id)
@@ -104,7 +108,6 @@ export default function CourseDetailPage() {
   const addEnrollment        = useAddEnrollment(id)
   const removeEnrollment     = useRemoveEnrollment(id)
   const createLesson         = useCreateLesson(id)
-  const createLessons        = useCreateLessons(id)
   const updateLesson         = useUpdateLesson(editingLesson?.id ?? '', id)
   const deleteLesson         = useDeleteLesson(id)
   const deleteLessonsByCourse = useDeleteLessonsByCourse(id)
@@ -153,21 +156,28 @@ export default function CourseDetailPage() {
   async function handleLessonSubmit(values: LessonFormValues, recurrence?: RecurrenceOptions) {
     const baseISO = new Date(values.scheduled_at).toISOString()
     if (editingLesson) {
-      await updateLesson.mutateAsync({ ...values, scheduled_at: baseISO })
-      toast.success('Урок обновлён')
-    } else if (recurrence) {
-      const dates = generateDates(baseISO, recurrence, course?.ended_at)
-      if (dates.length === 0) {
-        toast.error('Не из чего собрать серию: проверьте дни недели и дату окончания курса')
+      // Правка вхождения серии сначала спрашивает область — сам запрос уйдёт
+      // из onPick диалога.
+      if (editingLesson.rule_id) {
+        setScopeAsk({ action: 'edit', lesson: editingLesson, values: { ...values, scheduled_at: baseISO } })
         return
       }
-      await createLessons.mutateAsync({
+      await updateLesson.mutateAsync({ data: { ...values, scheduled_at: baseISO } })
+      toast.success('Урок обновлён')
+    } else if (recurrence) {
+      // Даты раскатывает сервер: правило хранится в БД, поэтому бессрочную
+      // серию есть чем продлевать, а до горизонта её дотягивает ночная джоба.
+      await createLesson.mutateAsync({
         course_id:        id,
-        scheduled_ats:    dates,
+        scheduled_at:     baseISO,
         duration_minutes: values.duration_minutes,
         notes:            values.notes,
+        recurrence: {
+          ...toRecurrenceInput(recurrence),
+          ends_on: course?.ended_at ?? undefined,
+        },
       })
-      toast.success(`Создано ${lessonsPlural(dates.length)}`)
+      toast.success('Серия создана')
     } else {
       await createLesson.mutateAsync({ ...values, scheduled_at: baseISO, course_id: id })
       toast.success('Урок добавлен')
@@ -175,9 +185,29 @@ export default function CourseDetailPage() {
   }
 
   async function handleDeleteLesson(lesson: Lesson) {
+    if (lesson.rule_id) {
+      setScopeAsk({ action: 'delete', lesson })
+      return
+    }
     if (!confirm('Удалить этот урок?')) return
-    await deleteLesson.mutateAsync(lesson.id)
+    await deleteLesson.mutateAsync({ id: lesson.id })
     toast.success('Урок удалён')
+  }
+
+  // Выбранная область применяется к тому уроку, ради которого спросили.
+  async function applyScope(scope: RecurrenceScope) {
+    if (!scopeAsk) return
+    const { action, lesson, values } = scopeAsk
+    setScopeAsk(null)
+    if (action === 'delete') {
+      await deleteLesson.mutateAsync({ id: lesson.id, scope })
+      toast.success(scope === 'one' ? 'Урок отменён' : 'Серия обновлена')
+      return
+    }
+    if (values) {
+      await updateLesson.mutateAsync({ data: values, scope })
+      toast.success('Урок обновлён')
+    }
   }
 
   async function handleDeleteAllLessons() {
@@ -585,6 +615,13 @@ export default function CourseDetailPage() {
           onClose={() => setAttendanceLesson(null)}
         />
       )}
+
+      <RecurrenceScopeDialog
+        open={!!scopeAsk}
+        action={scopeAsk?.action ?? 'edit'}
+        onPick={applyScope}
+        onClose={() => setScopeAsk(null)}
+      />
 
       {seriesLesson && (
         <SeriesDialog

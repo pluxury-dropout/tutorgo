@@ -14,3 +14,14 @@ func (PdfImportArgs) Kind() string { return "pdf_import" }
 func (PdfImportArgs) InsertOpts() river.InsertOpts {
 	return river.InsertOpts{MaxAttempts: 5}
 }
+
+// RecurrenceExtendArgs — ночная догрузка горизонта повторений: бессрочное
+// правило («спортзал каждый понедельник») материализовано на 6 месяцев вперёд,
+// и кто-то должен двигать эту границу.
+type RecurrenceExtendArgs struct{}
+
+func (RecurrenceExtendArgs) Kind() string { return "recurrence_extend" }
+
+func (RecurrenceExtendArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{MaxAttempts: 3}
+}

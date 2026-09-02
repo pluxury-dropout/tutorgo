@@ -45,6 +45,8 @@ export interface Lesson {
   series_id?: string
   cycle_position?: number
   cycle_size?: number
+  /** Заполнен только у вхождения серии — правка тогда спрашивает область. */
+  rule_id?: string
 }
 
 export interface CalendarLesson {
@@ -60,6 +62,8 @@ export interface CalendarLesson {
   cycle_position?: number
   cycle_size?: number
   paid?: boolean
+  /** Заполнен только у вхождения серии — правка тогда спрашивает область. */
+  rule_id?: string
 }
 
 export interface StudentHomework {
@@ -126,6 +130,22 @@ export interface Event {
   color: string
   location: string
   notes: string
+  /** Заполнен только у вхождения серии — правка тогда спрашивает область. */
+  rule_id?: string
+}
+
+/** Область правки вхождения серии: только это, это и следующие, всё правило. */
+export type RecurrenceScope = 'one' | 'following' | 'all'
+
+/** Правило повторения для урока или события. Время и длительность сервер берёт
+ *  из первого вхождения, поэтому здесь их нет. */
+export interface RecurrenceInput {
+  freq:       'daily' | 'weekly' | 'monthly'
+  interval_n?: number
+  byweekday?: number[]   // ISO: 1=Пн … 7=Вс
+  tz:         string     // IANA, берём из браузера
+  ends_on?:   string
+  max_count?: number
 }
 
 /** Строка единой ленты календаря: общие поля наверху, специфика — по типу. */

@@ -321,6 +321,10 @@ func (m *mockCourseService) Create(ctx context.Context, req models.CreateCourseR
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
+func (m *mockCourseService) GetSubjects(ctx context.Context, tutorID string) ([]string, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]string), args.Error(1)
+}
 func (m *mockCourseService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
 	args := m.Called(ctx, tutorID, p)
 	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)
@@ -458,12 +462,12 @@ func (m *mockLessonService) GetByID(ctx context.Context, id string, tutorID stri
 	args := m.Called(ctx, id, tutorID)
 	return args.Get(0).(models.Lesson), args.Error(1)
 }
-func (m *mockLessonService) Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID string) (models.Lesson, error) {
-	args := m.Called(ctx, id, req, tutorID)
+func (m *mockLessonService) Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error) {
+	args := m.Called(ctx, id, req, tutorID, scope)
 	return args.Get(0).(models.Lesson), args.Error(1)
 }
-func (m *mockLessonService) Delete(ctx context.Context, id string, tutorID string) error {
-	return m.Called(ctx, id, tutorID).Error(0)
+func (m *mockLessonService) Delete(ctx context.Context, id string, tutorID, scope string) error {
+	return m.Called(ctx, id, tutorID, scope).Error(0)
 }
 
 func (m *mockLessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {

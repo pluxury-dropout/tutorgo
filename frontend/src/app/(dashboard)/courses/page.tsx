@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { BookOpen, Plus, Pencil, Trash2, ChevronRight, ArchiveRestore, Users } from 'lucide-react'
 
-import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, useArchivedCoursesPaged, useRestoreCourse } from '@/lib/hooks/useCourses'
+import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, useArchivedCoursesPaged, useRestoreCourse, useAddEnrollmentsBulk } from '@/lib/hooks/useCourses'
 import { useStudents, useStudentsPaged, useCreateStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { StudentForm } from '@/components/students/StudentForm'
@@ -54,7 +54,7 @@ function CoursesPageInner() {
     router.push(`/courses?${p}`)
   }
 
-  function changeTab(next: 'active' | 'students' | 'archive') {
+  function changeTab(next: 'active' | 'archive') {
     setTab(next)
     const p = new URLSearchParams(searchParams.toString())
     if (next === 'active') p.delete('tab')
@@ -77,57 +77,19 @@ function CoursesPageInner() {
   const { data: students = [] } = useStudents()
 
   const [formOpen, setFormOpen] = useState(false)
+  const [formMode, setFormMode] = useState<'individual' | 'group'>('individual')
   const [editing, setEditing]   = useState<Course | undefined>()
 
-  const createCourse = useCreateCourse()
+  const createCourse   = useCreateCourse()
+  const addEnrollments = useAddEnrollmentsBulk()
   const updateCourse = useUpdateCourse(editing?.id ?? '')
   const deleteCourse = useDeleteCourse()
 
   const tabParam = searchParams.get('tab')
-  const [tab, setTab] = useState<'active' | 'students' | 'archive'>(
-    tabParam === 'students' ? 'students' : tabParam === 'archive' ? 'archive' : 'active'
+  const [tab, setTab] = useState<'active' | 'archive'>(
+    tabParam === 'archive' ? 'archive' : 'active'
   )
   const [archivePage, setArchivePage] = useState(1)
-
-  const [studentSearch, setStudentSearch] = useState('')
-  const [studentPage, setStudentPage] = useState(1)
-  useEffect(() => { setStudentPage(1) }, [studentSearch])
-
-  const {
-    data: studentsData, isLoading: studentsLoading,
-    isError: studentsError, refetch: refetchStudents,
-  } = useStudentsPaged({
-    page: studentPage, limit: LIMIT, search: studentSearch,
-  })
-  const studentList  = studentsData?.data ?? []
-  const studentTotal = studentsData?.total ?? 0
-  const studentPages  = Math.ceil(studentTotal / LIMIT)
-
-  const [studentFormOpen, setStudentFormOpen] = useState(false)
-  const [editingStudent, setEditingStudent]   = useState<Student | undefined>()
-
-  const createStudent = useCreateStudent()
-  const updateStudent = useUpdateStudent(editingStudent?.id ?? '')
-  const deleteStudent = useDeleteStudent()
-
-  function openCreateStudent() { setEditingStudent(undefined); setStudentFormOpen(true) }
-  function openEditStudent(s: Student) { setEditingStudent(s); setStudentFormOpen(true) }
-
-  async function handleStudentSubmit(values: StudentFormValues) {
-    if (editingStudent) {
-      await updateStudent.mutateAsync(values)
-      toast.success('Ученик обновлён')
-    } else {
-      await createStudent.mutateAsync(values)
-      toast.success('Ученик добавлен')
-    }
-  }
-
-  async function handleStudentDelete(s: Student) {
-    if (!confirm(`Удалить ${s.first_name}${s.last_name ? ` ${s.last_name}` : ''}?`)) return
-    await deleteStudent.mutateAsync(s.id)
-    toast.success('Ученик удалён')
-  }
 
   const {
     data: archivedData, isLoading: archivedLoading,
@@ -143,11 +105,12 @@ function CoursesPageInner() {
 
   const restoreCourse = useRestoreCourse()
 
-  function openCreate() { setEditing(undefined); setFormOpen(true) }
-  function openEdit(c: Course) { setEditing(c); setFormOpen(true) }
+  function openCreate() { setEditing(undefined); setFormMode('individual'); setFormOpen(true) }
+  function openCreateGroup() { setEditing(undefined); setFormMode('group'); setFormOpen(true) }
+  function openEdit(c: Course) { setEditing(c); setFormMode('individual'); setFormOpen(true) }
 
   async function handleSubmit(values: CourseFormValues) {
-    const { type, student_id, started_at, ended_at, ...rest } = values
+    const { type, student_id, student_ids, started_at, ended_at, ...rest } = values
     const payload = {
       ...rest,
       started_at: `${started_at}T00:00:00Z`,
@@ -156,13 +119,24 @@ function CoursesPageInner() {
     if (editing) {
       await updateCourse.mutateAsync(payload)
       toast.success('Курс обновлён')
-    } else {
-      await createCourse.mutateAsync({
-        ...payload,
-        student_id: type === 'individual' && student_id ? student_id : undefined,
-      })
-      toast.success('Курс добавлен')
+      return
     }
+
+    const course = await createCourse.mutateAsync({
+      ...payload,
+      student_id: type === 'individual' && student_id ? student_id : undefined,
+    })
+    // Состав группы — вторым запросом: курс должен существовать, чтобы в него
+    // записывать. Частично собранная группа лучше, чем отменённое создание,
+    // поэтому ошибка записи не откатывает курс.
+    if (type === 'group' && student_ids && student_ids.length > 0) {
+      try {
+        await addEnrollments.mutateAsync({ courseId: course.id, studentIds: student_ids })
+      } catch {
+        toast.error('Группа создана, но учеников записать не удалось')
+      }
+    }
+    toast.success(type === 'group' ? 'Группа создана' : 'Курс добавлен')
   }
 
   async function handleDelete(course: Course) {
@@ -193,32 +167,29 @@ function CoursesPageInner() {
   return (
     <div style={{ maxWidth: 900 }}>
       <PageHeader
-        title={tab === 'students' ? 'Ученики' : 'Курсы'}
+        title="Курсы"
         meta={
-          tab === 'students' ? (
-            <HeaderMetric color="var(--purple)">{studentTotal} учеников</HeaderMetric>
-          ) : (
-            <HeaderMetric color="var(--success)">
-              {tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
-            </HeaderMetric>
-          )
+          <HeaderMetric color="var(--success)">
+            {tab === 'active' ? `${total} курсов` : `${archivedTotal} в архиве`}
+          </HeaderMetric>
         }
         actions={
           tab === 'active' ? (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-1.5" /> Добавить
-            </Button>
-          ) : tab === 'students' ? (
-            <Button size="sm" onClick={openCreateStudent}>
-              <Plus className="h-4 w-4 mr-1.5" /> Добавить
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={openCreateGroup}>
+                <Users className="h-4 w-4 mr-1.5" /> Группа
+              </Button>
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-4 w-4 mr-1.5" /> Добавить
+              </Button>
+            </div>
           ) : null
         }
       />
 
       {/* Tab switcher */}
       <div className="flex gap-1 mb-4" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
-        {(['active', 'students', 'archive'] as const).map((t) => (
+        {(['active', 'archive'] as const).map((t) => (
           <button
             key={t}
             onClick={() => changeTab(t)}
@@ -234,53 +205,21 @@ function CoursesPageInner() {
               marginBottom: -1,
             }}
           >
-            {t === 'active' ? 'Активные' : t === 'students' ? 'Ученики' : 'Архив'}
+            {t === 'active' ? 'Активные' : 'Архив'}
           </button>
         ))}
       </div>
 
       <div className="mb-4">
         <Input
-          placeholder={tab === 'students' ? 'Поиск по имени или email...' : 'Поиск по предмету...'}
-          value={tab === 'students' ? studentSearch : localSearch}
-          onChange={(e) => tab === 'students' ? setStudentSearch(e.target.value) : setLocalSearch(e.target.value)}
+          placeholder="Поиск по предмету..."
+          value={localSearch}
+          onChange={(e) => setLocalSearch(e.target.value)}
           className="max-w-sm"
         />
       </div>
 
-      {tab === 'students' ? (
-        /* ── Students tab ── */
-        studentsLoading ? (
-          <div className="space-y-2">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
-            ))}
-          </div>
-        ) : studentsError ? (
-          <ErrorState what="учеников" onRetry={() => refetchStudents()} />
-        ) : studentList.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={studentSearch ? 'Ничего не найдено' : 'Учеников пока нет'}
-            description={studentSearch
-              ? 'Попробуй другой запрос — поиск идёт по имени и контактам'
-              : 'Ученик — карточка с контактами. К ней привязываются курсы, уроки и оплаты, а сам ученик может получить доступ в личный кабинет'}
-            action={!studentSearch ? { label: 'Добавить ученика', onClick: openCreateStudent } : undefined}
-          />
-        ) : (
-          <>
-            <StudentsList students={studentList} onEdit={openEditStudent} onDelete={handleStudentDelete} />
-            {studentPages > 1 && (
-              <div className="flex items-center justify-between mt-3 px-1">
-                <span className="text-xs text-muted-foreground">
-                  Страница {studentPage} из {studentPages}
-                </span>
-                <Pagination page={studentPage} totalPages={studentPages} onPageChange={setStudentPage} />
-              </div>
-            )}
-          </>
-        )
-      ) : tab === 'active' ? (
+      {tab === 'active' ? (
         /* ── Active tab ── */
         isLoading ? (
           <div className="space-y-2">
@@ -448,14 +387,9 @@ function CoursesPageInner() {
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
         initial={editing}
+        mode={formMode}
       />
 
-      <StudentForm
-        open={studentFormOpen}
-        onClose={() => setStudentFormOpen(false)}
-        onSubmit={handleStudentSubmit}
-        initial={editingStudent}
-      />
     </div>
   )
 }

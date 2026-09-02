@@ -14,9 +14,11 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"tutorgo/config"
+	"tutorgo/jobs"
 	"tutorgo/pdftool"
 	"tutorgo/pubsub"
 	"tutorgo/repository"
+	"tutorgo/service"
 	"tutorgo/storage"
 )
 
@@ -86,11 +88,27 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, log *slog.
 		Log:    log,
 	}
 
+	recurrenceWorker := &RecurrenceExtendWorker{
+		Svc: service.NewRecurrenceService(repository.NewRecurrenceRepository(pool)),
+		Log: log,
+	}
+
 	workers := river.NewWorkers()
 	river.AddWorker(workers, pdfWorker)
+	river.AddWorker(workers, recurrenceWorker)
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 2}},
 		Workers: workers,
+		// Раз в сутки плюс сразу при старте: горизонт в 6 месяцев прощает
+		// пропущенный запуск, а RunOnStart страхует от редеплоев, попадающих
+		// между срабатываниями (планировщик держит состояние только в памяти).
+		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(
+				river.PeriodicInterval(24*time.Hour),
+				func() (river.JobArgs, *river.InsertOpts) { return jobs.RecurrenceExtendArgs{}, nil },
+				&river.PeriodicJobOpts{ID: "recurrence_extend", RunOnStart: true},
+			),
+		},
 	})
 	if err != nil {
 		return err

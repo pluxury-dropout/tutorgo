@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { lessonsApi, LessonInput, LessonBulkInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
+import { lessonsApi, LessonInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
+import type { Lesson, RecurrenceScope } from '@/types/api'
 
 export const lessonKeys = {
   byCourse:   (courseId: string) => ['lessons', 'course', courseId] as const,
@@ -64,19 +65,26 @@ export function useCreateLesson(courseId: string) {
   })
 }
 
-export function useCreateLessons(courseId: string) {
+// Урок из календаря: course_id заранее неизвестен — курс может создаться на
+// лету, — поэтому инвалидируем оба дерева целиком, а не конкретный курс.
+// Серия отличается только полем recurrence: раскатку дат делает сервер.
+export function useCreateSlotLesson() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: LessonBulkInput) => lessonsApi.createBulk(data),
-    onSuccess:  () => invalidateLessonViews(qc, courseId),
+    mutationFn: (data: LessonInput): Promise<Lesson> => lessonsApi.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lessons'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
   })
 }
 
 export function useUpdateLesson(id: string, courseId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: LessonUpdateInput) => lessonsApi.update(id, data),
-    onSuccess:  (updated) => {
+    mutationFn: ({ data, scope }: { data: LessonUpdateInput; scope?: RecurrenceScope }) =>
+      lessonsApi.update(id, data, scope),
+    onSuccess: (updated) => {
       invalidateLessonViews(qc, courseId)
       qc.setQueryData(lessonKeys.detail(id), updated)
     },
@@ -86,7 +94,7 @@ export function useUpdateLesson(id: string, courseId: string) {
 export function useDeleteLesson(courseId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: lessonsApi.delete,
+    mutationFn: ({ id, scope }: { id: string; scope?: RecurrenceScope }) => lessonsApi.delete(id, scope),
     onSuccess:  () => invalidateLessonViews(qc, courseId),
   })
 }

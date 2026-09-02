@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
 
 type CourseService interface {
 	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
+	GetSubjects(ctx context.Context, tutorID string) ([]string, error)
 	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
 	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
@@ -36,7 +38,14 @@ func (s *courseService) Create(ctx context.Context, req models.CreateCourseReque
 			return models.Course{}, fmt.Errorf("student: %w", ErrNotFound)
 		}
 	}
+	if req.StartedAt.IsZero() {
+		req.StartedAt = time.Now()
+	}
 	return s.repo.Create(ctx, req, tutorID)
+}
+
+func (s *courseService) GetSubjects(ctx context.Context, tutorID string) ([]string, error) {
+	return s.repo.GetSubjects(ctx, tutorID)
 }
 
 func (s *courseService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {

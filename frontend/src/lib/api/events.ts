@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Event, EventKind } from '@/types/api'
+import { Event, EventKind, RecurrenceInput, RecurrenceScope } from '@/types/api'
 
 export interface EventInput {
   title: string
@@ -9,13 +9,16 @@ export interface EventInput {
   color?: string
   location?: string
   notes?: string
+  /** Только при создании: превращает событие в серию. */
+  recurrence?: RecurrenceInput
 }
 
 export const eventsApi = {
   create: (data: EventInput) =>
     api.post<Event>('/events', data).then((r) => r.data),
-  update: (id: string, data: EventInput) =>
-    api.put<Event>(`/events/${id}`, data).then((r) => r.data),
-  delete: (id: string) =>
-    api.delete(`/events/${id}`).then(() => id),
+  // scope нужен только вхождению серии; для одиночного события сервер его игнорирует.
+  update: (id: string, data: EventInput, scope: RecurrenceScope = 'one') =>
+    api.put<Event>(`/events/${id}`, data, { params: { scope } }).then((r) => r.data),
+  delete: (id: string, scope: RecurrenceScope = 'one') =>
+    api.delete(`/events/${id}`, { params: { scope } }).then(() => id),
 }
