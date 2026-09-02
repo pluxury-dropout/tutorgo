@@ -312,7 +312,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 		             ELSE NULL
 		        END AS student_name,
 		        (c.student_id IS NULL) AS is_group,
-		        l.series_id,
+		        l.series_id, l.rule_id,
 		        r.rank
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
@@ -332,7 +332,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 	for rows.Next() {
 		var cl models.CalendarLesson
 		if err := rows.Scan(&cl.ID, &cl.CourseID, &cl.ScheduledAt, &cl.DurationMinutes,
-			&cl.Status, &cl.Notes, &cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.SeriesID, &cl.Rank); err != nil {
+			&cl.Status, &cl.Notes, &cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.SeriesID, &cl.RuleID, &cl.Rank); err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, cl)

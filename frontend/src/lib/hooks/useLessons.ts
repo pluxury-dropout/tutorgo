@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { lessonsApi, LessonInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
-import type { Lesson } from '@/types/api'
+import type { Lesson, RecurrenceScope } from '@/types/api'
 
 export const lessonKeys = {
   byCourse:   (courseId: string) => ['lessons', 'course', courseId] as const,
@@ -82,8 +82,9 @@ export function useCreateSlotLesson() {
 export function useUpdateLesson(id: string, courseId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: LessonUpdateInput) => lessonsApi.update(id, data),
-    onSuccess:  (updated) => {
+    mutationFn: ({ data, scope }: { data: LessonUpdateInput; scope?: RecurrenceScope }) =>
+      lessonsApi.update(id, data, scope),
+    onSuccess: (updated) => {
       invalidateLessonViews(qc, courseId)
       qc.setQueryData(lessonKeys.detail(id), updated)
     },
@@ -93,7 +94,7 @@ export function useUpdateLesson(id: string, courseId: string) {
 export function useDeleteLesson(courseId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: lessonsApi.delete,
+    mutationFn: ({ id, scope }: { id: string; scope?: RecurrenceScope }) => lessonsApi.delete(id, scope),
     onSuccess:  () => invalidateLessonViews(qc, courseId),
   })
 }

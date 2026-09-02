@@ -6,7 +6,8 @@ import { Trash2 } from 'lucide-react'
 
 import { useUpdateEvent, useDeleteEvent } from '@/lib/hooks/useEvents'
 import { EVENT_KINDS, KIND_LABELS, formatTimeRange } from '@/lib/eventKind'
-import type { Event, EventKind } from '@/types/api'
+import type { Event, EventKind, RecurrenceScope } from '@/types/api'
+import { RecurrenceScopeDialog } from '@/components/calendar/RecurrenceScopeDialog'
 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTitle } from '@/components/ui/popover'
@@ -40,8 +41,12 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
   const updateEvent = useUpdateEvent()
   const deleteEvent = useDeleteEvent()
 
-  function handleSave() {
-    if (!title.trim()) return
+  // У вхождения серии сначала спрашиваем область; одиночное событие правится
+  // сразу, лишний диалог там был бы шумом.
+  const [asking, setAsking] = useState<'edit' | 'delete' | null>(null)
+  const isSeries = !!event.rule_id
+
+  function save(scope: RecurrenceScope) {
     updateEvent.mutate(
       {
         id:   event.id,
@@ -54,15 +59,27 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
           location:         location.trim(),
           notes:            notes.trim(),
         },
+        scope,
       },
       { onError: () => toast.error('Не удалось сохранить событие') },
     )
     onClose()
   }
 
-  function handleDelete() {
-    deleteEvent.mutate(event.id, { onError: () => toast.error('Не удалось удалить событие') })
+  function remove(scope: RecurrenceScope) {
+    deleteEvent.mutate({ id: event.id, scope }, { onError: () => toast.error('Не удалось удалить событие') })
     onClose()
+  }
+
+  function handleSave() {
+    if (!title.trim()) return
+    if (isSeries) { setAsking('edit'); return }
+    save('one')
+  }
+
+  function handleDelete() {
+    if (isSeries) { setAsking('delete'); return }
+    remove('one')
   }
 
   return (
@@ -102,6 +119,13 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
           <Button size="sm" onClick={handleSave} disabled={!title.trim()}>Сохранить</Button>
         </div>
       </div>
+
+      <RecurrenceScopeDialog
+        open={!!asking}
+        action={asking ?? 'edit'}
+        onPick={(scope) => (asking === 'delete' ? remove(scope) : save(scope))}
+        onClose={() => setAsking(null)}
+      />
     </>
   )
 }
