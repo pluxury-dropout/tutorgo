@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useStudentCount } from '@/lib/hooks/useStudents'
 import { useCourseCount } from '@/lib/hooks/useCourses'
 import { useCalendar, useCurrentCycles } from '@/lib/hooks/useCalendar'
@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/common/StatusBadge'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { GettingStarted } from '@/components/common/GettingStarted'
+import { StudentOnboardingDialog } from '@/components/students/StudentOnboardingDialog'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import KanbanWidget from '@/components/tasks/KanbanWidget'
@@ -87,6 +88,7 @@ function RowsSkeleton({ rows = 3 }: { rows?: number }) {
 
 export default function DashboardPage() {
   useMinuteTick()
+  const [onboardOpen, setOnboardOpen] = useState(false)
   const { todayFrom, todayTo, weekStart, weekEnd, monthStart, monthEnd, dateLabel } = useMemo(buildDateRanges, [])
   const { data: studentCount   = 0,  isPending: studentsPending } = useStudentCount()
   const { data: courseCount    = 0,  isPending: coursesPending  } = useCourseCount()
@@ -154,8 +156,10 @@ export default function DashboardPage() {
           hasCourses={courseCount > 0}
           hasLessons={monthLessons.length > 0}
           hasPayments={recentPayments.length > 0}
+          onAddStudent={() => setOnboardOpen(true)}
         />
       )}
+      <StudentOnboardingDialog open={onboardOpen} onClose={() => setOnboardOpen(false)} />
 
       {/* KPI + доход */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

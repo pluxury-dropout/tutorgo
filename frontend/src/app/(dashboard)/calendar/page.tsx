@@ -9,21 +9,22 @@ import type { DatesSetArg, EventClickArg, EventDropArg, DateSelectArg, EventInpu
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import ruLocale from '@fullcalendar/core/locales/ru'
 import { Circle, CheckCircle2 } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { stripHtml } from '@/lib/stripHtml'
 import { useCalendarFeed, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { useRescheduleTask } from '@/lib/hooks/useTasks'
 import { useUpdateEvent } from '@/lib/hooks/useEvents'
-import { calendarApi, type ConflictQuery } from '@/lib/api/calendar'
+import { warnOnConflict } from '@/lib/conflictWarning'
 import { FC_COLORS, effectiveStatus } from '@/lib/lessonStatus'
-import { KIND_COLORS, TASK_COLORS, formatTimeRange } from '@/lib/eventKind'
+import { KIND_COLORS, TASK_COLORS } from '@/lib/eventKind'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { CycleBadge } from '@/components/lessons/CycleBadge'
 import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
 import { SlotCreatePopover } from '@/components/calendar/SlotCreatePopover'
 import { EventQuickPopover } from '@/components/calendar/EventQuickPopover'
 import { MobileWeekCalendar } from '@/components/calendar/MobileWeekCalendar'
+import { StudentOnboardingDialog } from '@/components/students/StudentOnboardingDialog'
+import { Button } from '@/components/ui/button'
 import type { Event as TutorEvent, LessonStatus, Task } from '@/types/api'
 import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
@@ -40,22 +41,6 @@ const EDGE_ZONE = 50
 
 const PERSONAL_KEY = 'tg_cal_show_personal'
 
-// Перенос уже сохранён — это предупреждение постфактум, без отката: наложение
-// бывает осознанным, решает репетитор. Сама проверка необязательна, поэтому
-// упавший запрос молчит, а не роняет промис.
-function warnOnConflict(q: ConflictQuery) {
-  calendarApi
-    .conflicts(q)
-    .then((conflicts) => {
-      if (conflicts.length === 0) return
-      const list = conflicts
-        .map((c) => `«${c.title}» ${formatTimeRange(c.starts_at, c.duration_minutes)}`)
-        .join(', ')
-      toast.warning(`Пересекается с ${list}`)
-    })
-    .catch(() => {})
-}
-
 export default function CalendarPage() {
   useMinuteTick()
   const { mutate: reschedule } = useRescheduleLesson()
@@ -68,6 +53,7 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent]   = useState<{ event: TutorEvent; el: HTMLElement } | null>(null)
   const [newTaskSlot, setNewTaskSlot]       = useState<{ start: Date; end: Date; rect: DOMRect } | null>(null)
   const [isMobile, setIsMobile]             = useState(false)
+  const [onboardOpen, setOnboardOpen]       = useState(false)
   // Тумблер «показывать личное»: нужен, когда репетитор показывает расписание
   // ученику. Читаем localStorage лениво с window-guard — как в stores/auth.
   const [showPersonal, setShowPersonal] = useState(
@@ -404,11 +390,17 @@ export default function CalendarPage() {
             ставится кликом по слоту. Исчезает, как только в периоде есть события,
             и не показывается, пока запросы периода ещё в полёте. */}
         {events.length === 0 && !eventsLoading && (
-          <div className="mb-2 shrink-0 rounded-lg border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
-            В этом периоде пусто. Кликни по свободному слоту, чтобы добавить событие или задачу.
-            Уроки пока ставятся на странице курса.
+          <div className="mb-2 flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-center text-xs text-muted-foreground">
+            <span>
+              В этом периоде пусто. Кликни по свободному слоту, чтобы поставить урок,
+              событие или задачу, либо
+            </span>
+            <Button size="sm" variant="outline" onClick={() => setOnboardOpen(true)}>
+              Добавить ученика
+            </Button>
           </div>
         )}
+        <StudentOnboardingDialog open={onboardOpen} onClose={() => setOnboardOpen(false)} />
         <div className="min-h-0 flex-1">
         <FullCalendar
           ref={calendarRef}

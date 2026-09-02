@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Users } from 'lucide-react'
 
-import { useStudentsPaged, useCreateStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
+import { useStudentsPaged, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
 import { StudentForm } from '@/components/students/StudentForm'
+import { StudentOnboardingDialog } from '@/components/students/StudentOnboardingDialog'
 import { StudentsList } from '@/components/students/StudentsList'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { EmptyState } from '@/components/common/EmptyState'
@@ -36,24 +37,21 @@ export default function StudentsPage() {
   const total      = data?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
 
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing]   = useState<Student | undefined>()
+  const [formOpen, setFormOpen]       = useState(false)
+  const [onboardOpen, setOnboardOpen] = useState(false)
+  const [editing, setEditing]         = useState<Student | undefined>()
 
-  const createStudent = useCreateStudent()
   const updateStudent = useUpdateStudent(editing?.id ?? '')
   const deleteStudent = useDeleteStudent()
 
-  function openCreate() { setEditing(undefined); setFormOpen(true) }
   function openEdit(s: Student) { setEditing(s); setFormOpen(true) }
 
+  // Создание переехало в StudentOnboardingDialog (спека 8.2, фаза 4) — за один
+  // сабмит заводит ещё и курс с расписанием. StudentForm остался только для
+  // правки контактов уже заведённого ученика.
   async function handleSubmit(values: StudentFormValues) {
-    if (editing) {
-      await updateStudent.mutateAsync(values)
-      toast.success('Ученик обновлён')
-    } else {
-      await createStudent.mutateAsync(values)
-      toast.success('Ученик добавлен')
-    }
+    await updateStudent.mutateAsync(values)
+    toast.success('Ученик обновлён')
   }
 
   async function handleDelete(s: Student) {
@@ -68,7 +66,7 @@ export default function StudentsPage() {
         title="Ученики"
         meta={<HeaderMetric color="var(--purple)">{total} учеников</HeaderMetric>}
         actions={
-          <Button size="sm" onClick={openCreate}>
+          <Button size="sm" onClick={() => setOnboardOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" /> Добавить
           </Button>
         }
@@ -98,7 +96,7 @@ export default function StudentsPage() {
           description={search
             ? 'Попробуй другой запрос — поиск идёт по имени и контактам'
             : 'Ученик — карточка с контактами. К ней привязываются курсы, уроки и оплаты, а сам ученик может получить доступ в личный кабинет'}
-          action={!search ? { label: 'Добавить ученика', onClick: openCreate } : undefined}
+          action={!search ? { label: 'Добавить ученика', onClick: () => setOnboardOpen(true) } : undefined}
         />
       ) : (
         <>
@@ -120,6 +118,7 @@ export default function StudentsPage() {
         onSubmit={handleSubmit}
         initial={editing}
       />
+      <StudentOnboardingDialog open={onboardOpen} onClose={() => setOnboardOpen(false)} />
     </div>
   )
 }

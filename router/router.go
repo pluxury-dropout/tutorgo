@@ -61,6 +61,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	taskService := service.NewTaskService(taskRepo)
 	eventService := service.NewEventService(eventRepo, recurrenceService)
 	calendarService := service.NewCalendarService(lessonService, eventRepo, taskRepo)
+	onboardingService := service.NewOnboardingService(studentService, courseService, lessonService)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
 	materialService := service.NewMaterialService(materialRepo)
@@ -81,6 +82,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
 	authHandler := handlers.NewAuthHandler(tutorService, registrationService, refreshTokenService, log, cfg.JWTSecret, cfg.Env == "production")
 	studentHandler := handlers.NewStudentHandler(studentService, log)
+	onboardingHandler := handlers.NewOnboardingHandler(onboardingService, log)
 	courseHandler := handlers.NewCourseHandler(courseService, log)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
 	lessonHandler := handlers.NewLessonHandler(lessonService, log)
@@ -192,6 +194,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 		auth.GET("/students", studentHandler.GetAll)
 		auth.POST("/students", studentHandler.Create)
+		// Ученик + курс + серия одним сабмитом: обычный /students остаётся для
+		// правки карточки, этот — для первого шага.
+		auth.POST("/onboarding/student", onboardingHandler.CreateStudent)
 		auth.GET("/students/:id", studentHandler.GetByID)
 		auth.PUT("/students/:id", studentHandler.Update)
 		auth.DELETE("/students/:id", studentHandler.Delete)
