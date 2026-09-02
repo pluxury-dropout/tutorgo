@@ -2,7 +2,7 @@ process.env.TZ = 'Asia/Almaty'   // генерация зависит от ло�
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateDates, lessonsPlural } from './recurrence.ts'
+import { generateDates, lessonsPlural, isoWeekday } from './recurrence.ts'
 
 const TUE_1_SEP = new Date('2026-09-01T17:00:00+05:00').toISOString()
 
@@ -38,6 +38,12 @@ test('урок в последний день курса попадает в с�
 
   assert.equal(dates.length, 2)
   assert.equal(new Date(dates[1]).getDate(), 31)
+})
+
+test('воскресенье — седьмой день, а не нулевой', () => {
+  assert.equal(isoWeekday(new Date('2026-09-01T17:00:00+05:00')), 2)  // вторник
+  assert.equal(isoWeekday(new Date('2026-09-06T17:00:00+05:00')), 7)  // воскресенье
+  assert.equal(isoWeekday(new Date('2026-09-07T17:00:00+05:00')), 1)  // понедельник
 })
 
 test('склонение уроков', () => {

@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { lessonSchema, LessonFormValues } from '@/schemas/lesson'
 import { Lesson, ApiError } from '@/types/api'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
-import { generateDates, lessonsPlural, RecurrenceOptions, RecurrenceType } from '@/lib/recurrence'
+import { generateDates, lessonsPlural, WEEK_DAYS, RecurrenceOptions, RecurrenceType } from '@/lib/recurrence'
 import { useConflicts } from '@/lib/hooks/useEvents'
 import { formatTimeRange } from '@/lib/eventKind'
 import { AlertTriangle } from 'lucide-react'
@@ -19,16 +19,6 @@ import { Label } from '@/components/ui/label'
 import { TimePicker } from '@/components/ui/time-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-const WEEK_DAYS = [
-  { label: 'Пн', iso: 1 },
-  { label: 'Вт', iso: 2 },
-  { label: 'Ср', iso: 3 },
-  { label: 'Чт', iso: 4 },
-  { label: 'Пт', iso: 5 },
-  { label: 'Сб', iso: 6 },
-  { label: 'Вс', iso: 7 },
-]
 
 const REC_TYPE_LABELS: Record<RecurrenceType, string> = {
   weekly_same:   'Каждую неделю в этот день',

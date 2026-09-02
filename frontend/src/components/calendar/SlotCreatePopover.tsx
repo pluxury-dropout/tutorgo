@@ -1,14 +1,15 @@
 'use client'
 
+import * as React from 'react'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Repeat } from 'lucide-react'
 
 import { useCreateTask } from '@/lib/hooks/useTasks'
 import { useCreateEvent, useConflicts } from '@/lib/hooks/useEvents'
 import { useCreateSlotLesson } from '@/lib/hooks/useLessons'
 import { useStudentCourses } from '@/lib/hooks/useCourses'
-import { generateDates, lessonsPlural } from '@/lib/recurrence'
+import { generateDates, lessonsPlural, isoWeekday, WEEK_DAYS } from '@/lib/recurrence'
 import { EVENT_KINDS, KIND_LABELS, formatTimeRange } from '@/lib/eventKind'
 import type { EventKind, Student } from '@/types/api'
 
@@ -102,7 +103,9 @@ function SlotForm({ start, end, onClose }: { start: Date; end: Date; onClose: ()
 
 function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
   const [student, setStudent] = useState<Student | null>(null)
-  const [repeat, setRepeat]   = useState(false)
+  // 'none' — разовый урок; остальные значения совпадают с типами generateDates.
+  const [repeat, setRepeat]   = useState<'none' | 'weekly_same' | 'weekly_custom'>('none')
+  const [days, setDays]       = useState<number[]>([isoWeekday(start)])
   // null — пользователь предмет не трогал, показываем подсказку по ученику.
   // Состояние вместо эффекта: подстановка при загрузке курсов иначе была бы
   // setState внутри useEffect, то есть лишний каскад рендеров.
@@ -114,20 +117,27 @@ function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose
   const { data: studentCourses = [] } = useStudentCourses(student?.id ?? '')
   const subject = typedSubject ?? studentCourses[0]?.subject ?? ''
 
-  const dates = repeat
-    ? generateDates(start.toISOString(), { type: 'weekly_same' })
-    : [start.toISOString()]
+  // Пустой список дней — не молчаливый один урок, а заблокированная кнопка:
+  // серия из одного элемента выглядит как потерянные данные.
+  const daysMissing = repeat === 'weekly_custom' && days.length === 0
+  const dates = repeat === 'none' || daysMissing
+    ? [start.toISOString()]
+    : generateDates(start.toISOString(), { type: repeat, days })
   const lastDate = dates.length > 1 ? new Date(dates[dates.length - 1]) : null
 
+  function toggleDay(iso: number) {
+    setDays((prev) => (prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso]))
+  }
+
   function handleSave() {
-    if (!student || !subject.trim()) return
+    if (!student || !subject.trim() || daysMissing) return
     const common = {
       student_id:       student.id,
       subject:          subject.trim(),
       duration_minutes: slotMinutes(start, end),
     }
     createLesson.mutate(
-      repeat ? { ...common, scheduled_ats: dates } : { ...common, scheduled_at: dates[0] },
+      repeat === 'none' ? { ...common, scheduled_at: dates[0] } : { ...common, scheduled_ats: dates },
       { onError: () => toast.error('Не удалось поставить урок') },
     )
     onClose()
@@ -142,20 +152,67 @@ function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose
       />
       {student && <SubjectCombobox value={subject} onChange={setTypedSubject} />}
 
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={repeat}
-          onChange={(e) => setRepeat(e.target.checked)}
-          className="size-3.5 accent-primary"
-        />
-        Повторять каждую неделю
-      </label>
+      {repeat === 'none' ? (
+        <button
+          type="button"
+          onClick={() => setRepeat('weekly_same')}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Repeat className="size-3.5" />
+          Повторять
+        </button>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-input p-2">
+          <div className="flex gap-1">
+            <RepeatMode active={repeat === 'weekly_same'} onClick={() => setRepeat('weekly_same')}>
+              Еженедельно
+            </RepeatMode>
+            <RepeatMode active={repeat === 'weekly_custom'} onClick={() => setRepeat('weekly_custom')}>
+              По дням
+            </RepeatMode>
+          </div>
+
+          {repeat === 'weekly_custom' && (
+            <div className="flex gap-1">
+              {WEEK_DAYS.map(({ label, iso }) => (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={() => toggleDay(iso)}
+                  className={`h-7 flex-1 rounded text-xs font-medium transition-colors ${
+                    days.includes(iso)
+                      ? 'bg-primary text-primary-foreground'
+                      : 'border border-input hover:bg-muted'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {daysMissing && (
+            <p className="text-xs text-destructive">Выберите хотя бы один день недели</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setRepeat('none')}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Не повторять
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
-        <Button size="sm" onClick={handleSave} disabled={!student || !subject.trim()}>
-          {repeat ? `Создать ${lessonsPlural(dates.length)}` : 'Создать'}
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={!student || !subject.trim() || daysMissing}
+        >
+          {repeat === 'none' ? 'Создать' : `Создать ${lessonsPlural(dates.length)}`}
         </Button>
       </div>
       {lastDate && (
@@ -164,6 +221,20 @@ function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose
         </p>
       )}
     </div>
+  )
+}
+
+function RepeatMode({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`h-7 flex-1 rounded text-xs font-medium transition-colors ${
+        active ? 'bg-primary text-primary-foreground' : 'border border-input hover:bg-muted'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

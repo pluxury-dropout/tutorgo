@@ -12,6 +12,22 @@ export interface RecurrenceOptions {
   count?:  number     // не задан — генерируем до конца курса либо до горизонта
 }
 
+/** Дни недели в ISO-нумерации — нужны и форме урока, и поповеру календаря. */
+export const WEEK_DAYS = [
+  { label: 'Пн', iso: 1 },
+  { label: 'Вт', iso: 2 },
+  { label: 'Ср', iso: 3 },
+  { label: 'Чт', iso: 4 },
+  { label: 'Пт', iso: 5 },
+  { label: 'Сб', iso: 6 },
+  { label: 'Вс', iso: 7 },
+]
+
+/** ISO-день даты: 1=Пн … 7=Вс (Date.getDay() считает с воскресенья). */
+export function isoWeekday(d: Date): number {
+  return ((d.getDay() + 6) % 7) + 1
+}
+
 /** Потолок по датам, когда не заданы ни count, ни ended_at курса. */
 export const MAX_HORIZON_MONTHS = 12
 /** Второй предохранитель: сколько уроков максимум за один сабмит. */
