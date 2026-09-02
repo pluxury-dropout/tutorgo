@@ -85,7 +85,8 @@ func (h *EventHandler) Update(c *gin.Context) {
 	if !bindAndValidate(c, &req) {
 		return
 	}
-	event, err := h.service.Update(c.Request.Context(), c.Param("id"), tutorID, req)
+	// ?scope=one|following|all — область правки вхождения серии (дефолт «one»).
+	event, err := h.service.Update(c.Request.Context(), c.Param("id"), tutorID, req, c.DefaultQuery("scope", "one"))
 	if err != nil {
 		h.log.Error("Failed to update event", slog.String("error", err.Error()))
 		handleServiceError(c, err)
@@ -100,7 +101,7 @@ func (h *EventHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	if err := h.service.Delete(c.Request.Context(), c.Param("id"), tutorID); err != nil {
+	if err := h.service.Delete(c.Request.Context(), c.Param("id"), tutorID, c.DefaultQuery("scope", "one")); err != nil {
 		h.log.Error("Failed to delete event", slog.String("error", err.Error()))
 		handleServiceError(c, err)
 		return
