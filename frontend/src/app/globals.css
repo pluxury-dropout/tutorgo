@@ -356,6 +356,17 @@
   cursor: pointer;
 }
 
+/* Выделение слота протяжкой — серый вместо дефолтного бирюзового
+   rgba(188,232,241,.3), скругление как у чипа события. Цвет задаём через
+   собственную переменную FullCalendar, а не перебиваем правило !important.
+   Оттенок — от токена --foreground, поэтому тёмная тема работает сама. */
+.fc {
+  --fc-highlight-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+.fc .fc-highlight {
+  border-radius: 6px;
+}
+
 /* Past events — slightly darker for pastel palette */
 .fc-event-past {
   filter: brightness(0.90);
