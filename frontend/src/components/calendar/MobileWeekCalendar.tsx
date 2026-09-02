@@ -6,6 +6,7 @@ import { useCalendarFeed, useRescheduleLesson } from '@/lib/hooks/useCalendar'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { KIND_COLORS, TASK_COLORS } from '@/lib/eventKind'
 import { stripHtml } from '@/lib/stripHtml'
+import { warnOnConflict } from '@/lib/conflictWarning'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
 import { EventQuickPopover } from '@/components/calendar/EventQuickPopover'
@@ -170,15 +171,25 @@ export function MobileWeekCalendar({
       const base     = new Date(drag.lesson.scheduled_at)
       base.setDate(base.getDate() + dayDelta)
       const newStart = new Date(base.getTime() + minutesDelta * 60_000)
-      reschedule.mutate({
-        id:   drag.lesson.id,
-        data: {
-          scheduled_at:     newStart.toISOString(),
-          duration_minutes: drag.lesson.duration_minutes,
-          status:           drag.lesson.status,
-          notes:            drag.lesson.notes,
+      reschedule.mutate(
+        {
+          id:   drag.lesson.id,
+          data: {
+            scheduled_at:     newStart.toISOString(),
+            duration_minutes: drag.lesson.duration_minutes,
+            status:           drag.lesson.status,
+            notes:            drag.lesson.notes,
+          },
         },
-      })
+        {
+          onSuccess: () => warnOnConflict({
+            starts_at:        newStart.toISOString(),
+            duration_minutes: drag.lesson.duration_minutes,
+            exclude_type:     'lesson',
+            exclude_id:       drag.lesson.id,
+          }),
+        },
+      )
     }
     setDrag(null)
   }
