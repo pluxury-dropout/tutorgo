@@ -143,11 +143,11 @@ var (
 )
 
 func newLessonSvc(lessonRepo *mockLessonRepo, courseRepo *mockCourseRepo) service.LessonService {
-	return service.NewLessonService(lessonRepo, courseRepo, new(mockPaymentRepo))
+	return service.NewLessonService(lessonRepo, courseRepo, new(mockPaymentRepo), nil)
 }
 
 func newLessonSvcWithPayment(lessonRepo *mockLessonRepo, courseRepo *mockCourseRepo, paymentRepo *mockPaymentRepo) service.LessonService {
-	return service.NewLessonService(lessonRepo, courseRepo, paymentRepo)
+	return service.NewLessonService(lessonRepo, courseRepo, paymentRepo, nil)
 }
 
 // Create
@@ -187,7 +187,7 @@ func TestLessonCreate_ArchivedCourse(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	courseRepo := new(mockCourseRepo)
 	payRepo := new(mockPaymentRepo)
-	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo)
+	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo, nil)
 
 	archivedCourse := models.Course{ID: courseID, TutorID: tutorID, IsActive: false}
 	courseRepo.On("GetByID", mock.Anything, createLessonReq.CourseID, tutorID).Return(archivedCourse, nil)
@@ -204,7 +204,7 @@ func TestLessonCreateBulk_ArchivedCourse(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	courseRepo := new(mockCourseRepo)
 	payRepo := new(mockPaymentRepo)
-	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo)
+	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo, nil)
 
 	archivedCourse := models.Course{ID: courseID, TutorID: tutorID, IsActive: false}
 	courseRepo.On("GetByID", mock.Anything, createLessonReq.CourseID, tutorID).Return(archivedCourse, nil)
@@ -429,7 +429,7 @@ func TestLessonStartRoom_NotFound(t *testing.T) {
 }
 func TestEndRoom_Success(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil, nil)
+	svc := service.NewLessonService(repo, nil, nil, nil)
 
 	repo.On("EndRoom", mock.Anything, lessonID, tutorID).Return(nil)
 
@@ -439,7 +439,7 @@ func TestEndRoom_Success(t *testing.T) {
 }
 func TestEndRoom_NotFound(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil, nil)
+	svc := service.NewLessonService(repo, nil, nil, nil)
 
 	repo.On("EndRoom", mock.Anything, lessonID, tutorID).Return(errors.New("lesson not found"))
 
@@ -450,7 +450,7 @@ func TestEndRoom_NotFound(t *testing.T) {
 
 func TestGetRoomStatus_Active(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil, nil)
+	svc := service.NewLessonService(repo, nil, nil, nil)
 
 	repo.On("GetRoomStatus", mock.Anything, lessonID).Return("active", nil)
 
@@ -462,7 +462,7 @@ func TestGetRoomStatus_Active(t *testing.T) {
 
 func TestGetRoomStatus_Ended(t *testing.T) {
 	repo := new(mockLessonRepo)
-	svc := service.NewLessonService(repo, nil, nil)
+	svc := service.NewLessonService(repo, nil, nil, nil)
 
 	repo.On("GetRoomStatus", mock.Anything, lessonID).Return("ended", nil)
 

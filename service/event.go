@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 	"tutorgo/models"
 	"tutorgo/repository"
 
@@ -19,18 +20,42 @@ type EventService interface {
 }
 
 type eventService struct {
-	repo repository.EventRepository
+	repo       repository.EventRepository
+	recurrence RecurrenceService
 }
 
-func NewEventService(repo repository.EventRepository) EventService {
-	return &eventService{repo: repo}
+func NewEventService(repo repository.EventRepository, recurrence RecurrenceService) EventService {
+	return &eventService{repo: repo, recurrence: recurrence}
 }
 
 func (s *eventService) Create(ctx context.Context, tutorID string, req models.CreateEventRequest) (models.Event, error) {
 	if req.Kind == "" {
 		req.Kind = "personal"
 	}
-	return s.repo.Create(ctx, tutorID, req)
+	if req.Recurrence == nil {
+		return s.repo.Create(ctx, tutorID, req)
+	}
+
+	// Первое событие — оно же шаблон серии: остальные вхождения материализация
+	// копирует с него (см. repository.InsertOccurrences).
+	rule, err := s.recurrence.CreateRule(ctx, *req.Recurrence, req.StartsAt, req.DurationMinutes, tutorID)
+	if err != nil {
+		return models.Event{}, err
+	}
+	req.RuleID = rule.ID
+	req.OccurrenceDate = &rule.StartsOn
+
+	event, err := s.repo.Create(ctx, tutorID, req)
+	if err != nil {
+		if delErr := s.recurrence.DeleteRule(ctx, rule.ID); delErr != nil {
+			return models.Event{}, fmt.Errorf("create event: %w (orphan rule %s)", err, rule.ID)
+		}
+		return models.Event{}, err
+	}
+
+	// Материализация не критична: не вышло сейчас — ночная джоба догонит.
+	_, _ = s.recurrence.Materialize(ctx, rule.ID, time.Now().Add(RecurrenceHorizon))
+	return event, nil
 }
 
 func (s *eventService) GetByID(ctx context.Context, id, tutorID string) (models.Event, error) {

@@ -34,14 +34,16 @@ type lessonService struct {
 	repo        repository.LessonRepository
 	courseRepo  repository.CourseRepository
 	paymentRepo repository.PaymentRepository
+	recurrence  RecurrenceService
 }
 
 func NewLessonService(
 	repo repository.LessonRepository,
 	courseRepo repository.CourseRepository,
 	paymentRepo repository.PaymentRepository,
+	recurrence RecurrenceService,
 ) LessonService {
-	return &lessonService{repo: repo, courseRepo: courseRepo, paymentRepo: paymentRepo}
+	return &lessonService{repo: repo, courseRepo: courseRepo, paymentRepo: paymentRepo, recurrence: recurrence}
 }
 
 // cyclePositionFromRank computes a lesson's position and size within its payment cycle.
@@ -130,11 +132,46 @@ func (s *lessonService) Create(ctx context.Context, req models.CreateLessonReque
 	}
 	req.CourseID = course.ID
 
+	if req.Recurrence != nil {
+		return s.createSeries(ctx, req, tutorID)
+	}
+
 	lesson, err := s.repo.Create(ctx, req)
 	if err == nil {
 		globalCalendarCache.Invalidate(tutorID)
 	}
 	return lesson, err
+}
+
+// createSeries заводит правило, создаёт по нему первый урок — он же шаблон для
+// материализации — и добивает горизонт. Возвращается именно первый урок:
+// клиенту нужен он, остальные серия отдаст через календарь.
+func (s *lessonService) createSeries(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
+	rule, err := s.recurrence.CreateRule(ctx, *req.Recurrence, req.ScheduledAt, req.DurationMinutes, tutorID)
+	if err != nil {
+		return models.Lesson{}, err
+	}
+
+	req.RuleID = rule.ID
+	req.OccurrenceDate = &rule.StartsOn
+
+	lesson, err := s.repo.Create(ctx, req)
+	if err != nil {
+		// Правило без первого вхождения — сирота: шаблона для материализации у
+		// него нет, зато ночная джоба будет ходить к нему каждый день.
+		if delErr := s.recurrence.DeleteRule(ctx, rule.ID); delErr != nil {
+			return models.Lesson{}, fmt.Errorf("create lesson: %w (orphan rule %s)", err, rule.ID)
+		}
+		return models.Lesson{}, err
+	}
+
+	// Ошибка материализации не отменяет уже созданный урок: ночная джоба
+	// догонит горизонт, а пользователь получит хотя бы первое занятие.
+	if _, err := s.recurrence.Materialize(ctx, rule.ID, time.Now().Add(RecurrenceHorizon)); err != nil {
+		return lesson, nil
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return lesson, nil
 }
 
 func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {

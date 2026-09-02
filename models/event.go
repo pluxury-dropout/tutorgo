@@ -16,7 +16,13 @@ type Event struct {
 	Notes           string    `json:"notes"`
 }
 
+// Recurrence превращает событие в серию — «спортзал каждый понедельник».
+// RuleID и OccurrenceDate заполняет сервис, не клиент.
 type CreateEventRequest struct {
+	Recurrence     *RecurrenceInput `json:"recurrence" validate:"omitempty"`
+	RuleID         string           `json:"-"`
+	OccurrenceDate *time.Time       `json:"-"`
+
 	Title           string    `json:"title"            validate:"required,max=200"`
 	Kind            string    `json:"kind"             validate:"omitempty,oneof=personal work trial"`
 	StartsAt        time.Time `json:"starts_at"        validate:"required"`

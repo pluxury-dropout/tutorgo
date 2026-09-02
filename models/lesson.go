@@ -35,6 +35,14 @@ type CreateLessonRequest struct {
 	ScheduledAt     time.Time `json:"scheduled_at"     validate:"required"`
 	DurationMinutes int       `json:"duration_minutes" validate:"required,gt=0"`
 	Notes           string    `json:"notes"            validate:"omitempty,max=500"`
+
+	// Recurrence превращает урок в серию: сам он становится первым вхождением
+	// и шаблоном, остальные добирает материализация.
+	Recurrence *RecurrenceInput `json:"recurrence" validate:"omitempty"`
+
+	// Заполняются сервисом, не клиентом.
+	RuleID         string     `json:"-"`
+	OccurrenceDate *time.Time `json:"-"`
 }
 
 type UpdateLessonRequest struct {

@@ -47,11 +47,12 @@ func NewLessonRepository(pool *pgxpool.Pool) LessonRepository {
 func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error) {
 	var lesson models.Lesson
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status)
+		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status, rule_id, occurrence_date)
 		 VALUES ($1, $2, $3, $4,
-		         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
+		         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END,
+		         NULLIF($5, '')::uuid, $6::date)
 		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
-		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes,
+		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes, req.RuleID, req.OccurrenceDate,
 	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
 	return lesson, err
 }

@@ -15,8 +15,10 @@ CREATE TABLE recurrence_rules (
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_rules_materialize ON recurrence_rules(materialized_until)
-    WHERE ends_on IS NULL OR ends_on > CURRENT_DATE;
+-- Составной, а не частичный: предикат с CURRENT_DATE Postgres не принимает
+-- («functions in index predicate must be marked IMMUTABLE»), а ends_on второй
+-- колонкой всё равно отсекает закончившиеся правила без обращения к таблице.
+CREATE INDEX idx_rules_materialize ON recurrence_rules(materialized_until, ends_on);
 
 -- rule_id у урока — SET NULL: правило можно удалить, а проведённые уроки с их
 -- посещаемостью, досками и платежами обязаны остаться. У события удалять нечего,

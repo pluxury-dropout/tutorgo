@@ -21,3 +21,15 @@ type RecurrenceRule struct {
 	MaxCount          *int       `json:"max_count"` // nil — без ограничения
 	MaterializedUntil time.Time  `json:"materialized_until"`
 }
+
+// RecurrenceInput — правило в запросе на создание урока или события.
+// Время начала и длительность здесь не спрашиваются: они и так есть у первого
+// вхождения, а дублирующее поле рано или поздно разойдётся с ним.
+type RecurrenceInput struct {
+	Freq      string     `json:"freq"       validate:"required,oneof=daily weekly monthly"`
+	IntervalN int        `json:"interval_n" validate:"omitempty,min=1"`
+	ByWeekday []int      `json:"byweekday"  validate:"omitempty,max=7,dive,min=1,max=7"`
+	TZ        string     `json:"tz"         validate:"required,max=64"`
+	EndsOn    *time.Time `json:"ends_on"`
+	MaxCount  *int       `json:"max_count"  validate:"omitempty,min=1,max=500"`
+}

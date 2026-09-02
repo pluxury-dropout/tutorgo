@@ -20,6 +20,10 @@ type RecurrenceService interface {
 	Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error)
 	// ExtendAll — то же для всех правил, чей горизонт короче: точка входа джобы.
 	ExtendAll(ctx context.Context, horizon time.Time) (int, error)
+	// CreateRule собирает правило из первого вхождения: время и длительность
+	// берутся оттуда, а не спрашиваются вторично.
+	CreateRule(ctx context.Context, in models.RecurrenceInput, firstAt time.Time, durationMinutes int, tutorID string) (models.RecurrenceRule, error)
+	DeleteRule(ctx context.Context, ruleID string) error
 }
 
 type recurrenceService struct {
@@ -29,6 +33,39 @@ type recurrenceService struct {
 
 func NewRecurrenceService(repo repository.RecurrenceRepository) RecurrenceService {
 	return &recurrenceService{repo: repo, log: slog.Default()}
+}
+
+func (s *recurrenceService) CreateRule(ctx context.Context, in models.RecurrenceInput, firstAt time.Time, durationMinutes int, tutorID string) (models.RecurrenceRule, error) {
+	loc, err := time.LoadLocation(in.TZ)
+	if err != nil {
+		return models.RecurrenceRule{}, fmt.Errorf("timezone %q: %w", in.TZ, ErrBadRequest)
+	}
+	local := firstAt.In(loc)
+	startsOn := dayOf(local)
+
+	rule := models.RecurrenceRule{
+		TutorID:         tutorID,
+		Freq:            in.Freq,
+		IntervalN:       max(in.IntervalN, 1),
+		ByWeekday:       in.ByWeekday,
+		TimeLocal:       local.Format("15:04"),
+		TZ:              in.TZ,
+		DurationMinutes: durationMinutes,
+		StartsOn:        startsOn,
+		EndsOn:          in.EndsOn,
+		MaxCount:        in.MaxCount,
+		// Первое вхождение создаёт вызывающий, поэтому граница — день старта:
+		// материализация добирает всё, что дальше.
+		MaterializedUntil: startsOn,
+	}
+	if rule.ByWeekday == nil {
+		rule.ByWeekday = []int{}
+	}
+	return s.repo.Create(ctx, rule)
+}
+
+func (s *recurrenceService) DeleteRule(ctx context.Context, ruleID string) error {
+	return s.repo.Delete(ctx, ruleID)
 }
 
 func (s *recurrenceService) Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error) {

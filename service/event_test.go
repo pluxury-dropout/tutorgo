@@ -48,7 +48,7 @@ func (m *mockEventRepo) GetOccupiedInRange(ctx context.Context, tutorID, from, t
 
 func TestEventService_Create_DefaultsKind(t *testing.T) {
 	repo := new(mockEventRepo)
-	svc := service.NewEventService(repo)
+	svc := service.NewEventService(repo, nil)
 
 	repo.On("Create", mock.Anything, "tutor-1", mock.MatchedBy(func(r models.CreateEventRequest) bool {
 		return r.Kind == "personal"
@@ -64,7 +64,7 @@ func TestEventService_Create_DefaultsKind(t *testing.T) {
 
 func TestEventService_Delete_NotFound(t *testing.T) {
 	repo := new(mockEventRepo)
-	svc := service.NewEventService(repo)
+	svc := service.NewEventService(repo, nil)
 
 	repo.On("Delete", mock.Anything, "missing", "tutor-1").Return(repository.ErrEventNotFound)
 

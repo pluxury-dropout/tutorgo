@@ -40,11 +40,11 @@ func scanEvent(row interface{ Scan(...any) error }) (models.Event, error) {
 
 func (r *eventRepository) Create(ctx context.Context, tutorID string, req models.CreateEventRequest) (models.Event, error) {
 	return scanEvent(r.conn.QueryRow(ctx,
-		`INSERT INTO events (tutor_id, title, kind, starts_at, duration_minutes, color, location, notes)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO events (tutor_id, title, kind, starts_at, duration_minutes, color, location, notes, rule_id, occurrence_date)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, '')::uuid, $10::date)
 		 RETURNING `+eventColumns,
 		tutorID, req.Title, req.Kind, req.StartsAt, req.DurationMinutes,
-		req.Color, req.Location, req.Notes,
+		req.Color, req.Location, req.Notes, req.RuleID, req.OccurrenceDate,
 	))
 }
 

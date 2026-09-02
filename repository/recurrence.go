@@ -9,6 +9,8 @@ import (
 )
 
 type RecurrenceRepository interface {
+	Create(ctx context.Context, rule models.RecurrenceRule) (models.RecurrenceRule, error)
+	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (models.RecurrenceRule, error)
 	DueForMaterialization(ctx context.Context, horizon time.Time) ([]models.RecurrenceRule, error)
 	SetMaterializedUntil(ctx context.Context, id string, until time.Time) error
@@ -33,6 +35,25 @@ func scanRule(row interface{ Scan(...any) error }) (models.RecurrenceRule, error
 	err := row.Scan(&r.ID, &r.TutorID, &r.Freq, &r.IntervalN, &r.ByWeekday, &r.TimeLocal,
 		&r.TZ, &r.DurationMinutes, &r.StartsOn, &r.EndsOn, &r.MaxCount, &r.MaterializedUntil)
 	return r, err
+}
+
+func (r *recurrenceRepository) Create(ctx context.Context, rule models.RecurrenceRule) (models.RecurrenceRule, error) {
+	return scanRule(r.pool.QueryRow(ctx,
+		`INSERT INTO recurrence_rules
+		     (tutor_id, freq, interval_n, byweekday, time_local, tz, duration_minutes,
+		      starts_on, ends_on, max_count, materialized_until)
+		 VALUES ($1::uuid, $2, $3, $4::smallint[], $5::time, $6, $7, $8::date, $9::date, $10, $11::date)
+		 RETURNING `+ruleCols,
+		rule.TutorID, rule.Freq, rule.IntervalN, rule.ByWeekday, rule.TimeLocal, rule.TZ,
+		rule.DurationMinutes, rule.StartsOn, rule.EndsOn, rule.MaxCount, rule.MaterializedUntil,
+	))
+}
+
+// Delete нужен на откате: правило без первого вхождения — сирота, шаблона для
+// материализации у него нет, и висеть в базе ему незачем.
+func (r *recurrenceRepository) Delete(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM recurrence_rules WHERE id = $1`, id)
+	return err
 }
 
 func (r *recurrenceRepository) GetByID(ctx context.Context, id string) (models.RecurrenceRule, error) {
