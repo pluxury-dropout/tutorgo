@@ -4,6 +4,7 @@ import (
 	"context"
 	"tutorgo/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,6 +19,10 @@ type TutorRepository interface {
 	Delete(ctx context.Context, id string) error
 	GetPasswordHash(ctx context.Context, id string) (string, error)
 	UpdatePassword(ctx context.Context, id string, hash string) error
+	// Токен ICS-подписки: пустая строка означает «подписки нет».
+	GetIDByICSToken(ctx context.Context, token string) (string, error)
+	GetICSToken(ctx context.Context, tutorID string) (string, error)
+	SetICSToken(ctx context.Context, tutorID, token string) error
 }
 type tutorRepository struct {
 	conn *pgxpool.Pool
@@ -113,5 +118,33 @@ func (r *tutorRepository) GetPasswordHash(ctx context.Context, id string) (strin
 func (r *tutorRepository) UpdatePassword(ctx context.Context, id string, hash string) error {
 	_, err := r.conn.Exec(ctx,
 		`UPDATE tutors SET password_hash = $1 WHERE id = $2`, hash, id)
+	return err
+}
+
+// GetIDByICSToken ищет владельца публичной ссылки. Пустой токен не ищем вовсе:
+// он означает «подписки нет», и запрос с пустым параметром иначе выдал бы
+// первого попавшегося репетитора без подписки.
+func (r *tutorRepository) GetIDByICSToken(ctx context.Context, token string) (string, error) {
+	if token == "" {
+		return "", pgx.ErrNoRows
+	}
+	var id string
+	err := r.conn.QueryRow(ctx,
+		`SELECT id FROM tutors WHERE ics_token = $1`, token,
+	).Scan(&id)
+	return id, err
+}
+
+func (r *tutorRepository) GetICSToken(ctx context.Context, tutorID string) (string, error) {
+	var token string
+	err := r.conn.QueryRow(ctx,
+		`SELECT ics_token FROM tutors WHERE id = $1`, tutorID,
+	).Scan(&token)
+	return token, err
+}
+
+func (r *tutorRepository) SetICSToken(ctx context.Context, tutorID, token string) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE tutors SET ics_token = $1 WHERE id = $2`, token, tutorID)
 	return err
 }
