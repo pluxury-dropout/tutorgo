@@ -19,6 +19,14 @@ func (m *mockCourseRepo) Create(ctx context.Context, req models.CreateCourseRequ
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
+func (m *mockCourseRepo) GetOrCreateIndividual(ctx context.Context, tutorID string, studentID string, subject string, startedAt time.Time) (models.Course, error) {
+	args := m.Called(ctx, tutorID, studentID, subject, startedAt)
+	return args.Get(0).(models.Course), args.Error(1)
+}
+func (m *mockCourseRepo) GetSubjects(ctx context.Context, tutorID string) ([]string, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]string), args.Error(1)
+}
 func (m *mockCourseRepo) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
 	args := m.Called(ctx, tutorID, p)
 	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)
@@ -81,6 +89,24 @@ var (
 
 func newCourseSvc(courseRepo *mockCourseRepo, studentRepo *mockStudentRepo) service.CourseService {
 	return service.NewCourseService(courseRepo, studentRepo)
+}
+
+// Курс можно завести, не заполняя дату старта: она нужна отчётам, а не тому,
+// кто ставит первый урок.
+func TestCourseCreate_DefaultsStartedAtToToday(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	svc := newCourseSvc(courseRepo, studentRepo)
+
+	req := models.CreateCourseRequest{Subject: "Химия", LessonsPerCycle: 1}
+	courseRepo.On("Create", mock.Anything, mock.MatchedBy(func(r models.CreateCourseRequest) bool {
+		return !r.StartedAt.IsZero()
+	}), tutorID).Return(models.Course{ID: courseID}, nil)
+
+	_, err := svc.Create(context.Background(), req, tutorID)
+
+	assert.NoError(t, err)
+	courseRepo.AssertExpectations(t)
 }
 
 // Create

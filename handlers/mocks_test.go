@@ -321,6 +321,10 @@ func (m *mockCourseService) Create(ctx context.Context, req models.CreateCourseR
 	args := m.Called(ctx, req, tutorID)
 	return args.Get(0).(models.Course), args.Error(1)
 }
+func (m *mockCourseService) GetSubjects(ctx context.Context, tutorID string) ([]string, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]string), args.Error(1)
+}
 func (m *mockCourseService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {
 	args := m.Called(ctx, tutorID, p)
 	return args.Get(0).([]models.Course), args.Int(1), args.Error(2)

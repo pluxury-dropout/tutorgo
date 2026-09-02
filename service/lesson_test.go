@@ -700,3 +700,104 @@ func TestGetCurrentCycles_SkipsCourseWithNoPayments(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, result)
 }
+
+// Неявное создание курса: урок ставится по паре «ученик + предмет»,
+// course_id клиент не знает и не присылает.
+
+var implicitStudentID = "student-uuid-1"
+
+func TestLessonCreate_ImplicitCourse(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	req := models.CreateLessonRequest{
+		StudentID:       implicitStudentID,
+		Subject:         "Математика",
+		ScheduledAt:     scheduledAt,
+		DurationMinutes: 60,
+		Notes:           "first lesson",
+	}
+	implicit := models.Course{ID: courseID, TutorID: tutorID, Subject: "Математика", IsActive: true}
+
+	courseRepo.On("GetOrCreateIndividual", mock.Anything, tutorID, implicitStudentID, "Математика", scheduledAt).
+		Return(implicit, nil)
+	lessonRepo.On("Create", mock.Anything, mock.MatchedBy(func(r models.CreateLessonRequest) bool {
+		return r.CourseID == courseID
+	})).Return(expectedLesson, nil)
+
+	lesson, err := svc.Create(context.Background(), req, tutorID)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedLesson, lesson)
+	courseRepo.AssertNotCalled(t, "GetByID")
+	courseRepo.AssertExpectations(t)
+	lessonRepo.AssertExpectations(t)
+}
+
+func TestLessonCreate_ForeignStudent(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	req := models.CreateLessonRequest{
+		StudentID:       implicitStudentID,
+		Subject:         "Математика",
+		ScheduledAt:     scheduledAt,
+		DurationMinutes: 60,
+	}
+	courseRepo.On("GetOrCreateIndividual", mock.Anything, tutorID, implicitStudentID, "Математика", scheduledAt).
+		Return(models.Course{}, errors.New("no rows in result set"))
+
+	lesson, err := svc.Create(context.Background(), req, tutorID)
+
+	assert.ErrorIs(t, err, service.ErrNotFound)
+	assert.Empty(t, lesson)
+	lessonRepo.AssertNotCalled(t, "Create")
+	courseRepo.AssertExpectations(t)
+}
+
+func TestLessonCreate_NeitherCourseNorStudent(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	req := models.CreateLessonRequest{ScheduledAt: scheduledAt, DurationMinutes: 60}
+
+	lesson, err := svc.Create(context.Background(), req, tutorID)
+
+	assert.ErrorIs(t, err, service.ErrBadRequest)
+	assert.Empty(t, lesson)
+	lessonRepo.AssertNotCalled(t, "Create")
+	courseRepo.AssertNotCalled(t, "GetOrCreateIndividual")
+	courseRepo.AssertNotCalled(t, "GetByID")
+}
+
+func TestLessonCreateBulk_ImplicitCourse(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newLessonSvc(lessonRepo, courseRepo)
+
+	// started_at неявного курса — дата первого урока серии, не «сегодня».
+	first := time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC)
+	req := models.CreateBulkLessonRequest{
+		StudentID:       implicitStudentID,
+		Subject:         "Физика",
+		ScheduledAts:    []string{first.Format(time.RFC3339), "2026-05-08T10:00:00Z"},
+		DurationMinutes: 60,
+	}
+	implicit := models.Course{ID: courseID, TutorID: tutorID, Subject: "Физика", IsActive: true}
+
+	courseRepo.On("GetOrCreateIndividual", mock.Anything, tutorID, implicitStudentID, "Физика", first).
+		Return(implicit, nil)
+	lessonRepo.On("CreateBulk", mock.Anything, mock.MatchedBy(func(r models.CreateBulkLessonRequest) bool {
+		return r.CourseID == courseID
+	})).Return([]models.Lesson{expectedLesson}, nil)
+
+	lessons, err := svc.CreateBulk(context.Background(), req, tutorID)
+
+	assert.NoError(t, err)
+	assert.Len(t, lessons, 1)
+	courseRepo.AssertExpectations(t)
+	lessonRepo.AssertExpectations(t)
+}

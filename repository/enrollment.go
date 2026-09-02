@@ -9,6 +9,7 @@ import (
 
 type EnrollmentRepository interface {
 	Add(ctx context.Context, courseID string, studentID string) (models.CourseEnrollment, error)
+	AddBulk(ctx context.Context, courseID string, studentIDs []string, tutorID string) ([]models.CourseEnrollment, error)
 	Remove(ctx context.Context, courseID string, studentID string) error
 	GetByCourse(ctx context.Context, courseID string) ([]models.CourseEnrollment, error)
 }
@@ -30,6 +31,36 @@ func (r *enrollmentRepository) Add(ctx context.Context, courseID string, student
 		courseID, studentID,
 	).Scan(&e.ID, &e.CourseID, &e.StudentID)
 	return e, err
+}
+
+// AddBulk записывает в группу сразу нескольких учеников. Вставка идёт SELECT'ом
+// из students — чужие ученики отсеиваются там же, отдельной проверкой владения
+// по одному запросу на каждого. Повторная запись уже состоящего в группе
+// молча пропускается: собрать группу дважды — не ошибка пользователя.
+func (r *enrollmentRepository) AddBulk(ctx context.Context, courseID string, studentIDs []string, tutorID string) ([]models.CourseEnrollment, error) {
+	rows, err := r.pool.Query(ctx,
+		`INSERT INTO course_enrollments (course_id, student_id)
+		 SELECT $1::uuid, s.id
+		 FROM students s
+		 WHERE s.tutor_id = $2::uuid AND s.id = ANY($3::uuid[])
+		 ON CONFLICT (course_id, student_id) DO NOTHING
+		 RETURNING id, course_id, student_id`,
+		courseID, tutorID, studentIDs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	enrollments := []models.CourseEnrollment{}
+	for rows.Next() {
+		var e models.CourseEnrollment
+		if err := rows.Scan(&e.ID, &e.CourseID, &e.StudentID); err != nil {
+			return nil, err
+		}
+		enrollments = append(enrollments, e)
+	}
+	return enrollments, rows.Err()
 }
 
 func (r *enrollmentRepository) Remove(ctx context.Context, courseID string, studentID string) error {

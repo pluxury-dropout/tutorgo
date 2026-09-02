@@ -200,6 +200,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.GET("/courses", courseHandler.GetAll)
 		auth.POST("/courses", courseHandler.Create)
 		auth.GET("/courses/archived", courseHandler.GetArchived)
+		auth.GET("/courses/subjects", courseHandler.GetSubjects)
 		auth.GET("/courses/:id", courseHandler.GetByID)
 		auth.PUT("/courses/:id", courseHandler.Update)
 		auth.DELETE("/courses/:id", courseHandler.Delete)
@@ -240,6 +241,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 		auth.GET("/courses/:id/enrollments", enrollmentHandler.GetByCourse)
 		auth.POST("/courses/:id/enrollments", enrollmentHandler.Add)
+		auth.POST("/courses/:id/enrollments/bulk", enrollmentHandler.AddBulk)
 		auth.DELETE("/courses/:id/enrollments/:studentId", enrollmentHandler.Remove)
 
 		auth.GET("/lessons/:id/attendance", attendanceHandler.Get)

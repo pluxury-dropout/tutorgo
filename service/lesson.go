@@ -84,14 +84,52 @@ func (s *lessonService) enrichLessons(ctx context.Context, courseID string, less
 	return nil
 }
 
-func (s *lessonService) Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
-	course, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
+// resolveCourse отдаёт курс, в который ляжет урок: либо существующий по
+// course_id, либо найденный/созданный по паре «ученик + предмет». Второй путь —
+// постановка урока из календаря, где пользователь про курсы не думает вовсе.
+func (s *lessonService) resolveCourse(ctx context.Context, tutorID, courseID, studentID, subject string, startedAt time.Time) (models.Course, error) {
+	if courseID == "" {
+		if studentID == "" || subject == "" {
+			return models.Course{}, fmt.Errorf("course_id or student_id with subject required: %w", ErrBadRequest)
+		}
+		// Курс создаётся уже активным, проверять IsActive нечего.
+		course, err := s.courseRepo.GetOrCreateIndividual(ctx, tutorID, studentID, subject, startedAt)
+		if err != nil {
+			return models.Course{}, fmt.Errorf("student: %w", ErrNotFound)
+		}
+		return course, nil
+	}
+
+	course, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
 	if err != nil {
-		return models.Lesson{}, fmt.Errorf("course: %w", ErrNotFound)
+		return models.Course{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
 	if !course.IsActive {
-		return models.Lesson{}, fmt.Errorf("course is archived: %w", ErrConflict)
+		return models.Course{}, fmt.Errorf("course is archived: %w", ErrConflict)
 	}
+	return course, nil
+}
+
+// firstScheduledAt — дата первого урока серии, она же started_at неявного курса.
+// Мусор в строке разберёт репозиторий при вставке; курсу хватит сегодняшней даты.
+func firstScheduledAt(ats []string) time.Time {
+	if len(ats) == 0 {
+		return time.Now()
+	}
+	t, err := time.Parse(time.RFC3339, ats[0])
+	if err != nil {
+		return time.Now()
+	}
+	return t
+}
+
+func (s *lessonService) Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error) {
+	course, err := s.resolveCourse(ctx, tutorID, req.CourseID, req.StudentID, req.Subject, req.ScheduledAt)
+	if err != nil {
+		return models.Lesson{}, err
+	}
+	req.CourseID = course.ID
+
 	lesson, err := s.repo.Create(ctx, req)
 	if err == nil {
 		globalCalendarCache.Invalidate(tutorID)
@@ -100,13 +138,12 @@ func (s *lessonService) Create(ctx context.Context, req models.CreateLessonReque
 }
 
 func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {
-	course, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
+	course, err := s.resolveCourse(ctx, tutorID, req.CourseID, req.StudentID, req.Subject, firstScheduledAt(req.ScheduledAts))
 	if err != nil {
-		return nil, fmt.Errorf("course: %w", ErrNotFound)
+		return nil, err
 	}
-	if !course.IsActive {
-		return nil, fmt.Errorf("course is archived: %w", ErrConflict)
-	}
+	req.CourseID = course.ID
+
 	lessons, err := s.repo.CreateBulk(ctx, req)
 	if err == nil {
 		globalCalendarCache.Invalidate(tutorID)

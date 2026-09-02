@@ -39,6 +39,21 @@ func (h *CourseHandler) GetAll(c *gin.Context) {
 	})
 }
 
+// GetSubjects отдаёт предметы тьютора для комбобокса — плоский массив строк.
+func (h *CourseHandler) GetSubjects(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	subjects, err := h.service.GetSubjects(c.Request.Context(), tutorID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, subjects)
+}
+
 func (h *CourseHandler) Create(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

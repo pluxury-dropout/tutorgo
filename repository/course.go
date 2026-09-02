@@ -2,13 +2,18 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"time"
 	"tutorgo/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type CourseRepository interface {
 	Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error)
+	GetOrCreateIndividual(ctx context.Context, tutorID string, studentID string, subject string, startedAt time.Time) (models.Course, error)
+	GetSubjects(ctx context.Context, tutorID string) ([]string, error)
 	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
 	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
@@ -37,6 +42,70 @@ func (r *courseRepository) Create(ctx context.Context, req models.CreateCourseRe
 		req.StudentID, tutorID, req.Subject, req.PricePerCycle, req.LessonsPerCycle, req.StartedAt, req.EndedAt,
 	).Scan(&course.ID, &course.StudentID, &course.TutorID, &course.Subject, &course.PricePerCycle, &course.LessonsPerCycle, &course.StartedAt, &course.EndedAt, &course.IsActive)
 	return course, err
+}
+
+const courseCols = `id, student_id, tutor_id, subject, price_per_cycle, lessons_per_cycle, started_at, ended_at, is_active`
+
+func scanCourse(row pgx.Row) (models.Course, error) {
+	var c models.Course
+	err := row.Scan(&c.ID, &c.StudentID, &c.TutorID, &c.Subject, &c.PricePerCycle, &c.LessonsPerCycle, &c.StartedAt, &c.EndedAt, &c.IsActive)
+	return c, err
+}
+
+// GetOrCreateIndividual возвращает активный индивидуальный курс тьютора по паре
+// «ученик + предмет», создавая его при отсутствии. Курс — производная сущность:
+// пользователь ставит урок, а не заводит курс.
+//
+// Транзакции здесь нет намеренно: под READ COMMITTED она от гонки не спасает —
+// два параллельных запроса оба увидят пустой SELECT. Спасает уникальный индекс
+// из миграции 032 плюс ON CONFLICT DO NOTHING, поэтому проигравший гонку просто
+// читает чужой курс.
+//
+// Вставка идёт SELECT'ом из students — это заодно и проверка владения: чужой
+// ученик даёт ноль строк, а не чужой курс.
+func (r *courseRepository) GetOrCreateIndividual(ctx context.Context, tutorID string, studentID string, subject string, startedAt time.Time) (models.Course, error) {
+	const find = `SELECT ` + courseCols + `
+	              FROM courses
+	              WHERE tutor_id = $1::uuid AND student_id = $2::uuid AND subject = $3::text AND is_active`
+
+	course, err := scanCourse(r.conn.QueryRow(ctx, find, tutorID, studentID, subject))
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return course, err
+	}
+
+	// Дефолты — самые частые значения тьютора: у репетитора почти всегда один
+	// прайс, спрашивать его посреди постановки урока незачем.
+	const create = `INSERT INTO courses (student_id, tutor_id, subject, price_per_cycle, lessons_per_cycle, started_at)
+	                SELECT s.id, $1::uuid, $3::text,
+	                       COALESCE((SELECT price_per_cycle FROM courses WHERE tutor_id = $1::uuid AND is_active
+	                                 GROUP BY price_per_cycle ORDER BY count(*) DESC, price_per_cycle LIMIT 1), 0),
+	                       COALESCE((SELECT lessons_per_cycle FROM courses WHERE tutor_id = $1::uuid AND is_active
+	                                 GROUP BY lessons_per_cycle ORDER BY count(*) DESC, lessons_per_cycle LIMIT 1), 1),
+	                       $4::timestamptz
+	                FROM students s
+	                WHERE s.id = $2::uuid AND s.tutor_id = $1::uuid
+	                ON CONFLICT DO NOTHING
+	                RETURNING ` + courseCols
+
+	course, err = scanCourse(r.conn.QueryRow(ctx, create, tutorID, studentID, subject, startedAt))
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return course, err
+	}
+
+	// Ноль строк — либо ученик чужой, либо гонку выиграл параллельный запрос.
+	// Повторный SELECT различает: нашёлся курс — гонка, пусто — чужой ученик.
+	return scanCourse(r.conn.QueryRow(ctx, find, tutorID, studentID, subject))
+}
+
+// GetSubjects — предметы тьютора для комбобокса: свободный ввод плодил
+// «Математику» и «математику» как разные курсы.
+func (r *courseRepository) GetSubjects(ctx context.Context, tutorID string) ([]string, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT DISTINCT subject FROM courses WHERE tutor_id = $1 AND is_active ORDER BY subject`, tutorID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
 func (r *courseRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {

@@ -2,8 +2,12 @@ package models
 
 import "time"
 
+// CreateBulkLessonRequest, как и CreateLessonRequest, принимает либо CourseID,
+// либо пару StudentID + Subject — курс тогда создаётся неявно.
 type CreateBulkLessonRequest struct {
-	CourseID        string   `json:"course_id"        validate:"required,uuid"`
+	CourseID        string   `json:"course_id"        validate:"omitempty,uuid"`
+	StudentID       string   `json:"student_id"       validate:"omitempty,uuid"`
+	Subject         string   `json:"subject"          validate:"omitempty,min=2"`
 	ScheduledAts    []string `json:"scheduled_ats"    validate:"required,min=1"`
 	DurationMinutes int      `json:"duration_minutes" validate:"required,gt=0"`
 	Notes           string   `json:"notes"            validate:"omitempty,max=500"`
@@ -21,8 +25,13 @@ type Lesson struct {
 	CycleSize       *int      `json:"cycle_size,omitempty"`
 }
 
+// CreateLessonRequest принимает либо CourseID (урок в существующем курсе), либо
+// пару StudentID + Subject — тогда курс находится или создаётся по ней. Выбор
+// «либо/либо» проверяет сервис: тегами validator такое не выражается.
 type CreateLessonRequest struct {
-	CourseID        string    `json:"course_id"        validate:"required,uuid"`
+	CourseID        string    `json:"course_id"        validate:"omitempty,uuid"`
+	StudentID       string    `json:"student_id"       validate:"omitempty,uuid"`
+	Subject         string    `json:"subject"          validate:"omitempty,min=2"`
 	ScheduledAt     time.Time `json:"scheduled_at"     validate:"required"`
 	DurationMinutes int       `json:"duration_minutes" validate:"required,gt=0"`
 	Notes           string    `json:"notes"            validate:"omitempty,max=500"`
