@@ -1,15 +1,22 @@
 import { api } from './client'
 import { Lesson, LessonStatus, AttendanceRecord, PagedResponse } from '@/types/api'
 
+// Урок ставится либо в известный курс (course_id), либо по паре «ученик +
+// предмет» — тогда курс найдётся или создастся на бэкенде. Второй путь — это
+// постановка из календаря, где про курсы пользователь не думает.
 export interface LessonInput {
-  course_id:        string
+  course_id?:       string
+  student_id?:      string
+  subject?:         string
   scheduled_at:     string
   duration_minutes: number
   notes?:           string
 }
 
 export interface LessonBulkInput {
-  course_id:        string
+  course_id?:       string
+  student_id?:      string
+  subject?:         string
   scheduled_ats:    string[]
   duration_minutes: number
   notes?:           string

@@ -6,13 +6,18 @@ import { AlertTriangle } from 'lucide-react'
 
 import { useCreateTask } from '@/lib/hooks/useTasks'
 import { useCreateEvent, useConflicts } from '@/lib/hooks/useEvents'
+import { useCreateSlotLesson } from '@/lib/hooks/useLessons'
+import { useStudentCourses } from '@/lib/hooks/useCourses'
+import { generateDates, lessonsPlural } from '@/lib/recurrence'
 import { EVENT_KINDS, KIND_LABELS, formatTimeRange } from '@/lib/eventKind'
-import type { EventKind } from '@/types/api'
+import type { EventKind, Student } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTitle } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { StudentCombobox } from '@/components/students/StudentCombobox'
+import { SubjectCombobox } from '@/components/courses/SubjectCombobox'
 
 interface Props {
   start:   Date | null
@@ -51,8 +56,9 @@ export function SlotCreatePopover({ start, end, anchor, onClose }: Props) {
 
 function SlotForm({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
   // Тип не запоминается между открытиями: иначе репетитор, один раз создавший
-  // задачу, потом молча создаёт задачи вместо всего остального.
-  const [tab, setTab] = useState('event')
+  // задачу, потом молча создаёт задачи вместо уроков. Дефолт — урок: это то,
+  // ради чего в календарь вообще тыкают.
+  const [tab, setTab] = useState('lesson')
 
   // Занятость запрашиваем сразу при открытии, до заполнения полей.
   const { data: conflicts = [] } = useConflicts({
@@ -75,10 +81,14 @@ function SlotForm({ start, end, onClose }: { start: Date; end: Date; onClose: ()
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
         <TabsList className="w-full">
+          <TabsTrigger value="lesson">Урок</TabsTrigger>
           <TabsTrigger value="event">Событие</TabsTrigger>
           <TabsTrigger value="task">Задача</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="lesson" className="pt-3">
+          <LessonFields start={start} end={end} onClose={onClose} />
+        </TabsContent>
         <TabsContent value="event" className="pt-3">
           <EventFields start={start} end={end} onClose={onClose} />
         </TabsContent>
@@ -87,6 +97,73 @@ function SlotForm({ start, end, onClose }: { start: Date; end: Date; onClose: ()
         </TabsContent>
       </Tabs>
     </>
+  )
+}
+
+function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
+  const [student, setStudent] = useState<Student | null>(null)
+  const [repeat, setRepeat]   = useState(false)
+  // null — пользователь предмет не трогал, показываем подсказку по ученику.
+  // Состояние вместо эффекта: подстановка при загрузке курсов иначе была бы
+  // setState внутри useEffect, то есть лишний каскад рендеров.
+  const [typedSubject, setTypedSubject] = useState<string | null>(null)
+  const createLesson = useCreateSlotLesson()
+
+  // Предмет подставляем из последнего курса ученика: у большинства он один,
+  // и печатать его заново на каждый урок незачем.
+  const { data: studentCourses = [] } = useStudentCourses(student?.id ?? '')
+  const subject = typedSubject ?? studentCourses[0]?.subject ?? ''
+
+  const dates = repeat
+    ? generateDates(start.toISOString(), { type: 'weekly_same' })
+    : [start.toISOString()]
+  const lastDate = dates.length > 1 ? new Date(dates[dates.length - 1]) : null
+
+  function handleSave() {
+    if (!student || !subject.trim()) return
+    const common = {
+      student_id:       student.id,
+      subject:          subject.trim(),
+      duration_minutes: slotMinutes(start, end),
+    }
+    createLesson.mutate(
+      repeat ? { ...common, scheduled_ats: dates } : { ...common, scheduled_at: dates[0] },
+      { onError: () => toast.error('Не удалось поставить урок') },
+    )
+    onClose()
+  }
+
+  return (
+    <div className="space-y-3">
+      <StudentCombobox
+        value={student}
+        onChange={(s) => { setStudent(s); setTypedSubject(null) }}
+        autoFocus
+      />
+      {student && <SubjectCombobox value={subject} onChange={setTypedSubject} />}
+
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={repeat}
+          onChange={(e) => setRepeat(e.target.checked)}
+          className="size-3.5 accent-primary"
+        />
+        Повторять каждую неделю
+      </label>
+
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
+        <Button size="sm" onClick={handleSave} disabled={!student || !subject.trim()}>
+          {repeat ? `Создать ${lessonsPlural(dates.length)}` : 'Создать'}
+        </Button>
+      </div>
+      {lastDate && (
+        <p className="text-right text-xs text-muted-foreground">
+          до {lastDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      )}
+    </div>
   )
 }
 

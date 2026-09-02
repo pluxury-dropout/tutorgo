@@ -6,13 +6,15 @@ import { toast } from 'sonner'
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 
 import { useStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
-import { useStudentCourses } from '@/lib/hooks/useCourses'
+import { useStudentCourses, useUpdateCourse } from '@/lib/hooks/useCourses'
 import { StudentForm } from '@/components/students/StudentForm'
 import { PageHeader } from '@/components/common/PageHeader'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { StudentFormValues } from '@/schemas/student'
+import { Course } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -35,7 +37,7 @@ export default function StudentDetailPage() {
     if (!confirm(`Удалить ${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}?`)) return
     await deleteStudent.mutateAsync(student.id)
     toast.success('Ученик удалён')
-    router.push('/courses?tab=students')
+    router.push('/students')
   }
 
   if (isLoading) {
@@ -49,7 +51,7 @@ export default function StudentDetailPage() {
   return (
     <>
       <button
-        onClick={() => router.push('/courses?tab=students')}
+        onClick={() => router.push('/students')}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
       >
         <ArrowLeft className="h-4 w-4" /> Все ученики
@@ -89,8 +91,8 @@ export default function StudentDetailPage() {
                 <span className="font-medium">{course.subject}</span>
                 <div className="flex items-center gap-4 text-muted-foreground shrink-0">
                   <CourseTypeBadge isGroup={!course.student_id} />
-                  <span>{Math.round(course.price_per_cycle / course.lessons_per_cycle).toLocaleString()} ₸/ур.</span>
-                  <span>{new Date(course.started_at).toLocaleDateString('ru-RU')}</span>
+                  <CoursePrice course={course} />
+                  <span>{course.lessons_per_cycle} в цикле</span>
                 </div>
               </div>
             ))}
@@ -105,6 +107,61 @@ export default function StudentDetailPage() {
         initial={student}
       />
     </>
+  )
+}
+
+/** Цена курса правится прямо в строке: ради одного числа гонять пользователя
+ *  на страницу курса и обратно незачем. */
+function CoursePrice({ course }: { course: Course }) {
+  const update = useUpdateCourse(course.id)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState('')
+
+  async function save() {
+    setEditing(false)
+    const price = Number(draft)
+    if (!Number.isFinite(price) || price < 0 || price === course.price_per_cycle) return
+    try {
+      await update.mutateAsync({
+        subject:           course.subject,
+        price_per_cycle:   price,
+        lessons_per_cycle: course.lessons_per_cycle,
+        started_at:        course.started_at,
+        ended_at:          course.ended_at ?? undefined,
+      })
+      toast.success('Цена обновлена')
+    } catch {
+      toast.error('Не удалось обновить цену')
+    }
+  }
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        type="number"
+        min={0}
+        value={draft}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        className="h-6 w-24 text-right"
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setDraft(String(course.price_per_cycle)); setEditing(true) }}
+      className="hover:text-foreground hover:underline"
+    >
+      {course.price_per_cycle.toLocaleString()} ₸ за цикл
+    </button>
   )
 }
 

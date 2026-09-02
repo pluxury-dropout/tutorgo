@@ -8,10 +8,17 @@ export const courseKeys = {
   enrollments: (id: string) => ['courses', id, 'enrollments'] as const,
   byStudent:   (studentId: string) => ['courses', 'student', studentId] as const,
   archived:    ['courses', 'archived'] as const,
+  subjects:    ['courses', 'subjects'] as const,
 }
 
 export function useCourses() {
   return useQuery({ queryKey: courseKeys.all, queryFn: coursesApi.list })
+}
+
+// Предметы тьютора для комбобокса. Список меняется только вместе с курсами,
+// поэтому живёт под тем же ключом ['courses'] и чинится их инвалидацией.
+export function useSubjects() {
+  return useQuery({ queryKey: courseKeys.subjects, queryFn: coursesApi.subjects })
 }
 
 export function useCourse(id: string) {
@@ -70,6 +77,18 @@ export function useAddEnrollment(courseId: string) {
   return useMutation({
     mutationFn: (studentId: string) => coursesApi.addEnrollment(courseId, studentId),
     onSuccess:  () => qc.invalidateQueries({ queryKey: courseKeys.enrollments(courseId) }),
+  })
+}
+
+// Состав группы одним запросом: собирать её кликами по одному ученику — это
+// диалог «добавить» N раз вместо одной формы.
+export function useAddEnrollmentsBulk() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ courseId, studentIds }: { courseId: string; studentIds: string[] }) =>
+      coursesApi.addEnrollmentsBulk(courseId, studentIds),
+    onSuccess: (_, { courseId }) =>
+      qc.invalidateQueries({ queryKey: courseKeys.enrollments(courseId) }),
   })
 }
 

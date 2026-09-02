@@ -1,29 +1,34 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { X } from 'lucide-react'
 
 import { courseSchema, CourseFormValues } from '@/schemas/course'
-import { Course, ApiError } from '@/types/api'
-import { useStudents } from '@/lib/hooks/useStudents'
+import { Course, Student, ApiError } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { StudentCombobox, studentName } from '@/components/students/StudentCombobox'
+import { SubjectCombobox } from '@/components/courses/SubjectCombobox'
 
 interface CourseFormProps {
   open: boolean
   onClose: () => void
   onSubmit: (data: CourseFormValues) => Promise<void>
   initial?: Course
+  /** Задаётся точкой входа («Добавить курс» / «Создать группу»), а не вопросом
+   *  пользователю: выбор между student_id и course_enrollments — деталь схемы. */
+  mode?: 'individual' | 'group'
 }
 
-export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps) {
-  const { data: students = [] } = useStudents()
+export function CourseForm({ open, onClose, onSubmit, initial, mode = 'individual' }: CourseFormProps) {
+  const [individual, setIndividual] = useState<Student | null>(null)
+  const [picked, setPicked]         = useState<Student[]>([])
 
   const {
     register,
@@ -35,15 +40,18 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     formState: { errors, isSubmitting },
   } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: { type: 'individual', subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' },
+    defaultValues: { type: mode, subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' },
   })
 
   const courseType      = watch('type')
   const pricePerCycle   = watch('price_per_cycle')
   const lessonsPerCycle = watch('lessons_per_cycle')
   const pricePerLesson  = lessonsPerCycle > 0 ? pricePerCycle / lessonsPerCycle : 0
+  const selectedStudent = watch('student_id')
 
   useEffect(() => {
+    setPicked([])
+    setIndividual(null)
     if (initial) {
       reset({
         type:              initial.student_id ? 'individual' : 'group',
@@ -55,13 +63,18 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
         ended_at:          initial.ended_at?.slice(0, 10) ?? '',
       })
     } else {
-      reset({ type: 'individual', subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' })
+      reset({ type: mode, subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' })
     }
-  }, [initial, open, reset])
+  }, [initial, open, mode, reset])
+
+  function addStudent(student: Student | null) {
+    if (!student || picked.some((s) => s.id === student.id)) return
+    setPicked([...picked, student])
+  }
 
   async function submit(values: CourseFormValues) {
     try {
-      await onSubmit(values)
+      await onSubmit({ ...values, student_ids: picked.map((s) => s.id) })
       onClose()
     } catch (err) {
       const e = err as ApiError
@@ -73,63 +86,23 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Редактировать курс' : 'Новый курс'}</DialogTitle>
+          <DialogTitle>
+            {initial ? 'Редактировать курс' : courseType === 'group' ? 'Новая группа' : 'Новый курс'}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
-          {!initial && (
-            <div className="space-y-1.5">
-              <Label>Тип курса</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={courseType === 'individual' ? 'default' : 'outline'}
-                  onClick={() => setValue('type', 'individual')}
-                >
-                  Индивидуальный
-                </Button>
-                <Button
-                  type="button"
-                  variant={courseType === 'group' ? 'default' : 'outline'}
-                  onClick={() => {
-                    setValue('type', 'group')
-                    setValue('student_id', undefined)
-                  }}
-                >
-                  Групповой
-                </Button>
-              </div>
-            </div>
-          )}
-
           {courseType === 'individual' && !initial && (
             <div className="space-y-1.5">
-              <Label htmlFor="student_id">Ученик</Label>
+              <Label>Ученик</Label>
               <Controller
                 name="student_id"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger id="student_id">
-                      <SelectValue>
-                        {(id) => {
-                          const s = students.find((s) => s.id === id)
-                          if (!s) return 'Выберите ученика'
-                          return s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {students.map((s) => {
-                        const name = s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name
-                        return (
-                          <SelectItem key={s.id} value={s.id} label={name}>
-                            {name}
-                          </SelectItem>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
+                  <StudentCombobox
+                    value={individual}
+                    onChange={(student) => { setIndividual(student); field.onChange(student?.id) }}
+                  />
                 )}
               />
               {errors.student_id && (
@@ -138,9 +111,37 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
             </div>
           )}
 
+          {courseType === 'group' && !initial && (
+            <div className="space-y-1.5">
+              <Label>Ученики</Label>
+              <StudentCombobox value={null} onChange={addStudent} placeholder="Добавить ученика" />
+              {picked.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {picked.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setPicked(picked.filter((p) => p.id !== s.id))}
+                      className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs hover:bg-muted/70"
+                    >
+                      {studentName(s)}
+                      <X className="size-3" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
-            <Label htmlFor="subject">Предмет</Label>
-            <Input id="subject" placeholder="Математика" {...register('subject')} />
+            <Label>Предмет</Label>
+            <Controller
+              name="subject"
+              control={control}
+              render={({ field }) => (
+                <SubjectCombobox value={field.value ?? ''} onChange={field.onChange} />
+              )}
+            />
             {errors.subject && (
               <p className="text-xs text-destructive">{errors.subject.message}</p>
             )}

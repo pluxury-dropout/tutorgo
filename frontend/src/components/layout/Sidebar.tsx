@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   CalendarDays,
+  Users,
   BookOpen,
   CreditCard,
   User,
@@ -399,6 +400,7 @@ function CalendarSidebarPanel() {
 const NAV = [
   { href: '/dashboard',  label: 'Главная',      icon: LayoutDashboard },
   { href: '/calendar',   label: 'Расписание',   icon: CalendarDays },
+  { href: '/students',   label: 'Ученики',      icon: Users },
   { href: '/courses',    label: 'Курсы',        icon: BookOpen },
   { href: '/trial',      label: 'Пробный урок', icon: Video },
   { href: '/payments',   label: 'Платежи',      icon: CreditCard },

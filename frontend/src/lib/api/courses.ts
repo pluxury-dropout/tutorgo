@@ -25,6 +25,7 @@ export const coursesApi = {
   listArchived: (p: CourseListParams) =>
     api.get<PagedResponse<Course>>('/courses/archived', { params: p }).then((r) => r.data),
   restore: (id: string) => api.post(`/courses/${id}/restore`).then(() => id),
+  subjects: () => api.get<string[]>('/courses/subjects').then((r) => r.data ?? []),
   get: (id: string) => api.get<Course>(`/courses/${id}`).then((r) => r.data),
   create: (data: CourseInput) =>
     api.post<Course>('/courses', data).then((r) => r.data),
@@ -38,6 +39,9 @@ export const coursesApi = {
   addEnrollment: (courseId: string, studentId: string) =>
     api.post<Enrollment>(`/courses/${courseId}/enrollments`, { student_id: studentId })
       .then((r) => r.data),
+  addEnrollmentsBulk: (courseId: string, studentIds: string[]) =>
+    api.post<Enrollment[]>(`/courses/${courseId}/enrollments/bulk`, { student_ids: studentIds })
+      .then((r) => r.data ?? []),
   removeEnrollment: (courseId: string, studentId: string) =>
     api.delete(`/courses/${courseId}/enrollments/${studentId}`).then(() => studentId),
   listByStudent: (studentId: string) =>

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { lessonsApi, LessonInput, LessonBulkInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
+import type { Lesson } from '@/types/api'
 
 export const lessonKeys = {
   byCourse:   (courseId: string) => ['lessons', 'course', courseId] as const,
@@ -69,6 +70,23 @@ export function useCreateLessons(courseId: string) {
   return useMutation({
     mutationFn: (data: LessonBulkInput) => lessonsApi.createBulk(data),
     onSuccess:  () => invalidateLessonViews(qc, courseId),
+  })
+}
+
+// Урок из календаря: course_id заранее неизвестен — курс может создаться на
+// лету, — поэтому инвалидируем оба дерева целиком, а не конкретный курс.
+// Одна мутация на оба случая: серию от одиночного урока отличает scheduled_ats.
+export function useCreateSlotLesson() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: LessonInput | LessonBulkInput): Promise<Lesson[]> =>
+      'scheduled_ats' in data
+        ? lessonsApi.createBulk(data)
+        : lessonsApi.create(data).then((lesson) => [lesson]),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lessons'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
   })
 }
 
