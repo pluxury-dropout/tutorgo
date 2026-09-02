@@ -250,10 +250,22 @@ func (s *lessonService) Update(ctx context.Context, id string, req models.Update
 
 	if scope == scopeOne || lesson.RuleID == nil || lesson.OccurrenceDate == nil {
 		updated, err := s.repo.Update(ctx, id, req)
-		if err == nil {
-			globalCalendarCache.Invalidate(tutorID)
+		if err != nil {
+			return updated, err
 		}
-		return updated, err
+		// Вхождение, ушедшее со своего места в расписании, метим: иначе
+		// следующее «это и все следующие» снесёт его и материализация вернёт
+		// урок обратно. Статус и заметки правилом не задаются — они с
+		// расписанием не спорят и метки не заслуживают.
+		movedOffSchedule := !req.ScheduledAt.Equal(lesson.ScheduledAt) ||
+			req.DurationMinutes != lesson.DurationMinutes
+		if lesson.RuleID != nil && movedOffSchedule {
+			if err := s.repo.MarkOverride(ctx, id); err != nil {
+				return updated, err
+			}
+		}
+		globalCalendarCache.Invalidate(tutorID)
+		return updated, nil
 	}
 	return s.updateSeries(ctx, lesson, req, tutorID, scope)
 }

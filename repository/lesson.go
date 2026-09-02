@@ -23,6 +23,7 @@ type LessonRepository interface {
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
 	Delete(ctx context.Context, id string) error
 	Cancel(ctx context.Context, id string) error
+	MarkOverride(ctx context.Context, id string) error
 	ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error
 	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
@@ -152,6 +153,15 @@ func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesso
 func (r *lessonRepository) Cancel(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE lessons SET status = 'cancelled', is_override = TRUE WHERE id = $1`, id)
+	return err
+}
+
+// MarkOverride помечает вхождение вручную правленным. Ставится при правке
+// «только это»: без метки ближайшее «это и все следующие» снесёт строку
+// (DeleteFutureByRule смотрит ровно на is_override), а материализация вернёт
+// урок на место по расписанию правила — перенос молча пропадёт.
+func (r *lessonRepository) MarkOverride(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE lessons SET is_override = TRUE WHERE id = $1`, id)
 	return err
 }
 

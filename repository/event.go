@@ -21,6 +21,7 @@ type EventRepository interface {
 	Update(ctx context.Context, id, tutorID string, req models.UpdateEventRequest) (models.Event, error)
 	Delete(ctx context.Context, id, tutorID string) error
 	Cancel(ctx context.Context, id, tutorID string) error
+	MarkOverride(ctx context.Context, id, tutorID string) error
 	ReassignToRule(ctx context.Context, eventID, ruleID string, occurrenceDate time.Time) error
 	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	// GetOccupiedInRange отдаёт всё, что занимает время в пересечении с [from, to):
@@ -66,6 +67,14 @@ func (r *eventRepository) Cancel(ctx context.Context, id, tutorID string) error 
 	_, err := r.conn.Exec(ctx,
 		`UPDATE events SET cancelled = TRUE, is_override = TRUE WHERE id = $1 AND tutor_id = $2`,
 		id, tutorID)
+	return err
+}
+
+// MarkOverride помечает вхождение вручную правленным — та же защита от
+// «это и все следующие», что и у отмены, но для переноса и правки.
+func (r *eventRepository) MarkOverride(ctx context.Context, id, tutorID string) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE events SET is_override = TRUE WHERE id = $1 AND tutor_id = $2`, id, tutorID)
 	return err
 }
 
