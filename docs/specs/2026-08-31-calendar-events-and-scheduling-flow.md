@@ -1,7 +1,8 @@
 # Календарь как единая рабочая поверхность + переработка флоу планирования
 
 **Дата:** 2026-08-31
-**Статус:** Фазы 0–1 реализованы и смержены в `main`, фаза 2 следующая
+**Статус:** Фазы 0–3 в проде (PR #11, смержен 2026-09-02; миграции 031–034 накачены).
+Не сделан только п. 7.6 — перенос старых серий, причина там же. Дальше фазы 4 и 5.
 **Область:** `migrations/`, `models/`, `repository/`, `service/`, `handlers/`, `router/`, `jobs/`, `worker/`, `frontend/src/app/(dashboard)/calendar`, `frontend/src/components/{lessons,tasks,events,calendar}`
 
 > Спека разбита на фазы. **Реализуй по одной фазе за раз**, каждая фаза самодостаточна и деплоится отдельно. Не начинай следующую, пока предыдущая не смержена.
@@ -145,6 +146,10 @@ CREATE INDEX idx_events_tutor_starts ON events(tutor_id, starts_at);
 -- +goose Down
 DROP TABLE IF EXISTS events;
 ```
+
+> Позже фаза 3 добавила сюда `rule_id`, `occurrence_date`, `is_override`
+> (миграция `033`) и `cancelled` (миграция `034`). Отменённые события выпадают
+> из ленты календаря и из проверки занятости — см. врезку в 7.5.
 
 Поля `busy` нет намеренно: любое событие занимает время (см. раздел 2).
 Поля `all_day` нет по той же причине: событие «на весь день» не отвечает на
@@ -403,6 +408,17 @@ HAVING count(*) > 1` по живым индивидуальным курсам) 
 
 То же самое для `POST /lessons/bulk`.
 
+> **Как реализовано.** `courseRepo.GetOrCreateIndividual` — SELECT, затем
+> `INSERT … SELECT FROM students WHERE id = $2 AND tutor_id = $1` с
+> `ON CONFLICT DO NOTHING`, затем повторный SELECT. Вставка через `SELECT` из
+> `students` — это заодно и проверка владения: чужой ученик даёт ноль строк, а не
+> чужой курс, поэтому отдельного обращения к `studentRepo` (и лишней зависимости
+> в `lessonService`) не понадобилось. Ноль строк на втором шаге означает либо
+> чужого ученика, либо проигранную гонку — их различает третий запрос.
+>
+> Дефолты цены и размера цикла — самые частые значения тьютора, посчитанные
+> скалярными подзапросами прямо во вставке.
+
 ### 6.5. Ученик — самостоятельный раздел
 
 - Удалить редирект в `frontend/src/app/(dashboard)/students/page.tsx`, сделать полноценную страницу списка.
@@ -447,8 +463,9 @@ CREATE TABLE recurrence_rules (
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_rules_materialize ON recurrence_rules(materialized_until)
-    WHERE ends_on IS NULL OR ends_on > CURRENT_DATE;
+-- Реализовано составным, а не частичным: предикат с CURRENT_DATE Postgres
+-- отвергает («functions in index predicate must be marked IMMUTABLE»).
+CREATE INDEX idx_rules_materialize ON recurrence_rules(materialized_until, ends_on);
 
 ALTER TABLE lessons
     ADD COLUMN rule_id         UUID REFERENCES recurrence_rules(id) ON DELETE SET NULL,
@@ -502,7 +519,8 @@ func Occurrences(rule models.RecurrenceRule, from, to time.Time) ([]time.Time, e
 func (s *recurrenceService) Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error)
 ```
 
-Добавить частичный уникальный индекс, чтобы повторный запуск джобы был идемпотентен:
+Частичные уникальные индексы, благодаря которым повторный запуск джобы
+идемпотентен (вошли в ту же миграцию `033`):
 
 ```sql
 CREATE UNIQUE INDEX idx_lessons_rule_occurrence ON lessons(rule_id, occurrence_date)
@@ -512,6 +530,19 @@ CREATE UNIQUE INDEX idx_events_rule_occurrence ON events(rule_id, occurrence_dat
 ```
 
 Вставка — `INSERT ... ON CONFLICT DO NOTHING`.
+
+> **Как реализовано.** Отдельного «типа правила» в схеме нет: `InsertOccurrences`
+> берёт шаблон из первой строки серии (`JOIN LATERAL … ORDER BY … LIMIT 1`) — у
+> урока это курс, длительность и заметки, у события заголовок, вид и место.
+> Правило про уроки просто не находит шаблона в `events`, и наоборот. Поле,
+> которое выводится из данных, рано или поздно с ними разошлось бы.
+>
+> `occurrence_date` считается как `(starts_at AT TIME ZONE rule.tz)::date`, а не
+> в UTC: урок в 00:30 по Алматы в UTC попадает на вчерашний день, и уникальность
+> «одно вхождение на дату» поехала бы ровно на ночных слотах.
+>
+> `materialized_until` двигается и когда вхождений ноль — иначе закончившееся
+> правило вечно возвращается в выборку джобы.
 
 ### 7.4. River-джоба
 
@@ -527,7 +558,51 @@ func (RecurrenceExtendArgs) InsertOpts() river.InsertOpts {
 
 Воркер `worker/recurrence_extend.go`: раз в сутки выбирает правила с `materialized_until < CURRENT_DATE + INTERVAL '6 months'` и активные (`ends_on IS NULL OR ends_on > CURRENT_DATE`), для каждого вызывает `Materialize` и двигает `materialized_until`. Периодическую вставку джобы повесить на River periodic jobs в `worker/run.go`.
 
-Горизонт: константа `RecurrenceHorizon = 6 * 30 * 24 * time.Hour` в `config`.
+Горизонт: константа `RecurrenceHorizon = 6 * 30 * 24 * time.Hour`.
+
+> **Как реализовано.** Константа живёт в `service`, а не в `config`: это не
+> настройка окружения, а правило поведения, и оно нужно и сервису, и воркеру.
+> Периодическая джоба поставлена с `RunOnStart: true` — планировщик River держит
+> состояние только в памяти, и без этого редеплой между срабатываниями съедал бы
+> сутки.
+>
+> `ExtendAll` логирует и пропускает битое правило (например, с неизвестной
+> зоной): одна плохая строка не должна ронять всю ночную догрузку.
+>
+> **`main.go` импортирует `_ "time/tzdata"`.** Рантайм-образ — голый alpine без
+> пакета tzdata, и без этого импорта `time.LoadLocation("Asia/Almaty")` в проде
+> возвращает «unknown time zone», то есть вся машинерия повторений не работает
+> ровно там, где её нельзя проверить локально.
+
+### 7.4.1. Создание серий (в спеку не входило, реализовано так)
+
+Отдельной ручки для серии нет: `POST /lessons` и `POST /events` принимают
+необязательное поле `recurrence`.
+
+```go
+type RecurrenceInput struct {
+    Freq      string     `json:"freq"       validate:"required,oneof=daily weekly monthly"`
+    IntervalN int        `json:"interval_n" validate:"omitempty,min=1"`
+    ByWeekday []int      `json:"byweekday"  validate:"omitempty,max=7,dive,min=1,max=7"`
+    TZ        string     `json:"tz"         validate:"required,max=64"`
+    EndsOn    *time.Time `json:"ends_on"`
+    MaxCount  *int       `json:"max_count"  validate:"omitempty,min=1,max=500"`
+}
+```
+
+Времени и длительности в правиле нет: они берутся из первого вхождения — то
+самое дублирующее поле, которое разошлось бы с ним при первой же правке.
+
+Порядок в сервисе: создать правило → создать первое вхождение (оно же шаблон для
+материализации) → материализовать горизонт. Если вхождение не создалось, правило
+удаляется тут же: материализовать ему нечего, зато джоба ходила бы к нему каждую
+ночь. Обратная ошибка — неудачная материализация — урок не отменяет, горизонт
+догонит джоба.
+
+На фронте клиентская раскатка дат больше не используется: `toRecurrenceInput()`
+переводит режим повтора в правило, а кнопка говорит «Создать серию» вместо
+«Создать N уроков» — число врало бы, потому что сервер материализует только
+горизонт.
 
 ### 7.5. Семантика редактирования
 
@@ -543,16 +618,32 @@ func (RecurrenceExtendArgs) InsertOpts() river.InsertOpts {
 
 Удаление — та же тройка. «Только это» на вхождении правила ставит `status = 'cancelled'` для урока и удаляет строку для события.
 
-API:
+API — параметр к существующим ручкам, отдельного PATCH заводить не пришлось:
 
 ```
-PATCH  /lessons/:id?scope=one|following|all
+PUT    /lessons/:id?scope=one|following|all
 DELETE /lessons/:id?scope=one|following|all
-PATCH  /events/:id?scope=one|following|all
+PUT    /events/:id?scope=one|following|all
 DELETE /events/:id?scope=one|following|all
 ```
 
 `scope` по умолчанию `one`.
+
+> **Как реализовано.** Удаление вхождения не удаляет строку, а оставляет
+> тумбстоун: у урока это `status = 'cancelled'`, у события — колонка `cancelled`
+> из миграции `034` (у события статуса нет). Без тумбстоуна дата снова свободна,
+> и ближайшая ночная материализация возвращает отменённое занятие обратно —
+> «не иду в спортзал на этой неделе» держалось бы до утра.
+>
+> «Это и все следующие» = `SplitRule`: старое правило закрывается днём раньше
+> вхождения, урок переезжает в новую ветку через `ReassignToRule`, будущие
+> вхождения старого правила сносятся и пересоздаются материализацией.
+> `DeleteFutureByRule` сносит только `is_override = FALSE` — это и есть защита
+> вручную перенесённого урока.
+>
+> На фронте — `frontend/src/components/calendar/RecurrenceScopeDialog.tsx`,
+> подключён в поповере события и на странице курса. Перенос drag-and-drop
+> диалога не показывает и уходит со `scope=one`.
 
 ### 7.6. Перенос существующих серий
 
@@ -569,9 +660,14 @@ DELETE /events/:id?scope=one|following|all
 > правилах со scope-диалогом; два механизма сосуществуют без конфликта, потому
 > что у урока заполнено ровно одно из полей.
 
-Отдельная одноразовая миграция данных `034_series_to_rules.sql`: для каждого различного `lessons.series_id` восстановить правило по фактическим строкам (частота = медианный интервал между соседними уроками, `time_local` = время первого урока в `Asia/Almaty`, `starts_on` = дата первого, `ends_on` = дата последнего, `materialized_until` = дата последнего), проставить `rule_id` и `occurrence_date`, оставить `is_override = FALSE`.
+Отдельная одноразовая миграция данных `NNN_series_to_rules.sql` (номера 033 и 034
+уже заняты фазой 3): для каждого различного `lessons.series_id` восстановить правило по фактическим строкам (частота = медианный интервал между соседними уроками, `time_local` = время первого урока в `Asia/Almaty`, `starts_on` = дата первого, `ends_on` = дата последнего, `materialized_until` = дата последнего), проставить `rule_id` и `occurrence_date`, оставить `is_override = FALSE`.
 
-После проверки на проде — миграция `035`, удаляющая `lessons.series_id`, `UpdateSeriesRequest`, `DELETE /lessons/series/:seriesId`, `PATCH /lessons/series/:seriesId` и клиентский `generateDates()`.
+После проверки на проде — следующая миграция, удаляющая `lessons.series_id`,
+`UpdateSeriesRequest`, `DELETE /lessons/series/:seriesId`,
+`PATCH /lessons/series/:seriesId`, `POST /lessons/bulk` и клиентский
+`generateDates()`. Клиентских вызовов `bulk` уже нет — ручка осталась только
+ради старых серий.
 
 **Критерии приёмки**
 
@@ -693,10 +789,10 @@ DELETE /events/:id?scope=one|following|all
 |---|---|---|---|---|
 | 0 | Багфиксы повторений | нет | полдня | ✅ `aee49f8` |
 | 1 | `events`, единая лента, конфликты | 031 | 2–3 дня | ✅ `373d0b6`, `c1c0c0a`, `b2ac186`, `055a724` |
-| 2 | `SlotCreatePopover`, комбобоксы, неявный курс, раздел «Ученики» | 032 | 3–4 дня | ✅ `bff8ff5`, `7e56de7` (ветка `feat/implicit-course`, 032 на проде); ждёт ручного smoke |
-| 3 | `recurrence_rules`, материализация, джоба, семантика правок | 033–034 | 4–5 дней | ✅ кроме 7.6: `2c76c37`, `c9e2b6a`, `895571d`, `34df9d4`, `391b5c6`, `e287ccc`, `c1e5f9d`; перенос старых серий отложен (см. 7.6) |
-| 4 | `POST /onboarding/student`, модалка | нет | 2 дня | |
-| 5 | Кнопка «Начать пробный» на событии, ICS | 036 | 1–2 дня | |
+| 2 | `SlotCreatePopover`, комбобоксы, неявный курс, раздел «Ученики» | 032 | 3–4 дня | ✅ `bff8ff5`, `7e56de7`, `978c69e` (выбор режима повтора вместо чекбокса); ждёт ручного smoke |
+| 3 | `recurrence_rules`, материализация, джоба, семантика правок | 033, 034 | 4–5 дней | ✅ кроме 7.6: `2c76c37`, `c9e2b6a`, `895571d`, `34df9d4`, `391b5c6`, `e287ccc`, `c1e5f9d`; перенос старых серий отложен (см. 7.6) |
+| 4 | `POST /onboarding/student`, модалка | нет | 2 дня | следующая |
+| 5 | Кнопка «Начать пробный» на событии, ICS | +1 (номер по факту) | 1–2 дня | |
 
 Всё сделанное — в ветке `feat/recurrence-fixes`.
 
