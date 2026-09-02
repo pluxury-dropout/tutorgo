@@ -9,7 +9,7 @@ import { useCreateTask } from '@/lib/hooks/useTasks'
 import { useCreateEvent, useConflicts } from '@/lib/hooks/useEvents'
 import { useCreateSlotLesson } from '@/lib/hooks/useLessons'
 import { useStudentCourses } from '@/lib/hooks/useCourses'
-import { generateDates, lessonsPlural, isoWeekday, WEEK_DAYS } from '@/lib/recurrence'
+import { toRecurrenceInput, isoWeekday, WEEK_DAYS } from '@/lib/recurrence'
 import { EVENT_KINDS, KIND_LABELS, formatTimeRange } from '@/lib/eventKind'
 import type { EventKind, Student } from '@/types/api'
 
@@ -101,125 +101,85 @@ function SlotForm({ start, end, onClose }: { start: Date; end: Date; onClose: ()
   )
 }
 
-function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
-  const [student, setStudent] = useState<Student | null>(null)
-  // 'none' — разовый урок; остальные значения совпадают с типами generateDates.
-  const [repeat, setRepeat]   = useState<'none' | 'weekly_same' | 'weekly_custom'>('none')
-  const [days, setDays]       = useState<number[]>([isoWeekday(start)])
-  // null — пользователь предмет не трогал, показываем подсказку по ученику.
-  // Состояние вместо эффекта: подстановка при загрузке курсов иначе была бы
-  // setState внутри useEffect, то есть лишний каскад рендеров.
-  const [typedSubject, setTypedSubject] = useState<string | null>(null)
-  const createLesson = useCreateSlotLesson()
+/** Состояние повтора, общее для урока и события: правило уезжает на сервер,
+ *  раскатывать даты на клиенте больше не нужно. */
+function useRepeat(start: Date) {
+  const [mode, setMode] = useState<'none' | 'weekly_same' | 'weekly_custom'>('none')
+  const [days, setDays] = useState<number[]>([isoWeekday(start)])
 
-  // Предмет подставляем из последнего курса ученика: у большинства он один,
-  // и печатать его заново на каждый урок незачем.
-  const { data: studentCourses = [] } = useStudentCourses(student?.id ?? '')
-  const subject = typedSubject ?? studentCourses[0]?.subject ?? ''
+  // Пустой список дней — не молчаливая серия из одного элемента, а
+  // заблокированная кнопка: молчаливый один урок выглядит как потеря данных.
+  const missing = mode === 'weekly_custom' && days.length === 0
 
-  // Пустой список дней — не молчаливый один урок, а заблокированная кнопка:
-  // серия из одного элемента выглядит как потерянные данные.
-  const daysMissing = repeat === 'weekly_custom' && days.length === 0
-  const dates = repeat === 'none' || daysMissing
-    ? [start.toISOString()]
-    : generateDates(start.toISOString(), { type: repeat, days })
-  const lastDate = dates.length > 1 ? new Date(dates[dates.length - 1]) : null
+  return {
+    mode, setMode, days, setDays, missing,
+    recurrence: mode === 'none' || missing
+      ? undefined
+      : toRecurrenceInput({ type: mode, days }),
+  }
+}
+
+type Repeat = ReturnType<typeof useRepeat>
+
+function RepeatPicker({ repeat }: { repeat: Repeat }) {
+  const { mode, setMode, days, setDays, missing } = repeat
 
   function toggleDay(iso: number) {
     setDays((prev) => (prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso]))
   }
 
-  function handleSave() {
-    if (!student || !subject.trim() || daysMissing) return
-    const common = {
-      student_id:       student.id,
-      subject:          subject.trim(),
-      duration_minutes: slotMinutes(start, end),
-    }
-    createLesson.mutate(
-      repeat === 'none' ? { ...common, scheduled_at: dates[0] } : { ...common, scheduled_ats: dates },
-      { onError: () => toast.error('Не удалось поставить урок') },
+  if (mode === 'none') {
+    return (
+      <button
+        type="button"
+        onClick={() => setMode('weekly_same')}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <Repeat className="size-3.5" />
+        Повторять
+      </button>
     )
-    onClose()
   }
 
   return (
-    <div className="space-y-3">
-      <StudentCombobox
-        value={student}
-        onChange={(s) => { setStudent(s); setTypedSubject(null) }}
-        autoFocus
-      />
-      {student && <SubjectCombobox value={subject} onChange={setTypedSubject} />}
+    <div className="space-y-2 rounded-lg border border-input p-2">
+      <div className="flex gap-1">
+        <RepeatMode active={mode === 'weekly_same'} onClick={() => setMode('weekly_same')}>
+          Еженедельно
+        </RepeatMode>
+        <RepeatMode active={mode === 'weekly_custom'} onClick={() => setMode('weekly_custom')}>
+          По дням
+        </RepeatMode>
+      </div>
 
-      {repeat === 'none' ? (
-        <button
-          type="button"
-          onClick={() => setRepeat('weekly_same')}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Repeat className="size-3.5" />
-          Повторять
-        </button>
-      ) : (
-        <div className="space-y-2 rounded-lg border border-input p-2">
-          <div className="flex gap-1">
-            <RepeatMode active={repeat === 'weekly_same'} onClick={() => setRepeat('weekly_same')}>
-              Еженедельно
-            </RepeatMode>
-            <RepeatMode active={repeat === 'weekly_custom'} onClick={() => setRepeat('weekly_custom')}>
-              По дням
-            </RepeatMode>
-          </div>
-
-          {repeat === 'weekly_custom' && (
-            <div className="flex gap-1">
-              {WEEK_DAYS.map(({ label, iso }) => (
-                <button
-                  key={iso}
-                  type="button"
-                  onClick={() => toggleDay(iso)}
-                  className={`h-7 flex-1 rounded text-xs font-medium transition-colors ${
-                    days.includes(iso)
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-input hover:bg-muted'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {daysMissing && (
-            <p className="text-xs text-destructive">Выберите хотя бы один день недели</p>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setRepeat('none')}
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            Не повторять
-          </button>
+      {mode === 'weekly_custom' && (
+        <div className="flex gap-1">
+          {WEEK_DAYS.map(({ label, iso }) => (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => toggleDay(iso)}
+              className={`h-7 flex-1 rounded text-xs font-medium transition-colors ${
+                days.includes(iso)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border border-input hover:bg-muted'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={!student || !subject.trim() || daysMissing}
-        >
-          {repeat === 'none' ? 'Создать' : `Создать ${lessonsPlural(dates.length)}`}
-        </Button>
-      </div>
-      {lastDate && (
-        <p className="text-right text-xs text-muted-foreground">
-          до {lastDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
-      )}
+      {missing && <p className="text-xs text-destructive">Выберите хотя бы один день недели</p>}
+
+      <button
+        type="button"
+        onClick={() => setMode('none')}
+        className="text-xs text-muted-foreground hover:text-foreground"
+      >
+        Не повторять
+      </button>
     </div>
   )
 }
@@ -238,19 +198,75 @@ function RepeatMode({ active, onClick, children }: { active: boolean; onClick: (
   )
 }
 
+function LessonFields({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
+  const [student, setStudent] = useState<Student | null>(null)
+  // null — пользователь предмет не трогал, показываем подсказку по ученику.
+  // Состояние вместо эффекта: подстановка при загрузке курсов иначе была бы
+  // setState внутри useEffect, то есть лишний каскад рендеров.
+  const [typedSubject, setTypedSubject] = useState<string | null>(null)
+  const repeat = useRepeat(start)
+  const createLesson = useCreateSlotLesson()
+
+  // Предмет подставляем из последнего курса ученика: у большинства он один,
+  // и печатать его заново на каждый урок незачем.
+  const { data: studentCourses = [] } = useStudentCourses(student?.id ?? '')
+  const subject = typedSubject ?? studentCourses[0]?.subject ?? ''
+
+  function handleSave() {
+    if (!student || !subject.trim() || repeat.missing) return
+    createLesson.mutate(
+      {
+        student_id:       student.id,
+        subject:          subject.trim(),
+        scheduled_at:     start.toISOString(),
+        duration_minutes: slotMinutes(start, end),
+        recurrence:       repeat.recurrence,
+      },
+      { onError: () => toast.error('Не удалось поставить урок') },
+    )
+    onClose()
+  }
+
+  return (
+    <div className="space-y-3">
+      <StudentCombobox
+        value={student}
+        onChange={(s) => { setStudent(s); setTypedSubject(null) }}
+        autoFocus
+      />
+      {student && <SubjectCombobox value={subject} onChange={setTypedSubject} />}
+
+      <RepeatPicker repeat={repeat} />
+
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={!student || !subject.trim() || repeat.missing}
+        >
+          {repeat.mode === 'none' ? 'Создать' : 'Создать серию'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function EventFields({ start, end, onClose }: { start: Date; end: Date; onClose: () => void }) {
   const [title, setTitle] = useState('')
   const [kind, setKind]   = useState<EventKind>('personal')
+  const repeat = useRepeat(start)
   const createEvent = useCreateEvent()
 
   function handleSave() {
-    if (!title.trim()) return
+    if (!title.trim() || repeat.missing) return
     createEvent.mutate(
       {
         title:            title.trim(),
         kind,
         starts_at:        start.toISOString(),
         duration_minutes: slotMinutes(start, end),
+        recurrence:       repeat.recurrence,
       },
       { onError: () => toast.error('Не удалось создать событие') },
     )
@@ -279,9 +295,14 @@ function EventFields({ start, end, onClose }: { start: Date; end: Date; onClose:
           </button>
         ))}
       </div>
+
+      <RepeatPicker repeat={repeat} />
+
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose}>Отмена</Button>
-        <Button size="sm" onClick={handleSave} disabled={!title.trim()}>Создать</Button>
+        <Button size="sm" onClick={handleSave} disabled={!title.trim() || repeat.missing}>
+          {repeat.mode === 'none' ? 'Создать' : 'Создать серию'}
+        </Button>
       </div>
     </div>
   )

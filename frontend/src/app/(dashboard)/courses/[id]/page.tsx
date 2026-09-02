@@ -18,7 +18,6 @@ import {
 import {
   useLessonsByPeriod,
   useCreateLesson,
-  useCreateLessons,
   useUpdateLesson,
   useDeleteLesson,
   useDeleteLessonsByCourse,
@@ -39,7 +38,7 @@ import { ErrorState } from '@/components/common/ErrorState'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
 import { SeriesUpdateInput } from '@/lib/api/lessons'
-import { generateDates, lessonsPlural, RecurrenceOptions } from '@/lib/recurrence'
+import { toRecurrenceInput, RecurrenceOptions } from '@/lib/recurrence'
 import { PaymentFormValues } from '@/schemas/payment'
 import { Lesson, Payment } from '@/types/api'
 
@@ -104,7 +103,6 @@ export default function CourseDetailPage() {
   const addEnrollment        = useAddEnrollment(id)
   const removeEnrollment     = useRemoveEnrollment(id)
   const createLesson         = useCreateLesson(id)
-  const createLessons        = useCreateLessons(id)
   const updateLesson         = useUpdateLesson(editingLesson?.id ?? '', id)
   const deleteLesson         = useDeleteLesson(id)
   const deleteLessonsByCourse = useDeleteLessonsByCourse(id)
@@ -156,18 +154,19 @@ export default function CourseDetailPage() {
       await updateLesson.mutateAsync({ ...values, scheduled_at: baseISO })
       toast.success('Урок обновлён')
     } else if (recurrence) {
-      const dates = generateDates(baseISO, recurrence, course?.ended_at)
-      if (dates.length === 0) {
-        toast.error('Не из чего собрать серию: проверьте дни недели и дату окончания курса')
-        return
-      }
-      await createLessons.mutateAsync({
+      // Даты раскатывает сервер: правило хранится в БД, поэтому бессрочную
+      // серию есть чем продлевать, а до горизонта её дотягивает ночная джоба.
+      await createLesson.mutateAsync({
         course_id:        id,
-        scheduled_ats:    dates,
+        scheduled_at:     baseISO,
         duration_minutes: values.duration_minutes,
         notes:            values.notes,
+        recurrence: {
+          ...toRecurrenceInput(recurrence),
+          ends_on: course?.ended_at ?? undefined,
+        },
       })
-      toast.success(`Создано ${lessonsPlural(dates.length)}`)
+      toast.success('Серия создана')
     } else {
       await createLesson.mutateAsync({ ...values, scheduled_at: baseISO, course_id: id })
       toast.success('Урок добавлен')

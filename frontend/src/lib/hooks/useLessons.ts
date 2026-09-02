@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { lessonsApi, LessonInput, LessonBulkInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
+import { lessonsApi, LessonInput, LessonUpdateInput, SeriesUpdateInput } from '@/lib/api/lessons'
 import type { Lesson } from '@/types/api'
 
 export const lessonKeys = {
@@ -65,24 +65,13 @@ export function useCreateLesson(courseId: string) {
   })
 }
 
-export function useCreateLessons(courseId: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: LessonBulkInput) => lessonsApi.createBulk(data),
-    onSuccess:  () => invalidateLessonViews(qc, courseId),
-  })
-}
-
 // Урок из календаря: course_id заранее неизвестен — курс может создаться на
 // лету, — поэтому инвалидируем оба дерева целиком, а не конкретный курс.
-// Одна мутация на оба случая: серию от одиночного урока отличает scheduled_ats.
+// Серия отличается только полем recurrence: раскатку дат делает сервер.
 export function useCreateSlotLesson() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: LessonInput | LessonBulkInput): Promise<Lesson[]> =>
-      'scheduled_ats' in data
-        ? lessonsApi.createBulk(data)
-        : lessonsApi.create(data).then((lesson) => [lesson]),
+    mutationFn: (data: LessonInput): Promise<Lesson> => lessonsApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lessons'] })
       qc.invalidateQueries({ queryKey: ['calendar'] })

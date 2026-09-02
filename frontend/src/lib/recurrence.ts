@@ -3,6 +3,8 @@
 // превью для кнопки, страница курса шлёт результат в POST /lessons/bulk.
 // Временная механика — в фазе 3 правило переезжает в БД (recurrence_rules).
 
+import type { RecurrenceInput } from '@/types/api'
+
 export type RecurrenceType = 'weekly_same' | 'weekly_custom' | 'every_n_weeks'
 
 export interface RecurrenceOptions {
@@ -95,6 +97,18 @@ export function generateDates(baseISO: string, opts: RecurrenceOptions, courseEn
   }
 
   return results.map((d) => d.toISOString())
+}
+
+/** UI-режим повтора → правило для сервера. Раскатку дат делает бэкенд: правило
+ *  хранится в БД, поэтому бессрочную серию есть чем продлевать. generateDates
+ *  остаётся для превью в форме курса, пока та не переехала на правила. */
+export function toRecurrenceInput(opts: RecurrenceOptions): RecurrenceInput {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const base = { freq: 'weekly' as const, tz, max_count: opts.count }
+
+  if (opts.type === 'weekly_custom') return { ...base, byweekday: opts.days }
+  if (opts.type === 'every_n_weeks') return { ...base, interval_n: opts.n ?? 2 }
+  return base
 }
 
 const LESSON_PLURAL: Record<Intl.LDMLPluralRule, string> = {

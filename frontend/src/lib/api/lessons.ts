@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Lesson, LessonStatus, AttendanceRecord, PagedResponse } from '@/types/api'
+import { Lesson, LessonStatus, AttendanceRecord, PagedResponse, RecurrenceInput } from '@/types/api'
 
 // Урок ставится либо в известный курс (course_id), либо по паре «ученик +
 // предмет» — тогда курс найдётся или создастся на бэкенде. Второй путь — это
@@ -11,15 +11,8 @@ export interface LessonInput {
   scheduled_at:     string
   duration_minutes: number
   notes?:           string
-}
-
-export interface LessonBulkInput {
-  course_id?:       string
-  student_id?:      string
-  subject?:         string
-  scheduled_ats:    string[]
-  duration_minutes: number
-  notes?:           string
+  /** Серия: сервер сам заведёт правило и материализует горизонт. */
+  recurrence?:      RecurrenceInput
 }
 
 export interface LessonUpdateInput {
@@ -49,8 +42,6 @@ export const lessonsApi = {
     api.get<Lesson>(`/lessons/${id}`).then((r) => r.data),
   create: (data: LessonInput) =>
     api.post<Lesson>('/lessons', data).then((r) => r.data),
-  createBulk: (data: LessonBulkInput) =>
-    api.post<Lesson[]>('/lessons/bulk', data).then((r) => r.data ?? []),
   update: (id: string, data: LessonUpdateInput) =>
     api.put<Lesson>(`/lessons/${id}`, data).then((r) => r.data),
   delete: (id: string) =>

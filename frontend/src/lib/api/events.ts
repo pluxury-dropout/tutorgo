@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Event, EventKind } from '@/types/api'
+import { Event, EventKind, RecurrenceInput } from '@/types/api'
 
 export interface EventInput {
   title: string
@@ -9,6 +9,8 @@ export interface EventInput {
   color?: string
   location?: string
   notes?: string
+  /** Только при создании: превращает событие в серию. */
+  recurrence?: RecurrenceInput
 }
 
 export const eventsApi = {

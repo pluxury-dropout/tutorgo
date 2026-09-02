@@ -128,6 +128,17 @@ export interface Event {
   notes: string
 }
 
+/** Правило повторения для урока или события. Время и длительность сервер берёт
+ *  из первого вхождения, поэтому здесь их нет. */
+export interface RecurrenceInput {
+  freq:       'daily' | 'weekly' | 'monthly'
+  interval_n?: number
+  byweekday?: number[]   // ISO: 1=Пн … 7=Вс
+  tz:         string     // IANA, берём из браузера
+  ends_on?:   string
+  max_count?: number
+}
+
 /** Строка единой ленты календаря: общие поля наверху, специфика — по типу. */
 export type CalendarItem = {
   id: string
