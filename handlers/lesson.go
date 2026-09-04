@@ -79,26 +79,6 @@ func (h *LessonHandler) GetByCourse(c *gin.Context) {
 	c.JSON(http.StatusOK, lessons)
 }
 
-func (h *LessonHandler) CreateBulk(c *gin.Context) {
-	tutorID := c.GetString("tutorID")
-	if tutorID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	var req models.CreateBulkLessonRequest
-	if !bindAndValidate(c, &req) {
-		return
-	}
-	lessons, err := h.service.CreateBulk(c.Request.Context(), req, tutorID)
-	if err != nil {
-		h.log.Error("Failed to create lessons", slog.String("error", err.Error()))
-		handleServiceError(c, err)
-		return
-	}
-	h.log.Info("Lessons created", slog.Int("count", len(lessons)))
-	c.JSON(http.StatusCreated, lessons)
-}
-
 func (h *LessonHandler) Create(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {
@@ -192,51 +172,6 @@ func (h *LessonHandler) DeleteByCourse(c *gin.Context) {
 		return
 	}
 	h.log.Info("Lessons deleted by course", slog.String("courseId", courseID))
-	c.Status(http.StatusNoContent)
-}
-
-func (h *LessonHandler) DeleteSeries(c *gin.Context) {
-	tutorID := c.GetString("tutorID")
-	if tutorID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	seriesID := c.Param("seriesId")
-
-	var fromDatePtr, toDatePtr *string
-	if from := c.Query("from"); from != "" {
-		fromDatePtr = &from
-	}
-	if to := c.Query("to"); to != "" {
-		toDatePtr = &to
-	}
-
-	if err := h.service.DeleteSeries(c.Request.Context(), seriesID, tutorID, fromDatePtr, toDatePtr); err != nil {
-		h.log.Error("Failed to delete series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
-		handleServiceError(c, err)
-		return
-	}
-	h.log.Info("Series deleted", slog.String("seriesId", seriesID))
-	c.Status(http.StatusNoContent)
-}
-
-func (h *LessonHandler) UpdateSeries(c *gin.Context) {
-	tutorID := c.GetString("tutorID")
-	if tutorID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	seriesID := c.Param("seriesId")
-	var req models.UpdateSeriesRequest
-	if !bindAndValidate(c, &req) {
-		return
-	}
-	if err := h.service.UpdateSeries(c.Request.Context(), seriesID, tutorID, req); err != nil {
-		h.log.Error("Failed to update series", slog.String("seriesId", seriesID), slog.String("error", err.Error()))
-		handleServiceError(c, err)
-		return
-	}
-	h.log.Info("Series updated", slog.String("seriesId", seriesID))
 	c.Status(http.StatusNoContent)
 }
 

@@ -3,19 +3,14 @@ package repository
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 	"tutorgo/models"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type LessonRepository interface {
 	Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error)
-	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error)
 	GetByCoursePaged(ctx context.Context, courseID string, p models.Pagination) ([]models.Lesson, int, error)
 	GetByID(ctx context.Context, id string) (models.Lesson, error)
@@ -23,11 +18,10 @@ type LessonRepository interface {
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error)
 	Delete(ctx context.Context, id string) error
 	Cancel(ctx context.Context, id string) error
+	MarkOverride(ctx context.Context, id string) error
 	ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error
 	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
-	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
-	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
@@ -54,42 +48,15 @@ func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRe
 		 VALUES ($1, $2, $3, $4,
 		         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END,
 		         NULLIF($5, '')::uuid, $6::date)
-		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
+		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
 		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes, req.RuleID, req.OccurrenceDate,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
 	return lesson, err
-}
-
-func (r *lessonRepository) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error) {
-	seriesID := uuid.New().String()
-
-	batch := &pgx.Batch{}
-	for _, sa := range req.ScheduledAts {
-		batch.Queue(
-			`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, series_id, status)
-			 VALUES ($1, $2, $3, $4, $5,
-			         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END)
-			 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
-			req.CourseID, sa, req.DurationMinutes, req.Notes, seriesID,
-		)
-	}
-	br := r.pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	var lessons []models.Lesson
-	for range req.ScheduledAts {
-		var l models.Lesson
-		if err := br.QueryRow().Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes, &l.SeriesID); err != nil {
-			return nil, err
-		}
-		lessons = append(lessons, l)
-	}
-	return lessons, nil
 }
 
 func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes, series_id
+		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
 		 FROM lessons WHERE course_id = $1 ORDER BY scheduled_at`, courseID)
 	if err != nil {
 		return nil, err
@@ -99,7 +66,7 @@ func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]
 	lessons := []models.Lesson{}
 	for rows.Next() {
 		var lesson models.Lesson
-		if err := rows.Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID); err != nil {
+		if err := rows.Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes); err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, lesson)
@@ -116,7 +83,7 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes, series_id
+		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
 		 FROM lessons WHERE course_id = $1
 		 ORDER BY scheduled_at DESC
 		 LIMIT $2 OFFSET $3`,
@@ -129,7 +96,7 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 	lessons := []models.Lesson{}
 	for rows.Next() {
 		var l models.Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes, &l.SeriesID); err != nil {
+		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
 			return nil, 0, err
 		}
 		lessons = append(lessons, l)
@@ -140,9 +107,9 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesson, error) {
 	var lesson models.Lesson
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes, series_id
+		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
 		 FROM lessons WHERE id = $1`, id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
 	return lesson, err
 }
 
@@ -152,6 +119,15 @@ func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesso
 func (r *lessonRepository) Cancel(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE lessons SET status = 'cancelled', is_override = TRUE WHERE id = $1`, id)
+	return err
+}
+
+// MarkOverride помечает вхождение вручную правленным. Ставится при правке
+// «только это»: без метки ближайшее «это и все следующие» снесёт строку
+// (DeleteFutureByRule смотрит ровно на is_override), а материализация вернёт
+// урок на место по расписанию правила — перенос молча пропадёт.
+func (r *lessonRepository) MarkOverride(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE lessons SET is_override = TRUE WHERE id = $1`, id)
 	return err
 }
 
@@ -178,12 +154,12 @@ func (r *lessonRepository) DeleteFutureByRule(ctx context.Context, ruleID string
 func (r *lessonRepository) GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error) {
 	var lesson models.Lesson
 	err := r.pool.QueryRow(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes, l.series_id,
+		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
 		        l.rule_id, l.occurrence_date
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID,
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes,
 		&lesson.RuleID, &lesson.OccurrenceDate)
 	return lesson, err
 }
@@ -193,9 +169,9 @@ func (r *lessonRepository) Update(ctx context.Context, id string, req models.Upd
 	err := r.pool.QueryRow(ctx,
 		`UPDATE lessons SET scheduled_at=$1, duration_minutes=$2, status=$3, notes=$4
 		 WHERE id=$5
-		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes, series_id`,
+		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
 		req.ScheduledAt, req.DurationMinutes, req.Status, req.Notes, id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes, &lesson.SeriesID)
+	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
 	return lesson, err
 }
 
@@ -212,77 +188,6 @@ func (r *lessonRepository) DeleteByCourse(ctx context.Context, courseID string, 
 		   AND lessons.course_id = courses.id
 		   AND courses.tutor_id = $2`,
 		courseID, tutorID)
-	return err
-}
-
-func (r *lessonRepository) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
-	args := []interface{}{seriesID, tutorID}
-	fromClause := ""
-	toClause := ""
-	if fromDate != nil {
-		fromClause = fmt.Sprintf("AND lessons.scheduled_at >= $%d::timestamptz", len(args)+1)
-		args = append(args, *fromDate)
-	}
-	if toDate != nil {
-		toClause = fmt.Sprintf("AND lessons.scheduled_at <= $%d::timestamptz", len(args)+1)
-		args = append(args, *toDate)
-	}
-
-	query := fmt.Sprintf(`
-		DELETE FROM lessons
-		USING courses
-		WHERE lessons.series_id = $1
-		  AND lessons.course_id = courses.id
-		  AND courses.tutor_id = $2
-		  %s
-		  %s`, fromClause, toClause)
-
-	_, err := r.pool.Exec(ctx, query, args...)
-	return err
-}
-
-func (r *lessonRepository) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
-	setParts := []string{}
-	args := []interface{}{seriesID, tutorID}
-
-	if req.NewTime != nil {
-		idx := len(args) + 1
-		setParts = append(setParts, fmt.Sprintf("scheduled_at = date_trunc('day', lessons.scheduled_at) + $%d::interval", idx))
-		args = append(args, *req.NewTime)
-	}
-	if req.DurationMinutes != nil {
-		idx := len(args) + 1
-		setParts = append(setParts, fmt.Sprintf("duration_minutes = $%d", idx))
-		args = append(args, *req.DurationMinutes)
-	}
-	if req.Notes != nil {
-		idx := len(args) + 1
-		setParts = append(setParts, fmt.Sprintf("notes = $%d", idx))
-		args = append(args, *req.Notes)
-	}
-
-	if len(setParts) == 0 {
-		return nil
-	}
-
-	fromClause := ""
-	if req.FromDate != nil {
-		idx := len(args) + 1
-		fromClause = fmt.Sprintf("AND lessons.scheduled_at >= $%d::timestamptz", idx)
-		args = append(args, *req.FromDate)
-	}
-
-	query := fmt.Sprintf(`
-		UPDATE lessons
-		SET %s
-		FROM courses
-		WHERE lessons.series_id = $1
-		  AND lessons.course_id = courses.id
-		  AND courses.tutor_id = $2
-		  %s`,
-		strings.Join(setParts, ", "), fromClause)
-
-	_, err := r.pool.Exec(ctx, query, args...)
 	return err
 }
 
@@ -312,7 +217,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 		             ELSE NULL
 		        END AS student_name,
 		        (c.student_id IS NULL) AS is_group,
-		        l.series_id, l.rule_id,
+		        l.rule_id,
 		        r.rank
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
@@ -332,7 +237,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 	for rows.Next() {
 		var cl models.CalendarLesson
 		if err := rows.Scan(&cl.ID, &cl.CourseID, &cl.ScheduledAt, &cl.DurationMinutes,
-			&cl.Status, &cl.Notes, &cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.SeriesID, &cl.RuleID, &cl.Rank); err != nil {
+			&cl.Status, &cl.Notes, &cl.Subject, &cl.StudentName, &cl.IsGroup, &cl.RuleID, &cl.Rank); err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, cl)
@@ -342,7 +247,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 
 func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes, l.series_id
+		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 WHERE l.course_id = $1
@@ -359,7 +264,7 @@ func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tut
 	lessons := []models.Lesson{}
 	for rows.Next() {
 		var l models.Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes, &l.SeriesID); err != nil {
+		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, l)

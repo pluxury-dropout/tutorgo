@@ -1,31 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
 import { Video } from 'lucide-react'
 
-import { callsApi } from '@/lib/api/calls'
+import { useStartQuickRoom } from '@/lib/hooks/useStartQuickRoom'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SectionCard } from '@/components/common/SectionCard'
 import { Button } from '@/components/ui/button'
 
 export default function TrialPage() {
-  const router = useRouter()
-  const [starting, setStarting] = useState(false)
-
-  async function handleStart() {
-    if (starting) return
-    setStarting(true)
-    try {
-      const { room_id, token, server_url } = await callsApi.startQuickRoom()
-      sessionStorage.setItem(`quick-room-${room_id}`, JSON.stringify({ token, server_url }))
-      router.push(`/room/${room_id}`)
-    } catch {
-      toast.error('Не удалось создать комнату')
-      setStarting(false)
-    }
-  }
+  const { start: handleStart, starting } = useStartQuickRoom()
 
   return (
     <div style={{ maxWidth: 900 }}>

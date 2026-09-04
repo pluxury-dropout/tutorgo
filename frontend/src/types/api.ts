@@ -27,6 +27,35 @@ export interface Course {
   is_active: boolean
 }
 
+/** Расписание для быстрого онбординга — дни недели и стенное время из формы;
+ *  правило повторения из них собирает сервис. */
+export interface OnboardingSchedule {
+  byweekday?:        number[] // ISO: 1=Пн … 7=Вс
+  time_local:        string   // «17:00»
+  tz:                string   // IANA, берём из браузера
+  duration_minutes:  number
+  starts_on:         string   // RFC3339
+  ends_on?:          string | null
+}
+
+/** Тело POST /onboarding/student: ученик, курс и серия одним сабмитом.
+ *  Обязательно только first_name — без subject уйдёт только ученик, без
+ *  schedule — ученик и курс без уроков. */
+export interface OnboardingStudentInput {
+  first_name:          string
+  phone?:              string
+  subject?:            string
+  price_per_cycle?:    number
+  lessons_per_cycle?:  number
+  schedule?:           OnboardingSchedule
+}
+
+export interface OnboardingResult {
+  student:         Student
+  course:          Course | null
+  lessons_created: number
+}
+
 export interface CourseBalance {
   lessons_paid: number
   lessons_completed: number
@@ -42,7 +71,6 @@ export interface Lesson {
   duration_minutes: number
   status: LessonStatus
   notes: string
-  series_id?: string
   cycle_position?: number
   cycle_size?: number
   /** Заполнен только у вхождения серии — правка тогда спрашивает область. */

@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Video } from 'lucide-react'
 
 import { useUpdateEvent, useDeleteEvent } from '@/lib/hooks/useEvents'
+import { useStartQuickRoom } from '@/lib/hooks/useStartQuickRoom'
 import { EVENT_KINDS, KIND_LABELS, formatTimeRange } from '@/lib/eventKind'
 import type { Event, EventKind, RecurrenceScope } from '@/types/api'
 import { RecurrenceScopeDialog } from '@/components/calendar/RecurrenceScopeDialog'
@@ -40,6 +41,7 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
 
   const updateEvent = useUpdateEvent()
   const deleteEvent = useDeleteEvent()
+  const { start: startTrial, starting } = useStartQuickRoom()
 
   // У вхождения серии сначала спрашиваем область; одиночное событие правится
   // сразу, лишний диалог там был бы шумом.
@@ -109,6 +111,18 @@ function EventForm({ event, onClose }: { event: Event; onClose: () => void }) {
 
       <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Место (необязательно)" />
       <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Заметка (необязательно)" />
+
+      {/* Договорённость «пробный в четверг в 18:00» превращается в звонок
+          отсюда: комната та же, что со страницы /trial, — гость заходит по
+          публичной ссылке без регистрации. Кнопка смотрит на сохранённый вид
+          события, а не на выбранный в форме: пока правку не сохранили,
+          начинать по ней нечего. */}
+      {event.kind === 'trial' && (
+        <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={startTrial} disabled={starting}>
+          <Video className="size-4" />
+          {starting ? 'Создаём комнату...' : 'Начать пробный урок'}
+        </Button>
+      )}
 
       <div className="flex items-center justify-between pt-1">
         <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">

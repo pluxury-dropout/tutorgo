@@ -91,7 +91,20 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Event{}, fmt.Errorf("event: %w", ErrNotFound)
 	}
-	return e, err
+	if err != nil {
+		return e, err
+	}
+	// Вхождение, ушедшее со своего места в расписании, метим — иначе «это и все
+	// следующие» снесёт перенос и материализация вернёт событие на место.
+	// Переименование или смена заметки с расписанием не спорят.
+	movedOffSchedule := !req.StartsAt.Equal(current.StartsAt) ||
+		req.DurationMinutes != current.DurationMinutes
+	if scope == scopeOne && current.RuleID != nil && movedOffSchedule {
+		if err := s.repo.MarkOverride(ctx, id, tutorID); err != nil {
+			return e, err
+		}
+	}
+	return e, nil
 }
 
 // applyToSeries правит правило и сносит будущие вхождения — их пересоздаст

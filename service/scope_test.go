@@ -22,6 +22,12 @@ func (m *mockLessonRepo) ReassignToRule(ctx context.Context, lessonID, ruleID st
 func (m *mockLessonRepo) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error {
 	return m.Called(ctx, ruleID, after).Error(0)
 }
+func (m *mockLessonRepo) MarkOverride(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
+}
+func (m *mockEventRepo) MarkOverride(ctx context.Context, id, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
+}
 func (m *mockRecurrenceRepo) Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error) {
 	args := m.Called(ctx, ruleID, at, timeLocal, duration)
 	return args.Get(0).(models.RecurrenceRule), args.Error(1)
@@ -48,7 +54,10 @@ func scopedSvc(lessonRepo *mockLessonRepo, ruleRepo *mockRecurrenceRepo) service
 }
 
 // Перенос одного вхождения не трогает правило: иначе перетаскивание урока
-// мышью незаметно сдвигало бы всю серию.
+// мышью незаметно сдвигало бы всю серию. Само вхождение при этом помечается
+// вручную правленным — иначе ближайшее «это и все следующие» снесёт перенос
+// (DeleteFutureByRule смотрит ровно на is_override) и материализация вернёт
+// урок на место по расписанию.
 func TestLessonUpdate_ScopeOne(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	ruleRepo := new(mockRecurrenceRepo)
@@ -56,12 +65,55 @@ func TestLessonUpdate_ScopeOne(t *testing.T) {
 
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(seriesLesson(), nil)
 	lessonRepo.On("Update", mock.Anything, lessonID, updateLessonReq).Return(expectedLesson, nil)
+	lessonRepo.On("MarkOverride", mock.Anything, lessonID).Return(nil)
 
 	_, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "one")
 
 	require.NoError(t, err)
+	lessonRepo.AssertExpectations(t)
 	ruleRepo.AssertNotCalled(t, "Split")
 	ruleRepo.AssertNotCalled(t, "UpdateTiming")
+}
+
+// Отметка «проведён» и заметка — не отклонение от расписания: правило задаёт
+// время, а не статус. Пометь их — и «это и все следующие» перестанет двигать
+// урок, к которому просто дописали «принести учебник».
+func TestLessonUpdate_StatusOnlyNoOverride(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	ruleRepo := new(mockRecurrenceRepo)
+	svc := scopedSvc(lessonRepo, ruleRepo)
+
+	lesson := seriesLesson()
+	req := models.UpdateLessonRequest{
+		ScheduledAt:     lesson.ScheduledAt,
+		DurationMinutes: lesson.DurationMinutes,
+		Status:          "completed",
+		Notes:           "принести учебник",
+	}
+
+	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(lesson, nil)
+	lessonRepo.On("Update", mock.Anything, lessonID, req).Return(expectedLesson, nil)
+
+	_, err := svc.Update(context.Background(), lessonID, req, tutorID, "one")
+
+	require.NoError(t, err)
+	lessonRepo.AssertNotCalled(t, "MarkOverride")
+}
+
+// Урок вне серии метить нечем: правило его не пересоздаёт, а лишний UPDATE
+// в самом частом пути правки не нужен.
+func TestLessonUpdate_PlainLessonNoOverride(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	ruleRepo := new(mockRecurrenceRepo)
+	svc := scopedSvc(lessonRepo, ruleRepo)
+
+	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(expectedLesson, nil)
+	lessonRepo.On("Update", mock.Anything, lessonID, updateLessonReq).Return(expectedLesson, nil)
+
+	_, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "one")
+
+	require.NoError(t, err)
+	lessonRepo.AssertNotCalled(t, "MarkOverride")
 }
 
 // «Это и все следующие» разрезает правило: старое закрывается вчерашним днём,
@@ -120,6 +172,9 @@ func TestLessonUpdate_ScopeAll(t *testing.T) {
 
 	require.NoError(t, err)
 	ruleRepo.AssertNotCalled(t, "Split")
+	// Правка всей серии не метит вхождение вручную правленным: иначе следующая
+	// правка «все» обошла бы его стороной.
+	lessonRepo.AssertNotCalled(t, "MarkOverride")
 	lessonRepo.AssertExpectations(t)
 }
 
@@ -171,4 +226,70 @@ func TestLessonDelete_ScopeAllDropsRule(t *testing.T) {
 	require.NoError(t, err)
 	lessonRepo.AssertExpectations(t)
 	ruleRepo.AssertExpectations(t)
+}
+
+// У событий та же защита: «спортзал», перенесённый на вторник, должен пережить
+// последующую правку всей серии.
+func TestEventUpdate_ScopeOneMarksOverride(t *testing.T) {
+	repo := new(mockEventRepo)
+	svc := service.NewEventService(repo, nil)
+
+	ruleID := "rule-1"
+	occ := date(2026, time.September, 8)
+	req := models.UpdateEventRequest{
+		Title: "Спортзал", Kind: "personal", StartsAt: scheduledAt, DurationMinutes: 90,
+	}
+
+	repo.On("GetByID", mock.Anything, "e1", tutorID).
+		Return(models.Event{ID: "e1", RuleID: &ruleID, OccurrenceDate: &occ}, nil)
+	repo.On("Update", mock.Anything, "e1", tutorID, req).Return(models.Event{ID: "e1"}, nil)
+	repo.On("MarkOverride", mock.Anything, "e1", tutorID).Return(nil)
+
+	_, err := svc.Update(context.Background(), "e1", tutorID, req, "one")
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+// Переименование вхождения серии — не отклонение от расписания: логика та же,
+// что у уроков, но живёт в другом сервисе, поэтому проверяется отдельно.
+func TestEventUpdate_RenameOnlyNoOverride(t *testing.T) {
+	repo := new(mockEventRepo)
+	svc := service.NewEventService(repo, nil)
+
+	ruleID := "rule-1"
+	occ := date(2026, time.September, 8)
+	current := models.Event{
+		ID: "e1", Title: "Спортзал", Kind: "personal", StartsAt: scheduledAt,
+		DurationMinutes: 90, RuleID: &ruleID, OccurrenceDate: &occ,
+	}
+	req := models.UpdateEventRequest{
+		Title: "Зал с тренером", Kind: "personal", StartsAt: scheduledAt, DurationMinutes: 90,
+	}
+
+	repo.On("GetByID", mock.Anything, "e1", tutorID).Return(current, nil)
+	repo.On("Update", mock.Anything, "e1", tutorID, req).Return(models.Event{ID: "e1"}, nil)
+
+	_, err := svc.Update(context.Background(), "e1", tutorID, req, "one")
+
+	require.NoError(t, err)
+	repo.AssertNotCalled(t, "MarkOverride")
+}
+
+// Одиночное событие вне серии не метится.
+func TestEventUpdate_PlainEventNoOverride(t *testing.T) {
+	repo := new(mockEventRepo)
+	svc := service.NewEventService(repo, nil)
+
+	req := models.UpdateEventRequest{
+		Title: "Врач", Kind: "personal", StartsAt: scheduledAt, DurationMinutes: 30,
+	}
+
+	repo.On("GetByID", mock.Anything, "e1", tutorID).Return(models.Event{ID: "e1"}, nil)
+	repo.On("Update", mock.Anything, "e1", tutorID, req).Return(models.Event{ID: "e1"}, nil)
+
+	_, err := svc.Update(context.Background(), "e1", tutorID, req, "one")
+
+	require.NoError(t, err)
+	repo.AssertNotCalled(t, "MarkOverride")
 }

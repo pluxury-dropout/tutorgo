@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { studentsApi, StudentInput, StudentListParams } from '@/lib/api/students'
+import { courseKeys } from '@/lib/hooks/useCourses'
+import { OnboardingStudentInput } from '@/types/api'
 
 export const studentKeys = {
   all:    ['students'] as const,
@@ -35,6 +37,20 @@ export function useUpdateStudent(id: string) {
     onSuccess:  (updated) => {
       qc.invalidateQueries({ queryKey: studentKeys.all })
       qc.setQueryData(studentKeys.detail(id), updated)
+    },
+  })
+}
+
+// Быстрый онбординг заводит ученика, курс и серию уроков одним сабмитом —
+// инвалидируем все три дерева, иначе созданное не появится без перезагрузки.
+export function useOnboardStudent() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: OnboardingStudentInput) => studentsApi.onboard(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: studentKeys.all })
+      qc.invalidateQueries({ queryKey: courseKeys.all })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
     },
   })
 }

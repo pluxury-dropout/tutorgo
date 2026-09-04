@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { lessonSchema, LessonFormValues } from '@/schemas/lesson'
 import { Lesson, ApiError } from '@/types/api'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
-import { generateDates, lessonsPlural, WEEK_DAYS, RecurrenceOptions, RecurrenceType } from '@/lib/recurrence'
+import { WEEK_DAYS, RecurrenceOptions, RecurrenceType } from '@/lib/recurrence'
 import { useConflicts } from '@/lib/hooks/useEvents'
 import { formatTimeRange } from '@/lib/eventKind'
 import { AlertTriangle } from 'lucide-react'
@@ -101,14 +101,7 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
       }
     : undefined
 
-  // Превью считаем той же функцией, что потом раскатает серию, — иначе кнопка врёт.
   const daysMissing = recurrence?.type === 'weekly_custom' && recDays.length === 0
-  const preview = recurrence && dateVal && !daysMissing
-    ? generateDates(new Date(`${dateVal}T${timeStr}`).toISOString(), recurrence, courseEndAt)
-    : []
-  const lastDate = preview.length
-    ? new Date(preview[preview.length - 1]).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
-    : ''
 
   // Занятость слота. Предупреждение не блокирует сохранение: наложение бывает
   // осознанным, а решает репетитор. При правке урок исключает сам себя.
@@ -306,8 +299,8 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
                     />
                     <p className="text-xs text-muted-foreground">
                       {courseEndAt
-                        ? 'Оставьте пустым — уроки создадутся до окончания курса'
-                        : 'Оставьте пустым — создастся на 1 год вперёд'}
+                        ? 'Оставьте пустым — уроки будут идти до окончания курса'
+                        : 'Оставьте пустым — серия будет бессрочной, уроки добавляются автоматически'}
                     </p>
                   </div>
                 </>
@@ -317,14 +310,11 @@ export function LessonForm({ open, onClose, onSubmit, initial, courseEndAt }: Le
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
+            {/* Числа на кнопке нет намеренно: даты раскатывает сервер по
+                правилу и материализует только горизонт, поэтому любое «N
+                уроков» здесь было бы выдумкой. */}
             <Button type="submit" disabled={isSubmitting || daysMissing}>
-              {isSubmitting
-                ? 'Создание...'
-                : recurrence
-                  ? preview.length
-                    ? `Создать ${lessonsPlural(preview.length)} (до ${lastDate})`
-                    : 'Создать уроки'
-                  : 'Сохранить'}
+              {isSubmitting ? 'Создание...' : recurrence ? 'Создать серию' : 'Сохранить'}
             </Button>
           </div>
         </form>

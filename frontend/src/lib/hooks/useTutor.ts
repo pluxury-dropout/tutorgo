@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tutorsApi, TutorUpdateInput } from '@/lib/api/tutors'
+import { tutorsApi, icsApi, TutorUpdateInput } from '@/lib/api/tutors'
 
 export function useTutor(id: string) {
   return useQuery({
@@ -18,4 +18,14 @@ export function useUpdateTutor() {
       qc.setQueryData(['tutor', tutor.id], tutor)
     },
   })
+}
+
+// Токен нигде не кешируется React Query — GET-ручки «а есть ли ссылка» нет,
+// состояние живёт локально на странице профиля (см. её комментарий).
+export function useEnsureIcsLink() {
+  return useMutation({ mutationFn: icsApi.ensureLink })
+}
+
+export function useRevokeIcsLink() {
+  return useMutation({ mutationFn: icsApi.revokeLink })
 }

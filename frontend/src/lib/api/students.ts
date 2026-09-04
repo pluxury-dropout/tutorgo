@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Student, PagedResponse } from '@/types/api'
+import { Student, PagedResponse, OnboardingStudentInput, OnboardingResult } from '@/types/api'
 
 export interface StudentInput {
   first_name: string
@@ -29,4 +29,6 @@ export const studentsApi = {
   invite: (id: string) =>
     api.post<{ invite_token: string; expires_at: string }>(`/students/${id}/invite`)
       .then((r) => r.data),
+  onboard: (data: OnboardingStudentInput) =>
+    api.post<OnboardingResult>('/onboarding/student', data).then((r) => r.data),
 }

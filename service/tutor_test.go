@@ -62,6 +62,20 @@ func (m *mockTutorRepo) UpdatePassword(ctx context.Context, id string, hash stri
 	return m.Called(ctx, id, hash).Error(0)
 }
 
+func (m *mockTutorRepo) GetIDByICSToken(ctx context.Context, token string) (string, error) {
+	args := m.Called(ctx, token)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockTutorRepo) GetICSToken(ctx context.Context, tutorID string) (string, error) {
+	args := m.Called(ctx, tutorID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockTutorRepo) SetICSToken(ctx context.Context, tutorID, token string) error {
+	return m.Called(ctx, tutorID, token).Error(0)
+}
+
 func TestCreateTutor_Success(t *testing.T) {
 	repo := new(mockTutorRepo)
 	svc := service.NewTutorService(repo, nil, nil)

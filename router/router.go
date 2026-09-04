@@ -61,6 +61,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	taskService := service.NewTaskService(taskRepo)
 	eventService := service.NewEventService(eventRepo, recurrenceService)
 	calendarService := service.NewCalendarService(lessonService, eventRepo, taskRepo)
+	onboardingService := service.NewOnboardingService(studentService, courseService, lessonService)
+	icsService := service.NewICSService(calendarService, tutorRepo)
 	whiteboardService := service.NewWhiteboardService(whiteboardRepo)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, service.StubProvider{})
 	materialService := service.NewMaterialService(materialRepo)
@@ -81,6 +83,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
 	authHandler := handlers.NewAuthHandler(tutorService, registrationService, refreshTokenService, log, cfg.JWTSecret, cfg.Env == "production")
 	studentHandler := handlers.NewStudentHandler(studentService, log)
+	onboardingHandler := handlers.NewOnboardingHandler(onboardingService, log)
+	icsHandler := handlers.NewICSHandler(icsService, log)
 	courseHandler := handlers.NewCourseHandler(courseService, log)
 	paymentHandler := handlers.NewPaymentHandler(paymentService, log)
 	lessonHandler := handlers.NewLessonHandler(lessonService, log)
@@ -148,6 +152,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
 	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
+	// Публичная по назначению: сюда ходит Google Календарь без авторизации,
+	// секрет — сама ссылка. Rate-limit держит перебор токенов в рамках.
+	r.GET("/ics/:token", middleware.RateLimit(rate.Every(time.Second), 10), icsHandler.Feed)
 	r.POST("/webhooks/livekit", callHandler.LiveKitWebhook)
 	r.POST("/subscription/webhook", subscriptionHandler.Webhook)
 
@@ -192,6 +199,11 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 		auth.GET("/students", studentHandler.GetAll)
 		auth.POST("/students", studentHandler.Create)
+		// Ученик + курс + серия одним сабмитом: обычный /students остаётся для
+		// правки карточки, этот — для первого шага.
+		auth.POST("/onboarding/student", onboardingHandler.CreateStudent)
+		auth.POST("/ics/link", icsHandler.EnsureLink)
+		auth.DELETE("/ics/link", icsHandler.RevokeLink)
 		auth.GET("/students/:id", studentHandler.GetByID)
 		auth.PUT("/students/:id", studentHandler.Update)
 		auth.DELETE("/students/:id", studentHandler.Delete)
@@ -220,13 +232,10 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 		auth.GET("/lessons", lessonHandler.GetByCourse)
 		auth.POST("/lessons", lessonHandler.Create)
-		auth.POST("/lessons/bulk", lessonHandler.CreateBulk)
 		auth.DELETE("/lessons", lessonHandler.DeleteByCourse)
 		auth.GET("/lessons/:id", lessonHandler.GetByID)
 		auth.PUT("/lessons/:id", lessonHandler.Update)
 		auth.DELETE("/lessons/:id", lessonHandler.Delete)
-		auth.DELETE("/lessons/series/:seriesId", lessonHandler.DeleteSeries)
-		auth.PATCH("/lessons/series/:seriesId", lessonHandler.UpdateSeries)
 
 		// /calendar — только уроки (дашборд, сайдбар), /calendar/feed — единая лента.
 		auth.GET("/calendar", lessonHandler.GetCalendar)

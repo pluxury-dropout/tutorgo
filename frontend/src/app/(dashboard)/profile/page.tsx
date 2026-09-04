@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,9 +8,9 @@ import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { useAuthStore } from '@/stores/auth'
-import { useTutor, useUpdateTutor } from '@/lib/hooks/useTutor'
+import { useTutor, useUpdateTutor, useEnsureIcsLink, useRevokeIcsLink } from '@/lib/hooks/useTutor'
 import { tutorProfileSchema, TutorProfileValues, changePasswordSchema, ChangePasswordValues } from '@/schemas/tutor'
-import { tutorsApi } from '@/lib/api/tutors'
+import { tutorsApi, icsFeedUrl } from '@/lib/api/tutors'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +28,37 @@ export default function ProfilePage() {
     mutationFn: ({ current_password, new_password }: ChangePasswordValues) =>
       tutorsApi.changePassword(user!.id, { current_password, new_password }),
   })
+
+  // Токен живёт только в state страницы: GET-ручки «а есть ли ссылка» нет
+  // (сознательно, см. handlers/ics.go), а дёргать EnsureLink молча при заходе
+  // на страницу значило бы выпускать подписку всем, кто просто открыл профиль.
+  const [icsToken, setIcsToken] = useState<string | null>(null)
+  const ensureIcsLink = useEnsureIcsLink()
+  const revokeIcsLink = useRevokeIcsLink()
+
+  function handleCreateIcsLink() {
+    ensureIcsLink.mutate(undefined, {
+      onSuccess: setIcsToken,
+      onError: () => toast.error('Не удалось создать ссылку'),
+    })
+  }
+
+  function handleCopyIcsLink() {
+    if (!icsToken) return
+    navigator.clipboard.writeText(icsFeedUrl(icsToken))
+    toast.success('Ссылка скопирована')
+  }
+
+  function handleRevokeIcsLink() {
+    if (!confirm('Отозвать ссылку? Все, кто на неё подписан в Google Календаре или на телефоне, перестанут получать обновления расписания.')) return
+    revokeIcsLink.mutate(undefined, {
+      onSuccess: () => {
+        setIcsToken(null)
+        toast.success('Ссылка отозвана')
+      },
+      onError: () => toast.error('Не удалось отозвать ссылку'),
+    })
+  }
 
   const profileForm = useForm<TutorProfileValues>({
     resolver: zodResolver(tutorProfileSchema),
@@ -174,6 +205,44 @@ export default function ProfilePage() {
           <Link href="/subscription" className="text-sm text-primary underline underline-offset-2">
             Управлять
           </Link>
+        </div>
+
+        {/* Подписка на календарь (ICS-фид) */}
+        <div className="border rounded-xl bg-card p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">Подписка на календарь</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Расписание можно открыть в Google Календаре или на телефоне. Синхронизация
+              односторонняя — только чтение, править занятия по-прежнему нужно здесь.
+            </p>
+          </div>
+
+          {icsToken ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Input readOnly value={icsFeedUrl(icsToken)} className="font-mono text-xs truncate" />
+                <Button type="button" variant="outline" size="sm" onClick={handleCopyIcsLink}>
+                  Копировать
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Google Календарь: «Другие календари» → «Подписаться по URL» → вставьте ссылку.
+              </p>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleRevokeIcsLink}
+                disabled={revokeIcsLink.isPending}
+              >
+                Отозвать
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={handleCreateIcsLink} disabled={ensureIcsLink.isPending}>
+              {ensureIcsLink.isPending ? 'Создаю...' : 'Создать ссылку'}
+            </Button>
+          )}
         </div>
       </div>
     </>
