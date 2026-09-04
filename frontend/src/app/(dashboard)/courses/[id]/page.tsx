@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, Layers, ListX, Wallet, Users, CalendarDays } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, UserPlus, X, Plus, ClipboardList, ListX, Wallet, Users, CalendarDays } from 'lucide-react'
 
 import {
   useCourse,
@@ -21,15 +21,12 @@ import {
   useUpdateLesson,
   useDeleteLesson,
   useDeleteLessonsByCourse,
-  useDeleteSeries,
-  useUpdateSeries,
 } from '@/lib/hooks/useLessons'
 import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment } from '@/lib/hooks/usePayments'
 import { useStudents } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { LessonForm } from '@/components/lessons/LessonForm'
 import { AttendanceDialog } from '@/components/lessons/AttendanceDialog'
-import { SeriesDialog } from '@/components/lessons/SeriesDialog'
 import { PaymentForm } from '@/components/payments/PaymentForm'
 import { HomeworkEditPopover } from '@/components/homework/HomeworkEditPopover'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -37,7 +34,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { CourseFormValues } from '@/schemas/course'
 import { LessonFormValues } from '@/schemas/lesson'
-import { SeriesUpdateInput, LessonUpdateInput } from '@/lib/api/lessons'
+import { LessonUpdateInput } from '@/lib/api/lessons'
 import { RecurrenceScopeDialog } from '@/components/calendar/RecurrenceScopeDialog'
 import { toRecurrenceInput, RecurrenceOptions } from '@/lib/recurrence'
 import { PaymentFormValues } from '@/schemas/payment'
@@ -92,7 +89,6 @@ export default function CourseDetailPage() {
   const [courseFormOpen, setCourseFormOpen]     = useState(false)
   const [lessonFormOpen, setLessonFormOpen]     = useState(false)
   const [editingLesson, setEditingLesson]       = useState<Lesson | undefined>()
-  const [seriesLesson, setSeriesLesson]         = useState<Lesson | undefined>()
   const [attendanceLesson, setAttendanceLesson] = useState<string | null>(null)
   const [paymentFormOpen, setPaymentFormOpen]   = useState(false)
   const [homeworkAnchor, setHomeworkAnchor]     = useState<Element | null>(null)
@@ -111,8 +107,6 @@ export default function CourseDetailPage() {
   const updateLesson         = useUpdateLesson(editingLesson?.id ?? '', id)
   const deleteLesson         = useDeleteLesson(id)
   const deleteLessonsByCourse = useDeleteLessonsByCourse(id)
-  const deleteSeries         = useDeleteSeries(id)
-  const updateSeries         = useUpdateSeries(id)
   const createPayment        = useCreatePayment(id)
   const updatePayment = useUpdatePayment(id)
   const deletePayment = useDeletePayment(id)
@@ -214,14 +208,6 @@ export default function CourseDetailPage() {
     if (!confirm(`Удалить все ${lessonsTotal} уроков курса?`)) return
     await deleteLessonsByCourse.mutateAsync()
     toast.success('Все уроки удалены')
-  }
-
-  async function handleSeriesDelete(seriesId: string, fromDate?: string, toDate?: string) {
-    await deleteSeries.mutateAsync({ seriesId, fromDate, toDate })
-  }
-
-  async function handleSeriesUpdate(seriesId: string, data: SeriesUpdateInput) {
-    await updateSeries.mutateAsync({ seriesId, data })
   }
 
   async function handlePaymentSubmit(values: PaymentFormValues) {
@@ -542,14 +528,6 @@ export default function CourseDetailPage() {
                       <ClipboardList className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  {lesson.series_id && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8"
-                      onClick={() => setSeriesLesson(lesson)}
-                      title="Управление серией"
-                    >
-                      <Layers className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
                   <Button size="icon" variant="ghost" className="h-8 w-8"
                     onClick={() => openEditLesson(lesson)}>
                     <Pencil className="h-3.5 w-3.5" />
@@ -622,16 +600,6 @@ export default function CourseDetailPage() {
         onPick={applyScope}
         onClose={() => setScopeAsk(null)}
       />
-
-      {seriesLesson && (
-        <SeriesDialog
-          lesson={seriesLesson}
-          open={!!seriesLesson}
-          onClose={() => setSeriesLesson(undefined)}
-          onDelete={handleSeriesDelete}
-          onUpdate={handleSeriesUpdate}
-        />
-      )}
     </>
   )
 }

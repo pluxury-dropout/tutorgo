@@ -71,7 +71,6 @@ export interface Lesson {
   duration_minutes: number
   status: LessonStatus
   notes: string
-  series_id?: string
   cycle_position?: number
   cycle_size?: number
   /** Заполнен только у вхождения серии — правка тогда спрашивает область. */

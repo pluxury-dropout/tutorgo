@@ -12,15 +12,12 @@ import (
 
 type LessonService interface {
 	Create(ctx context.Context, req models.CreateLessonRequest, tutorID string) (models.Lesson, error)
-	CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error)
 	GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error)
 	GetByCoursePaged(ctx context.Context, courseID string, tutorID string, p models.Pagination) (models.PagedResponse[models.Lesson], error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Lesson, error)
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID, scope string) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
-	DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error
-	UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
@@ -172,20 +169,6 @@ func (s *lessonService) createSeries(ctx context.Context, req models.CreateLesso
 	}
 	globalCalendarCache.Invalidate(tutorID)
 	return lesson, nil
-}
-
-func (s *lessonService) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest, tutorID string) ([]models.Lesson, error) {
-	course, err := s.resolveCourse(ctx, tutorID, req.CourseID, req.StudentID, req.Subject, firstScheduledAt(req.ScheduledAts))
-	if err != nil {
-		return nil, err
-	}
-	req.CourseID = course.ID
-
-	lessons, err := s.repo.CreateBulk(ctx, req)
-	if err == nil {
-		globalCalendarCache.Invalidate(tutorID)
-	}
-	return lessons, err
 }
 
 func (s *lessonService) GetByCourse(ctx context.Context, courseID string, tutorID string) ([]models.Lesson, error) {
@@ -357,25 +340,6 @@ func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tut
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
 	err = s.repo.DeleteByCourse(ctx, courseID, tutorID)
-	if err == nil {
-		globalCalendarCache.Invalidate(tutorID)
-	}
-	return err
-}
-
-func (s *lessonService) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
-	err := s.repo.DeleteSeries(ctx, seriesID, tutorID, fromDate, toDate)
-	if err == nil {
-		globalCalendarCache.Invalidate(tutorID)
-	}
-	return err
-}
-
-func (s *lessonService) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
-	if req.NewTime == nil && req.DurationMinutes == nil && req.Notes == nil {
-		return fmt.Errorf("update requires at least one field: %w", ErrBadRequest)
-	}
-	err := s.repo.UpdateSeries(ctx, seriesID, tutorID, req)
 	if err == nil {
 		globalCalendarCache.Invalidate(tutorID)
 	}

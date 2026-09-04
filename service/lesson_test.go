@@ -53,11 +53,6 @@ func (m *mockLessonRepo) GetCalendar(ctx context.Context, tutorID string, from s
 	return args.Get(0).([]models.CalendarLesson), args.Error(1)
 }
 
-func (m *mockLessonRepo) CreateBulk(ctx context.Context, req models.CreateBulkLessonRequest) ([]models.Lesson, error) {
-	args := m.Called(ctx, req)
-	return args.Get(0).([]models.Lesson), args.Error(1)
-}
-
 func (m *mockLessonRepo) AutoComplete(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
@@ -65,14 +60,6 @@ func (m *mockLessonRepo) AutoComplete(ctx context.Context) (int64, error) {
 
 func (m *mockLessonRepo) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
 	return m.Called(ctx, courseID, tutorID).Error(0)
-}
-
-func (m *mockLessonRepo) DeleteSeries(ctx context.Context, seriesID string, tutorID string, fromDate *string, toDate *string) error {
-	return m.Called(ctx, seriesID, tutorID, fromDate, toDate).Error(0)
-}
-
-func (m *mockLessonRepo) UpdateSeries(ctx context.Context, seriesID string, tutorID string, req models.UpdateSeriesRequest) error {
-	return m.Called(ctx, seriesID, tutorID, req).Error(0)
 }
 
 func (m *mockLessonRepo) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
@@ -197,24 +184,6 @@ func TestLessonCreate_ArchivedCourse(t *testing.T) {
 	assert.ErrorIs(t, err, service.ErrConflict)
 	assert.Empty(t, lesson)
 	lessonRepo.AssertNotCalled(t, "Create")
-	courseRepo.AssertExpectations(t)
-}
-
-func TestLessonCreateBulk_ArchivedCourse(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	payRepo := new(mockPaymentRepo)
-	svc := service.NewLessonService(lessonRepo, courseRepo, payRepo, nil)
-
-	archivedCourse := models.Course{ID: courseID, TutorID: tutorID, IsActive: false}
-	courseRepo.On("GetByID", mock.Anything, createLessonReq.CourseID, tutorID).Return(archivedCourse, nil)
-
-	bulkReq := models.CreateBulkLessonRequest{CourseID: createLessonReq.CourseID}
-	lessons, err := svc.CreateBulk(context.Background(), bulkReq, tutorID)
-
-	assert.ErrorIs(t, err, service.ErrConflict)
-	assert.Empty(t, lessons)
-	lessonRepo.AssertNotCalled(t, "CreateBulk")
 	courseRepo.AssertExpectations(t)
 }
 
@@ -517,49 +486,6 @@ func TestLessonGetByPeriod_CourseNotFound(t *testing.T) {
 	lessonRepo.AssertNotCalled(t, "GetByPeriod")
 }
 
-// DeleteSeries
-
-func TestDeleteSeries_NoRange(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
-
-	lessonRepo.On("DeleteSeries", mock.Anything, "series-1", tutorID, (*string)(nil), (*string)(nil)).Return(nil)
-
-	err := svc.DeleteSeries(context.Background(), "series-1", tutorID, nil, nil)
-
-	assert.NoError(t, err)
-	lessonRepo.AssertExpectations(t)
-}
-
-func TestDeleteSeries_WithFromAndTo(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
-
-	from := "2026-06-05T00:00:00Z"
-	to   := "2026-12-31T23:59:59Z"
-	lessonRepo.On("DeleteSeries", mock.Anything, "series-1", tutorID, &from, &to).Return(nil)
-
-	err := svc.DeleteSeries(context.Background(), "series-1", tutorID, &from, &to)
-
-	assert.NoError(t, err)
-	lessonRepo.AssertExpectations(t)
-}
-
-func TestDeleteSeries_RepoError(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
-
-	lessonRepo.On("DeleteSeries", mock.Anything, "series-1", tutorID, (*string)(nil), (*string)(nil)).Return(errors.New("db error"))
-
-	err := svc.DeleteSeries(context.Background(), "series-1", tutorID, nil, nil)
-
-	assert.Error(t, err)
-	lessonRepo.AssertExpectations(t)
-}
-
 func TestGetCurrentCycles_ReturnsActiveCycle(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	paymentRepo := new(mockPaymentRepo)
@@ -773,31 +699,3 @@ func TestLessonCreate_NeitherCourseNorStudent(t *testing.T) {
 	courseRepo.AssertNotCalled(t, "GetByID")
 }
 
-func TestLessonCreateBulk_ImplicitCourse(t *testing.T) {
-	lessonRepo := new(mockLessonRepo)
-	courseRepo := new(mockCourseRepo)
-	svc := newLessonSvc(lessonRepo, courseRepo)
-
-	// started_at неявного курса — дата первого урока серии, не «сегодня».
-	first := time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC)
-	req := models.CreateBulkLessonRequest{
-		StudentID:       implicitStudentID,
-		Subject:         "Физика",
-		ScheduledAts:    []string{first.Format(time.RFC3339), "2026-05-08T10:00:00Z"},
-		DurationMinutes: 60,
-	}
-	implicit := models.Course{ID: courseID, TutorID: tutorID, Subject: "Физика", IsActive: true}
-
-	courseRepo.On("GetOrCreateIndividual", mock.Anything, tutorID, implicitStudentID, "Физика", first).
-		Return(implicit, nil)
-	lessonRepo.On("CreateBulk", mock.Anything, mock.MatchedBy(func(r models.CreateBulkLessonRequest) bool {
-		return r.CourseID == courseID
-	})).Return([]models.Lesson{expectedLesson}, nil)
-
-	lessons, err := svc.CreateBulk(context.Background(), req, tutorID)
-
-	assert.NoError(t, err)
-	assert.Len(t, lessons, 1)
-	courseRepo.AssertExpectations(t)
-	lessonRepo.AssertExpectations(t)
-}
