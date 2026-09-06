@@ -128,6 +128,7 @@ export default function CalendarPage() {
           isGroup:         l.is_group,
           scheduledAt:     item.starts_at,
           durationMinutes: item.duration_minutes,
+          ruleId:          l.rule_id ?? null,
           cyclePosition:   l.cycle_position ?? null,
           cycleSize:       l.cycle_size ?? null,
         },
@@ -242,6 +243,7 @@ export default function CalendarPage() {
         isGroup:         p.isGroup,
         scheduledAt:     p.scheduledAt,
         durationMinutes: p.durationMinutes,
+        ruleId:          (p.ruleId as string | null) ?? undefined,
       },
     })
   }
