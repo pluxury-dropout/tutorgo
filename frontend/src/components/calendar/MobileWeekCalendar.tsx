@@ -3,10 +3,13 @@
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { useCalendarFeed, useRescheduleLesson } from '@/lib/hooks/useCalendar'
+import { useUpdateEvent } from '@/lib/hooks/useEvents'
+import { useRescheduleTask } from '@/lib/hooks/useTasks'
 import { effectiveStatus } from '@/lib/lessonStatus'
 import { KIND_COLORS, TASK_COLORS } from '@/lib/eventKind'
 import { stripHtml } from '@/lib/stripHtml'
 import { warnOnConflict } from '@/lib/conflictWarning'
+import { dropSlot, HOUR_PX, HOURS, GRID_H, GUTTER_PX } from '@/lib/weekGridDrop'
 import { useMinuteTick } from '@/lib/hooks/useMinuteTick'
 import { LessonQuickPopover } from '@/components/lessons/LessonQuickPopover'
 import { EventQuickPopover } from '@/components/calendar/EventQuickPopover'
@@ -15,13 +18,14 @@ import type { QuickLesson } from '@/components/lessons/LessonQuickPopover'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const HOUR_PX  = 56
-const HOURS    = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
-const GRID_H   = HOURS.length * HOUR_PX
-
 // long-press before drag engages, so a normal scroll/tap isn't hijacked
 const DRAG_LONG_PRESS_MS = 300
 const DRAG_SLOP_PX       = 10
+// У края сетки неделя листается сама, как на десктопе (armEdgeTimer в page.tsx).
+// Зона узкая и пауза длиннее, чем там: колонка на телефоне ~50px, широкая зона
+// съела бы понедельник и воскресенье — на них стало бы не бросить.
+const EDGE_ZONE_PX  = 18
+const EDGE_FLIP_MS  = 600
 
 const DOW_MINI = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const MONTHS_GEN = [
@@ -76,8 +80,27 @@ function itemStyle(item: CalendarItem): { bg: string; text: string } {
   return item.task.status === 'done' ? TASK_COLORS.done : TASK_COLORS.active
 }
 
+/** Подпись блока: у урока — предмет (имя ученика уходит во вторую строку). */
+function itemLabel(item: CalendarItem): string {
+  if (item.type === 'lesson') return item.lesson.subject
+  if (item.type === 'task')   return stripHtml(item.title)
+  return item.title
+}
+
 /** Запись ленты плюс её колонка в кластере пересечений. */
 type PlacedItem = CalendarItem & { _col: number; _cols: number }
+
+/** Перетаскиваемый блок. Позиция — абсолютная (clientX/Y пальца), а не дельта:
+ *  во время drag неделя может пролистаться, и дельта от точки захвата потеряла
+ *  бы смысл. Размеры и точка захвата внутри карточки нужны призраку — он
+ *  fixed-оверлей и живёт, даже когда исходная карточка ушла с экрана. */
+type DragState = {
+  item:      CalendarItem
+  pointerId: number
+  grabX: number; grabY: number
+  w: number; h: number
+  x: number; y: number
+}
 
 // ─── MobileWeekCalendar ───────────────────────────────────────────────────────
 
@@ -116,89 +139,180 @@ export function MobileWeekCalendar({
   }, [weekStart])
 
   const { data: items = [] } = useCalendarFeed(rangeFrom, rangeTo)
-  const reschedule = useRescheduleLesson()
+  const reschedule     = useRescheduleLesson()
+  const updateEvent    = useUpdateEvent()
+  const rescheduleTask = useRescheduleTask()
 
   // ─── drag-to-reschedule (touch long-press) ─────────────────────────────────
 
-  const dragTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const dragStartRef    = useRef<{ x: number; y: number } | null>(null)
-  const dragEngagedRef  = useRef(false)
-  const gridRef         = useRef<HTMLDivElement>(null)
-  const [drag, setDrag] = useState<{ lesson: CalendarLesson; pointerId: number; deltaY: number; deltaX: number } | null>(null)
+  const dragTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pressRef       = useRef<{ x: number; y: number } | null>(null)
+  const dragEngagedRef = useRef(false)
+  const gridRef        = useRef<HTMLDivElement>(null)
+  const edgeTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const edgeSideRef    = useRef<'left' | 'right' | null>(null)
 
-  function clearDragTimer() {
-    if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
-    dragStartRef.current = null
+  const [drag, setDrag] = useState<DragState | null>(null)
+  // Логика drag живёт на window (см. эффект ниже), а тот читает состояние из
+  // ref: карточка под пальцем может исчезнуть на смене недели. Ref — источник
+  // истины, state нужен только чтобы перерисовать призрак.
+  const dragRef = useRef<DragState | null>(null)
+
+  function applyDrag(next: DragState | null) {
+    dragRef.current = next
+    setDrag(next)
   }
 
-  function handleEventPointerDown(e: React.PointerEvent<HTMLDivElement>, lesson: CalendarLesson) {
-    dragStartRef.current = { x: e.clientX, y: e.clientY }
-    const target = e.currentTarget
+  function clearPress() {
+    if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
+    pressRef.current = null
+  }
+
+  function clearEdgeTimer() {
+    if (edgeTimerRef.current) { clearInterval(edgeTimerRef.current); edgeTimerRef.current = null }
+    edgeSideRef.current = null
+  }
+
+  function handleCardPointerDown(e: React.PointerEvent<HTMLDivElement>, item: CalendarItem) {
+    dragEngagedRef.current = false
+    // currentTarget обнуляется после обработчика — геометрию снимаем сразу
+    const rect      = e.currentTarget.getBoundingClientRect()
+    const x         = e.clientX
+    const y         = e.clientY
+    const pointerId = e.pointerId
+    pressRef.current = { x, y }
     // ponytail: touch-action:none lives statically in the card style — setting it here is too
     // late, the browser locks scroll behavior at touchstart (before this pointerdown fires)
-    const pointerId = e.pointerId
     dragTimerRef.current = setTimeout(() => {
-      target.setPointerCapture(pointerId)
       dragEngagedRef.current = true
-      setDrag({ lesson, pointerId, deltaY: 0, deltaX: 0 })
+      applyDrag({
+        item, pointerId,
+        grabX: x - rect.left, grabY: y - rect.top,
+        w: rect.width, h: rect.height,
+        x, y,
+      })
     }, DRAG_LONG_PRESS_MS)
   }
 
-  function handleEventPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    // ponytail: check ref not state — setDrag is async, drag state is stale until next render
-    if (dragEngagedRef.current) {
-      setDrag(d => d && {
-        ...d,
-        deltaY: e.clientY - (dragStartRef.current?.y ?? e.clientY),
-        deltaX: e.clientX - (dragStartRef.current?.x ?? e.clientX),
-      })
+  /** Куда упал блок: колонка под его центром и время под его верхом — в той
+   *  неделе, что показана сейчас (за drag её могло пролистать у края). */
+  function commitDrag(d: DragState) {
+    const grid = gridRef.current
+    if (!grid) return
+    const { day, minutes } = dropSlot(
+      { left: d.x - d.grabX, top: d.y - d.grabY, width: d.w },
+      grid.getBoundingClientRect(),
+      d.item.duration_minutes,
+    )
+
+    const start = new Date(weekStart)
+    start.setDate(start.getDate() + day)
+    start.setHours(0, minutes, 0, 0)
+    if (start.getTime() === new Date(d.item.starts_at).getTime()) return
+
+    const iso      = start.toISOString()
+    const duration = d.item.duration_minutes
+
+    if (d.item.type === 'lesson') {
+      const l = d.item.lesson
+      reschedule.mutate(
+        { id: l.id, data: { scheduled_at: iso, duration_minutes: duration, status: l.status, notes: l.notes } },
+        { onSuccess: () => warnOnConflict({ starts_at: iso, duration_minutes: duration, exclude_type: 'lesson', exclude_id: l.id }) },
+      )
       return
     }
-    if (dragStartRef.current) {
-      const dx = Math.abs(e.clientX - dragStartRef.current.x)
-      const dy = Math.abs(e.clientY - dragStartRef.current.y)
-      if (dx > DRAG_SLOP_PX || dy > DRAG_SLOP_PX) clearDragTimer()
-    }
-  }
 
-  function handleEventPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    clearDragTimer()
-    if (!drag || e.pointerId !== drag.pointerId) return
-    const minutesDelta = Math.round(drag.deltaY / HOUR_PX * 2) * 30
-    const colWidth     = gridRef.current ? gridRef.current.clientWidth / 7 : 0
-    const dayDelta     = colWidth > 0 ? Math.round(drag.deltaX / colWidth) : 0
-    if (minutesDelta !== 0 || dayDelta !== 0) {
-      const base     = new Date(drag.lesson.scheduled_at)
-      base.setDate(base.getDate() + dayDelta)
-      const newStart = new Date(base.getTime() + minutesDelta * 60_000)
-      reschedule.mutate(
+    if (d.item.type === 'event') {
+      const ev = d.item.event
+      updateEvent.mutate(
         {
-          id:   drag.lesson.id,
+          id:   ev.id,
           data: {
-            scheduled_at:     newStart.toISOString(),
-            duration_minutes: drag.lesson.duration_minutes,
-            status:           drag.lesson.status,
-            notes:            drag.lesson.notes,
+            title:            ev.title,
+            kind:             ev.kind,
+            starts_at:        iso,
+            duration_minutes: duration,
+            color:            ev.color,
+            location:         ev.location,
+            notes:            ev.notes,
           },
         },
-        {
-          onSuccess: () => warnOnConflict({
-            starts_at:        newStart.toISOString(),
-            duration_minutes: drag.lesson.duration_minutes,
-            exclude_type:     'lesson',
-            exclude_id:       drag.lesson.id,
-          }),
-        },
+        { onSuccess: () => warnOnConflict({ starts_at: iso, duration_minutes: duration, exclude_type: 'event', exclude_id: ev.id }) },
       )
+      return
     }
-    setDrag(null)
+
+    // Задачи занятостью не считаются — для них проверки нет.
+    const t = d.item.task
+    rescheduleTask.mutate({
+      id:   t.id,
+      data: { title: t.title, scheduled_at: iso, duration_minutes: duration, status: t.status },
+    })
   }
 
-  function handleEventPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
-    clearDragTimer()
-    dragEngagedRef.current = false
-    setDrag(null)
+  function endDrag(e: PointerEvent, commit: boolean) {
+    clearPress()
+    clearEdgeTimer()
+    const d = dragRef.current
+    if (!d || e.pointerId !== d.pointerId) return
+    applyDrag(null)
+    if (commit) commitDrag(d)
   }
+  // latest-ref: слушатели window ставятся один раз, а завершение drag читает
+  // свежие weekStart и мутации.
+  const endDragRef = useRef(endDrag)
+  useEffect(() => { endDragRef.current = endDrag })
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current
+      if (d) {
+        if (e.pointerId !== d.pointerId) return
+        const next = { ...d, x: e.clientX, y: e.clientY }
+        dragRef.current = next
+        setDrag(next)
+
+        // край сетки — листаем неделю, пока палец там
+        const grid = gridRef.current
+        if (!grid) return
+        const r    = grid.getBoundingClientRect()
+        const side = e.clientX < r.left + EDGE_ZONE_PX  ? 'left'
+                   : e.clientX > r.right - EDGE_ZONE_PX ? 'right'
+                   : null
+        if (side !== edgeSideRef.current) {
+          clearEdgeTimer()
+          if (side) {
+            edgeSideRef.current = side
+            edgeTimerRef.current = setInterval(() => {
+              setWeekStart(ws => {
+                const next = new Date(ws)
+                next.setDate(next.getDate() + (side === 'left' ? -7 : 7))
+                return next
+              })
+            }, EDGE_FLIP_MS)
+          }
+        }
+        return
+      }
+      const p = pressRef.current
+      if (p && (Math.abs(e.clientX - p.x) > DRAG_SLOP_PX || Math.abs(e.clientY - p.y) > DRAG_SLOP_PX)) {
+        clearPress()
+      }
+    }
+    const onUp     = (e: PointerEvent) => endDragRef.current(e, true)
+    const onCancel = (e: PointerEvent) => endDragRef.current(e, false)
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      clearPress()
+      clearEdgeTimer()
+    }
+  }, [])
 
   // ─── auto-scroll ────────────────────────────────────────────────────────────
 
@@ -364,7 +478,7 @@ export function MobileWeekCalendar({
 
         {/* ── Day strip ── */}
         <div style={{
-          display: 'flex', padding: '8px 6px 8px 30px',
+          display: 'flex', padding: `8px 6px 8px ${GUTTER_PX}px`,
           borderBottom: '1px solid var(--border)',
           background: 'var(--background)', flexShrink: 0,
         }}>
@@ -409,7 +523,7 @@ export function MobileWeekCalendar({
           <div ref={gridRef} style={{ display: 'flex', position: 'relative', height: GRID_H }}>
 
             {/* Time gutter */}
-            <div style={{ width: 30, flexShrink: 0, position: 'relative', height: GRID_H }}>
+            <div style={{ width: GUTTER_PX, flexShrink: 0, position: 'relative', height: GRID_H }}>
               {HOURS.map((h, i) => (
                 <div key={h} style={{
                   position: 'absolute', top: i * HOUR_PX - 6, right: 4,
@@ -468,9 +582,7 @@ export function MobileWeekCalendar({
                     const left     = colW * ev._col
                     const style    = itemStyle(ev)
                     const isPast    = new Date(ev.starts_at).getTime() + ev.duration_minutes * 60_000 < Date.now()
-                    const isDragged = drag?.lesson.id === ev.id
-                    // Перетаскивание пока только для уроков: long-press-механика
-                    // завязана на reschedule урока, обобщать её — отдельная задача.
+                    const isDragged = drag?.item.id === ev.id
                     // Время берём с верхнего уровня ленты: оптимистичный патч
                     // переноса правит его, а не вложенный урок, — иначе второй
                     // подряд перенос отсчитывался бы от старого слота.
@@ -484,13 +596,13 @@ export function MobileWeekCalendar({
                       <div
                         key={`${ev.type}:${ev.id}`}
                         onClick={(e) => {
+                          // клик после переноса гасим: он может прилететь и на
+                          // чужую карточку — палец отпустили над ней
+                          if (dragEngagedRef.current) { dragEngagedRef.current = false; return }
                           if (lesson) openLesson(lesson, e.currentTarget)
                           else if (ev.type === 'event') setSelectedEvent({ event: ev.event, el: e.currentTarget })
                         }}
-                        onPointerDown={lesson ? (e) => handleEventPointerDown(e, lesson) : undefined}
-                        onPointerMove={lesson ? handleEventPointerMove : undefined}
-                        onPointerUp={lesson ? handleEventPointerUp : undefined}
-                        onPointerCancel={lesson ? handleEventPointerCancel : undefined}
+                        onPointerDown={(e) => handleCardPointerDown(e, ev)}
                         style={{
                           position: 'absolute',
                           top, height,
@@ -503,22 +615,18 @@ export function MobileWeekCalendar({
                           fontSize: 9.5, lineHeight: 1.15,
                           cursor: 'pointer',
                           overflow: 'hidden',
-                          zIndex:    isDragged ? 6 : 2,
+                          zIndex: 2,
                           userSelect: 'none',
                           WebkitUserSelect: 'none',
-                          // ponytail: must be static — see handleEventPointerDown.
-                          // Блокируем скролл только там, где есть drag, — на уроках.
-                          touchAction: lesson ? 'none' : undefined,
+                          // ponytail: must be static — see handleCardPointerDown.
+                          touchAction: 'none',
                           filter:          isPast ? 'brightness(0.9)' : undefined,
                           textDecoration:  struck ? 'line-through'    : undefined,
-                          transform:  isDragged ? `translate(${drag.deltaX}px,${drag.deltaY}px) scale(1.03)` : undefined,
-                          boxShadow:  isDragged ? '0 6px 16px -4px rgba(0,0,0,0.35)' : undefined,
+                          opacity:    isDragged ? 0.35 : undefined,
                         }}
                       >
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {/* У урока имя ученика уходит во вторую строку, поэтому
-                              берём предмет, а не готовый title ленты. */}
-                          {lesson ? lesson.subject : ev.type === 'task' ? stripHtml(ev.title) : ev.title}
+                          {itemLabel(ev)}
                         </div>
                         {height > 30 && lesson && !lesson.is_group && lesson.student_name && (
                           <div style={{ fontSize: 9, opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -533,6 +641,29 @@ export function MobileWeekCalendar({
             })}
           </div>
         </div>
+
+        {/* Призрак перетаскиваемого блока: fixed, поэтому переживает и смену
+            недели, и перезапрос ленты — исходной карточки к дропу может уже
+            не быть в DOM. */}
+        {drag && (
+          <div style={{
+            position: 'fixed',
+            left: drag.x - drag.grabX, top: drag.y - drag.grabY,
+            width: drag.w, height: drag.h,
+            background: itemStyle(drag.item).bg,
+            color:      itemStyle(drag.item).text,
+            borderRadius: 4, padding: '2px 4px',
+            fontSize: 9.5, lineHeight: 1.15,
+            fontWeight: 600,
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            zIndex: 60,
+            transform: 'scale(1.03)',
+            boxShadow: '0 6px 16px -4px rgba(0,0,0,0.35)',
+          }}>
+            {itemLabel(drag.item)}
+          </div>
+        )}
 
       </div>
     </>
