@@ -184,15 +184,21 @@ Retime(ctx context.Context, rule models.RecurrenceRule, occurrenceID string,
 | 3 | `cut := min(from, newDate)` | дата, с которой серия пересобирается |
 | 4a | `following`: `Split(ruleID, cut, timeLocal, duration, byweekday)` | `Split` уже ставит `materialized_until = cut` |
 | 4b | `all`: `UpdateTiming(...)`, **сразу за ним** `SetMaterializedUntil(ruleID, cut)` | откат watermark **до** разрушения — см. §2.3 |
-| 5 | `DeleteFutureByRule(targetRule, cut, except = occurrenceID)` | |
+| 5 | `DeleteFutureByRule(`**исходное**` правило, cut − 1, except = occurrenceID)` | см. ниже про источник и границу |
 | 6 | `ReassignToRule(occurrenceID, targetRule, newDate)` | после удаления: иначе коллизия по уникальному индексу |
 | 7 | `Materialize(targetRule, now + RecurrenceHorizon)` | |
 
-Шаг 6 стоит после шага 5 не случайно. Перенос «четверг → вторник той же недели» под
-`scope=all` даёт `cut` = вторник, и старая вторничная строка того же правила ещё
-существует. Переставь вхождение раньше — получишь нарушение
-`idx_lessons_rule_occurrence`. Удаление с `exceptID` снимает старую строку и щадит
-правимую.
+**Источник и цель — разные правила.** Чистим всегда `rule.ID`, материализуем
+`targetRule`. При `scope=all` это одно и то же; при `following` целевое правило
+только что создано и вхождений не имеет, а чистить надо именно старое — иначе его
+будущие вхождения остаются жить параллельно новой ветке.
+
+**Граница включительная.** Удалять надо всё начиная с `cut`, поэтому в `after`
+(семантика строгого `>`) уходит `cut − 1 день`. Перенос «четверг → вторник той же
+недели» под `scope=all` даёт `cut` = вторник, и старая вторничная строка того же
+правила ещё существует; строгое `> cut` её бы не тронуло, и шаг 6 упёрся бы в
+`idx_lessons_rule_occurrence`. При обычной смене времени `cut = from`, и под удаление
+попадает только правимое вхождение — которое `exceptID` и щадит.
 
 ### 2.1 Смена дня недели: подмена своего дня
 
