@@ -59,7 +59,13 @@ export function useDeleteStudent() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: studentsApi.delete,
-    onSuccess:  () => qc.invalidateQueries({ queryKey: studentKeys.all }),
+    // Ученик уходит вместе с курсами и уроками (ON DELETE CASCADE) — без этих
+    // двух сбросов его уроки висели в календаре до протухания кэша.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: studentKeys.all })
+      qc.invalidateQueries({ queryKey: courseKeys.all })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
   })
 }
 
