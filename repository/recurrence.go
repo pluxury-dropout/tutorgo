@@ -15,8 +15,10 @@ type RecurrenceRepository interface {
 	DueForMaterialization(ctx context.Context, horizon time.Time) ([]models.RecurrenceRule, error)
 	SetMaterializedUntil(ctx context.Context, id string, until time.Time) error
 	InsertOccurrences(ctx context.Context, ruleID string, starts []time.Time) (int, error)
-	Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error)
-	UpdateTiming(ctx context.Context, ruleID, timeLocal string, duration int) error
+	Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int, byweekday []int) (models.RecurrenceRule, error)
+	UpdateTiming(ctx context.Context, ruleID, timeLocal string, duration int, byweekday []int) error
+	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time, exceptID string) error
+	ReassignToRule(ctx context.Context, occurrenceID, ruleID string, occurrenceDate time.Time) error
 	SetEndsOn(ctx context.Context, ruleID string, endsOn time.Time) error
 }
 
@@ -89,7 +91,7 @@ func (r *recurrenceRepository) DueForMaterialization(ctx context.Context, horizo
 // вхождения, а с него начинается копия с новым временем и длительностью.
 // Ветвление, а не правка на месте: прошедшие вхождения должны остаться такими,
 // какими были, иначе история занятий начнёт врать.
-func (r *recurrenceRepository) Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error) {
+func (r *recurrenceRepository) Split(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int, byweekday []int) (models.RecurrenceRule, error) {
 	if _, err := r.pool.Exec(ctx,
 		`UPDATE recurrence_rules SET ends_on = $2::date - 1 WHERE id = $1`, ruleID, at,
 	); err != nil {
@@ -100,11 +102,11 @@ func (r *recurrenceRepository) Split(ctx context.Context, ruleID string, at time
 		`INSERT INTO recurrence_rules
 		     (tutor_id, freq, interval_n, byweekday, time_local, tz, duration_minutes,
 		      starts_on, ends_on, max_count, materialized_until)
-		 SELECT tutor_id, freq, interval_n, byweekday, $3::time, tz, $4,
+		 SELECT tutor_id, freq, interval_n, $5::smallint[], $3::time, tz, $4,
 		        $2::date, NULL, max_count, $2::date
 		 FROM recurrence_rules WHERE id = $1
 		 RETURNING `+ruleCols,
-		ruleID, at, timeLocal, duration,
+		ruleID, at, timeLocal, duration, byweekday,
 	))
 }
 
@@ -114,10 +116,12 @@ func (r *recurrenceRepository) SetEndsOn(ctx context.Context, ruleID string, end
 	return err
 }
 
-func (r *recurrenceRepository) UpdateTiming(ctx context.Context, ruleID, timeLocal string, duration int) error {
+func (r *recurrenceRepository) UpdateTiming(ctx context.Context, ruleID, timeLocal string, duration int, byweekday []int) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE recurrence_rules SET time_local = $2::time, duration_minutes = $3 WHERE id = $1`,
-		ruleID, timeLocal, duration)
+		`UPDATE recurrence_rules
+		 SET time_local = $2::time, duration_minutes = $3, byweekday = $4::smallint[]
+		 WHERE id = $1`,
+		ruleID, timeLocal, duration, byweekday)
 	return err
 }
 
@@ -172,4 +176,43 @@ func (r *recurrenceRepository) InsertOccurrences(ctx context.Context, ruleID str
 		return 0, err
 	}
 	return int(lessons.RowsAffected() + events.RowsAffected()), nil
+}
+
+// DeleteFutureByRule убирает вхождения правила начиная с `after` + 1 день, из
+// обеих таблиц сразу: правило владеет либо уроками, либо событиями, и второй
+// запрос просто ничего не находит — тот же приём, что в InsertOccurrences.
+//
+// Не трогает вручную перенесённые (is_override) и уже отменённые: и те, и
+// другие — осознанные решения пользователя. exceptID щадит вхождение, которое
+// вызывающий переставляет сам; пустая строка означает «щадить нечего».
+func (r *recurrenceRepository) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time, exceptID string) error {
+	if _, err := r.pool.Exec(ctx,
+		`DELETE FROM lessons
+		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
+		   AND is_override = FALSE AND status = 'scheduled'
+		   AND ($3 = '' OR id <> $3::uuid)`, ruleID, after, exceptID,
+	); err != nil {
+		return err
+	}
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM events
+		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
+		   AND is_override = FALSE AND NOT cancelled
+		   AND ($3 = '' OR id <> $3::uuid)`, ruleID, after, exceptID)
+	return err
+}
+
+// ReassignToRule переводит вхождение в другое правило и на другую дату.
+// is_override снимается: правку сделали через саму серию, а не вопреки ей.
+func (r *recurrenceRepository) ReassignToRule(ctx context.Context, occurrenceID, ruleID string, occurrenceDate time.Time) error {
+	if _, err := r.pool.Exec(ctx,
+		`UPDATE lessons SET rule_id = $2::uuid, occurrence_date = $3::date, is_override = FALSE
+		 WHERE id = $1::uuid`, occurrenceID, ruleID, occurrenceDate,
+	); err != nil {
+		return err
+	}
+	_, err := r.pool.Exec(ctx,
+		`UPDATE events SET rule_id = $2::uuid, occurrence_date = $3::date, is_override = FALSE
+		 WHERE id = $1::uuid`, occurrenceID, ruleID, occurrenceDate)
+	return err
 }

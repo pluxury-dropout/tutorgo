@@ -45,14 +45,6 @@ func (m *mockEventRepo) Cancel(ctx context.Context, id, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }
 
-func (m *mockEventRepo) ReassignToRule(ctx context.Context, eventID, ruleID string, occurrenceDate time.Time) error {
-	return m.Called(ctx, eventID, ruleID, occurrenceDate).Error(0)
-}
-
-func (m *mockEventRepo) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error {
-	return m.Called(ctx, ruleID, after).Error(0)
-}
-
 func (m *mockEventRepo) GetOccupiedInRange(ctx context.Context, tutorID, from, to, excludeType string, excludeID *string) ([]models.CalendarItem, error) {
 	args := m.Called(ctx, tutorID, from, to, excludeType, excludeID)
 	return args.Get(0).([]models.CalendarItem), args.Error(1)

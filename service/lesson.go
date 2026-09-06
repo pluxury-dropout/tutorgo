@@ -253,49 +253,10 @@ func (s *lessonService) Update(ctx context.Context, id string, req models.Update
 	return s.updateSeries(ctx, lesson, req, tutorID, scope)
 }
 
+// updateSeries переписывается в Задаче 3 (NormalizeSeriesStart/swapWeekday) —
+// сейчас только заглушка, чтобы пакет собирался.
 func (s *lessonService) updateSeries(ctx context.Context, lesson models.Lesson, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error) {
-	rule, err := s.recurrence.GetRule(ctx, *lesson.RuleID)
-	if err != nil {
-		return models.Lesson{}, err
-	}
-	timeLocal, err := localTimeIn(req.ScheduledAt, rule.TZ)
-	if err != nil {
-		return models.Lesson{}, err
-	}
-
-	ruleID := rule.ID
-	if scope == scopeFollowing {
-		// Ветвление: старое правило закрывается днём раньше, а этот урок
-		// становится первым вхождением новой ветки.
-		newRule, err := s.recurrence.SplitRule(ctx, rule.ID, *lesson.OccurrenceDate, timeLocal, req.DurationMinutes)
-		if err != nil {
-			return models.Lesson{}, err
-		}
-		ruleID = newRule.ID
-	} else if err := s.recurrence.UpdateRuleTiming(ctx, rule.ID, timeLocal, req.DurationMinutes); err != nil {
-		return models.Lesson{}, err
-	}
-
-	updated, err := s.repo.Update(ctx, lesson.ID, req)
-	if err != nil {
-		return models.Lesson{}, err
-	}
-	if ruleID != rule.ID {
-		if err := s.repo.ReassignToRule(ctx, lesson.ID, ruleID, *lesson.OccurrenceDate); err != nil {
-			return models.Lesson{}, err
-		}
-	}
-
-	// Будущие вхождения пересоздаст материализация — уже по новому времени.
-	// Вручную перенесённые (is_override) она не трогает.
-	if err := s.repo.DeleteFutureByRule(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
-		return models.Lesson{}, err
-	}
-	if _, err := s.recurrence.Materialize(ctx, ruleID, time.Now().Add(RecurrenceHorizon)); err != nil {
-		return updated, nil // горизонт догонит ночная джоба
-	}
-	globalCalendarCache.Invalidate(tutorID)
-	return updated, nil
+	return models.Lesson{}, fmt.Errorf("not implemented")
 }
 
 func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope string) error {
@@ -311,7 +272,7 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 
 	switch scope {
 	case scopeFollowing:
-		if err := s.repo.DeleteFutureByRule(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
+		if err := s.recurrence.PruneFuture(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
 			return err
 		}
 		if err := s.recurrence.CloseRule(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
@@ -322,7 +283,7 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 	case scopeAll:
 		// Порядок важен: удаление правила обнуляет rule_id у уроков
 		// (ON DELETE SET NULL), и найти вхождения станет нечем.
-		if err := s.repo.DeleteFutureByRule(ctx, *lesson.RuleID, time.Time{}); err != nil {
+		if err := s.recurrence.PruneFuture(ctx, *lesson.RuleID, time.Time{}); err != nil {
 			return err
 		}
 		return s.recurrence.DeleteRule(ctx, *lesson.RuleID)

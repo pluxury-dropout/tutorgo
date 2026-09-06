@@ -25,11 +25,10 @@ type RecurrenceService interface {
 	CreateRule(ctx context.Context, in models.RecurrenceInput, firstAt time.Time, durationMinutes int, tutorID string) (models.RecurrenceRule, error)
 	DeleteRule(ctx context.Context, ruleID string) error
 	GetRule(ctx context.Context, ruleID string) (models.RecurrenceRule, error)
-	// SplitRule закрывает правило днём раньше `at` и начинает с этой даты копию
-	// с новым временем — это «изменить это и все следующие».
-	SplitRule(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error)
-	UpdateRuleTiming(ctx context.Context, ruleID, timeLocal string, duration int) error
 	CloseRule(ctx context.Context, ruleID string, at time.Time) error
+	// PruneFuture убирает будущие вхождения правила: удаление «это и все
+	// следующие» и «все» ходят через него.
+	PruneFuture(ctx context.Context, ruleID string, after time.Time) error
 }
 
 // Область правки вхождения серии.
@@ -98,12 +97,8 @@ func (s *recurrenceService) GetRule(ctx context.Context, ruleID string) (models.
 	return rule, nil
 }
 
-func (s *recurrenceService) SplitRule(ctx context.Context, ruleID string, at time.Time, timeLocal string, duration int) (models.RecurrenceRule, error) {
-	return s.repo.Split(ctx, ruleID, at, timeLocal, duration)
-}
-
-func (s *recurrenceService) UpdateRuleTiming(ctx context.Context, ruleID, timeLocal string, duration int) error {
-	return s.repo.UpdateTiming(ctx, ruleID, timeLocal, duration)
+func (s *recurrenceService) PruneFuture(ctx context.Context, ruleID string, after time.Time) error {
+	return s.repo.DeleteFutureByRule(ctx, ruleID, after, "")
 }
 
 // CloseRule обрывает серию на дате `at`: всё, что дальше, серии больше не

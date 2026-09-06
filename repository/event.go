@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"time"
 	"tutorgo/models"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,8 +21,6 @@ type EventRepository interface {
 	Delete(ctx context.Context, id, tutorID string) error
 	Cancel(ctx context.Context, id, tutorID string) error
 	MarkOverride(ctx context.Context, id, tutorID string) error
-	ReassignToRule(ctx context.Context, eventID, ruleID string, occurrenceDate time.Time) error
-	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	// GetOccupiedInRange отдаёт всё, что занимает время в пересечении с [from, to):
 	// уроки в статусе scheduled и все события. Задачи занятостью не считаются.
 	GetOccupiedInRange(ctx context.Context, tutorID, from, to string, excludeType string, excludeID *string) ([]models.CalendarItem, error)
@@ -75,23 +72,6 @@ func (r *eventRepository) Cancel(ctx context.Context, id, tutorID string) error 
 func (r *eventRepository) MarkOverride(ctx context.Context, id, tutorID string) error {
 	_, err := r.conn.Exec(ctx,
 		`UPDATE events SET is_override = TRUE WHERE id = $1 AND tutor_id = $2`, id, tutorID)
-	return err
-}
-
-func (r *eventRepository) ReassignToRule(ctx context.Context, eventID, ruleID string, occurrenceDate time.Time) error {
-	_, err := r.conn.Exec(ctx,
-		`UPDATE events SET rule_id = $2::uuid, occurrence_date = $3::date, is_override = FALSE
-		 WHERE id = $1`, eventID, ruleID, occurrenceDate)
-	return err
-}
-
-// DeleteFutureByRule убирает будущие вхождения, кроме вручную перенесённых и
-// уже отменённых: и те, и другие — осознанные решения пользователя.
-func (r *eventRepository) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error {
-	_, err := r.conn.Exec(ctx,
-		`DELETE FROM events
-		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
-		   AND is_override = FALSE AND NOT cancelled`, ruleID, after)
 	return err
 }
 

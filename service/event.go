@@ -107,38 +107,10 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 	return e, nil
 }
 
-// applyToSeries правит правило и сносит будущие вхождения — их пересоздаст
-// материализация уже по новому времени.
+// applyToSeries переписывается в Задаче 3 (NormalizeSeriesStart/swapWeekday) —
+// сейчас только заглушка, чтобы пакет собирался.
 func (s *eventService) applyToSeries(ctx context.Context, current models.Event, req models.UpdateEventRequest, scope string) error {
-	rule, err := s.recurrence.GetRule(ctx, *current.RuleID)
-	if err != nil {
-		return err
-	}
-	timeLocal, err := localTimeIn(req.StartsAt, rule.TZ)
-	if err != nil {
-		return err
-	}
-
-	ruleID := rule.ID
-	if scope == scopeFollowing {
-		newRule, err := s.recurrence.SplitRule(ctx, rule.ID, *current.OccurrenceDate, timeLocal, req.DurationMinutes)
-		if err != nil {
-			return err
-		}
-		ruleID = newRule.ID
-		if err := s.repo.ReassignToRule(ctx, current.ID, ruleID, *current.OccurrenceDate); err != nil {
-			return err
-		}
-	} else if err := s.recurrence.UpdateRuleTiming(ctx, rule.ID, timeLocal, req.DurationMinutes); err != nil {
-		return err
-	}
-
-	if err := s.repo.DeleteFutureByRule(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {
-		return err
-	}
-	// Не вышло материализовать — догонит ночная джоба.
-	_, _ = s.recurrence.Materialize(ctx, ruleID, time.Now().Add(RecurrenceHorizon))
-	return nil
+	return fmt.Errorf("not implemented")
 }
 
 func (s *eventService) Delete(ctx context.Context, id, tutorID, scope string) error {
@@ -159,7 +131,7 @@ func (s *eventService) Delete(ctx context.Context, id, tutorID, scope string) er
 
 	switch scope {
 	case scopeFollowing:
-		if err := s.repo.DeleteFutureByRule(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {
+		if err := s.recurrence.PruneFuture(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {
 			return err
 		}
 		if err := s.recurrence.CloseRule(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {

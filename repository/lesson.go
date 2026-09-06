@@ -19,8 +19,6 @@ type LessonRepository interface {
 	Delete(ctx context.Context, id string) error
 	Cancel(ctx context.Context, id string) error
 	MarkOverride(ctx context.Context, id string) error
-	ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error
-	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error)
@@ -128,26 +126,6 @@ func (r *lessonRepository) Cancel(ctx context.Context, id string) error {
 // урок на место по расписанию правила — перенос молча пропадёт.
 func (r *lessonRepository) MarkOverride(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE lessons SET is_override = TRUE WHERE id = $1`, id)
-	return err
-}
-
-// ReassignToRule переводит вхождение в другое правило — используется при
-// «это и все следующие», где урок становится первым вхождением новой ветки.
-func (r *lessonRepository) ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE lessons SET rule_id = $2::uuid, occurrence_date = $3::date, is_override = FALSE
-		 WHERE id = $1`, lessonID, ruleID, occurrenceDate)
-	return err
-}
-
-// DeleteFutureByRule убирает будущие вхождения правила, кроме вручную
-// перенесённых: is_override — это то, что не даёт «изменить все следующие»
-// затереть урок, который репетитор уже подвинул руками.
-func (r *lessonRepository) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error {
-	_, err := r.pool.Exec(ctx,
-		`DELETE FROM lessons
-		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
-		   AND is_override = FALSE AND status = 'scheduled'`, ruleID, after)
 	return err
 }
 
