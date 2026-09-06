@@ -390,7 +390,21 @@ func (m *mockRecurrenceRepo) ReassignToRule(ctx context.Context, occurrenceID, r
 
 Удалить `mockLessonRepo.ReassignToRule`, `mockLessonRepo.DeleteFutureByRule` (`scope_test.go:19-24`) и `mockEventRepo.ReassignToRule`, `mockEventRepo.DeleteFutureByRule` (`event_test.go:48-55`).
 
-Тесты `TestLessonUpdate_ScopeFollowing` и `TestLessonUpdate_ScopeAll` в `scope_test.go` временно пометить `t.Skip("переписывается в Задаче 3")` — их полностью заменит Задача 3.
+Тесты `TestLessonUpdate_ScopeFollowing` (`:121`) и `TestLessonUpdate_ScopeAll` (`:155`) в `scope_test.go` временно пометить `t.Skip("переписывается в Задаче 3")` — их полностью заменит Задача 3.
+
+`TestLessonDelete_ScopeAllDropsRule` (`:212`) **не замораживать, а перенацелить**: `Delete` после этого шага полностью рабочий, у него просто сменился адресат. Заменить строку 221
+
+```go
+	lessonRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", mock.Anything).Return(nil)
+```
+
+на
+
+```go
+	// Удаление будущих вхождений уехало в recurrence-репозиторий: правило
+	// владеет и уроками, и событиями, и чистить их логично одним методом.
+	ruleRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", mock.Anything, "").Return(nil)
+```
 
 - [ ] **Step 7: Проверить сборку и тесты**
 
