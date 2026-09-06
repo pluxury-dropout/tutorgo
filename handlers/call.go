@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"tutorgo/service"
@@ -18,9 +18,26 @@ import (
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
-type quickRoom struct {
-	tutorID string
+// roomAPI — та часть LiveKit RoomService, которой пользуется хендлер.
+// Интерфейс существует ради тестов: настоящий клиент ходит по сети.
+type roomAPI interface {
+	CreateRoom(ctx context.Context, req *livekit.CreateRoomRequest) (*livekit.Room, error)
+	ListRooms(ctx context.Context, req *livekit.ListRoomsRequest) (*livekit.ListRoomsResponse, error)
+	DeleteRoom(ctx context.Context, req *livekit.DeleteRoomRequest) (*livekit.DeleteRoomResponse, error)
 }
+
+// Таймауты пробной комнаты. Раньше их роль играл TTL мапы в памяти (3 часа);
+// теперь комнату закрывает сам LiveKit, а мы только говорим когда.
+//
+// Оба щедрые осознанно: штатный конец урока — кнопка препода (EndQuickRoom →
+// DeleteRoom), она даёт «завершён» мгновенно. Таймаут страхует лишь «закрыл
+// вкладку и ушёл», и здесь ложное «Урок завершён» из-за пятиминутного разрыва
+// связи хуже, чем комната, повисевшая лишний час: пустые комнаты LiveKit Cloud
+// не тарифицирует, счёт идёт за participant-минуты.
+const (
+	quickEmptyTimeout     = 3600 // сек: ждём гостя в комнате, куда никто ещё не заходил
+	quickDepartureTimeout = 3600 // сек: держим комнату после ухода последнего
+)
 
 type CallHandler struct {
 	lessonService  service.LessonService
@@ -30,18 +47,11 @@ type CallHandler struct {
 	livekitURL     string
 	apiKey         string
 	apiSecret      string
-	roomClient     *lksdk.RoomServiceClient
-
-	quickMu    sync.RWMutex
-	quickRooms map[string]*quickRoom
+	roomClient     roomAPI
 }
 
 func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secret string, studentSvc service.StudentService, tutorSvc service.TutorService) *CallHandler {
-	var roomClient *lksdk.RoomServiceClient
-	if key != "" {
-		roomClient = lksdk.NewRoomServiceClient(url, key, secret)
-	}
-	return &CallHandler{
+	h := &CallHandler{
 		lessonService:  svc,
 		studentService: studentSvc,
 		tutorService:   tutorSvc,
@@ -49,9 +59,32 @@ func NewCallHandler(svc service.LessonService, log *slog.Logger, url, key, secre
 		livekitURL:     url,
 		apiKey:         key,
 		apiSecret:      secret,
-		roomClient:     roomClient,
-		quickRooms:     make(map[string]*quickRoom),
 	}
+	// Присваиваем только внутри if. Поле интерфейсное: положи мы сюда nil-типизированный
+	// *lksdk.RoomServiceClient, `h.roomClient != nil` вернуло бы true и вызов запаниковал.
+	if key != "" {
+		h.roomClient = lksdk.NewRoomServiceClient(url, key, secret)
+	}
+	return h
+}
+
+// quickRoomOwner спрашивает у LiveKit, жива ли пробная комната и кто её завёл
+// (tutorID кладётся в metadata при создании).
+//
+// Источник истины вынесен в LiveKit осознанно: мапа в памяти процесса не
+// переживала редеплой, и гостю это прилетало как «Урок завершён» посреди урока.
+//
+// Три исхода различимы: (ok=false, err=nil) — комнаты нет, урок правда
+// закончился; err != nil — LiveKit недоступен, и это НЕ «завершён».
+func (h *CallHandler) quickRoomOwner(ctx context.Context, roomID string) (string, bool, error) {
+	res, err := h.roomClient.ListRooms(ctx, &livekit.ListRoomsRequest{Names: []string{"quick-" + roomID}})
+	if err != nil {
+		return "", false, err
+	}
+	if len(res.GetRooms()) == 0 {
+		return "", false, nil
+	}
+	return res.GetRooms()[0].GetMetadata(), true, nil
 }
 
 // displayName склеивает имя для LiveKit-токена. Имя из токена LiveKit
@@ -303,17 +336,21 @@ func (h *CallHandler) StartQuickRoom(c *gin.Context) {
 		return
 	}
 
-	// Only insert if token generation succeeded
-	h.quickMu.Lock()
-	h.quickRooms[roomID] = &quickRoom{tutorID: tutorID}
-	h.quickMu.Unlock()
-
-	// Auto-evict after token validity window (3h)
-	time.AfterFunc(3*time.Hour, func() {
-		h.quickMu.Lock()
-		delete(h.quickRooms, roomID)
-		h.quickMu.Unlock()
-	})
+	// Комнату заводим явно и только после того, как токен получился: иначе провал
+	// генерации оставил бы висеть пустую комнату. Заводим именно здесь, а не
+	// полагаемся на ленивое создание при первом join'е, — иначе между «препод
+	// нажал начать» и «препод подключился» статус отдавал бы «завершён».
+	// Metadata — это владелец: единственное, что нам нужно помнить о комнате.
+	if _, err := h.roomClient.CreateRoom(c.Request.Context(), &livekit.CreateRoomRequest{
+		Name:             roomName,
+		Metadata:         tutorID,
+		EmptyTimeout:     quickEmptyTimeout,
+		DepartureTimeout: quickDepartureTimeout,
+	}); err != nil {
+		h.log.Error("Failed to create quick room", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video service unavailable"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"room_id":    roomID,
@@ -329,28 +366,33 @@ func (h *CallHandler) EndQuickRoom(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	if h.roomClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
+		return
+	}
 	roomID := c.Param("id")
 
-	h.quickMu.Lock()
-	room, ok := h.quickRooms[roomID]
-	if ok {
-		if room.tutorID != tutorID {
-			h.quickMu.Unlock()
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-			return
-		}
-		delete(h.quickRooms, roomID)
+	owner, ok, err := h.quickRoomOwner(c.Request.Context(), roomID)
+	if err != nil {
+		h.log.Error("Failed to look up quick room", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video service unavailable"})
+		return
 	}
-	h.quickMu.Unlock()
-
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
 		return
 	}
+	if owner != tutorID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
 
-	if h.roomClient != nil {
-		roomName := "quick-" + roomID
-		_, _ = h.roomClient.DeleteRoom(c.Request.Context(), &livekit.DeleteRoomRequest{Room: roomName})
+	// Удаление комнаты и есть завершение урока: следующий status-поллинг гостя
+	// её не найдёт и покажет «Урок завершён».
+	if _, err := h.roomClient.DeleteRoom(c.Request.Context(), &livekit.DeleteRoomRequest{Room: "quick-" + roomID}); err != nil {
+		h.log.Error("Failed to delete quick room", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video service unavailable"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "room ended"})
@@ -358,12 +400,20 @@ func (h *CallHandler) EndQuickRoom(c *gin.Context) {
 
 // GET /public/quick/:id/status
 func (h *CallHandler) GetQuickRoomStatus(c *gin.Context) {
+	if h.roomClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video calls not configured"})
+		return
+	}
 	roomID := c.Param("id")
 
-	h.quickMu.RLock()
-	_, ok := h.quickRooms[roomID]
-	h.quickMu.RUnlock()
-
+	_, ok, err := h.quickRoomOwner(c.Request.Context(), roomID)
+	// 503, а не 404: фронт приравнивает «ended» к концу урока и уводит гостя на
+	// финальный экран без возврата. На 503 он остаётся ждать и продолжает поллить.
+	if err != nil {
+		h.log.Error("Failed to look up quick room", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video service unavailable"})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"status": "ended"})
 		return
@@ -380,10 +430,12 @@ func (h *CallHandler) GetQuickGuestToken(c *gin.Context) {
 
 	roomID := c.Param("id")
 
-	h.quickMu.RLock()
-	_, ok := h.quickRooms[roomID]
-	h.quickMu.RUnlock()
-
+	_, ok, err := h.quickRoomOwner(c.Request.Context(), roomID)
+	if err != nil {
+		h.log.Error("Failed to look up quick room", slog.String("error", err.Error()))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "video service unavailable"})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "room not found or ended"})
 		return

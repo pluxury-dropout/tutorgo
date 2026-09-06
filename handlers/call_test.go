@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"tutorgo/handlers"
@@ -23,17 +25,74 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+// fakeLiveKit — двойник LiveKit RoomService: комнаты в мапе, как их держит
+// настоящий сервер. Важно, что состояние живёт ЗДЕСЬ, а не в хендлере: только
+// так можно собрать второй хендлер «после редеплоя» поверх тех же комнат.
+type fakeLiveKit struct {
+	mu    sync.Mutex
+	rooms map[string]*livekit.Room
+	err   error // подставляется, чтобы проверить реакцию на недоступный LiveKit
+}
+
+func newFakeLiveKit() *fakeLiveKit {
+	return &fakeLiveKit{rooms: make(map[string]*livekit.Room)}
+}
+
+func (f *fakeLiveKit) CreateRoom(_ context.Context, req *livekit.CreateRoomRequest) (*livekit.Room, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	room := &livekit.Room{Name: req.GetName(), Metadata: req.GetMetadata()}
+	f.rooms[req.GetName()] = room
+	return room, nil
+}
+
+func (f *fakeLiveKit) ListRooms(_ context.Context, req *livekit.ListRoomsRequest) (*livekit.ListRoomsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	res := &livekit.ListRoomsResponse{}
+	for _, name := range req.GetNames() {
+		if room, ok := f.rooms[name]; ok {
+			res.Rooms = append(res.Rooms, room)
+		}
+	}
+	return res, nil
+}
+
+func (f *fakeLiveKit) DeleteRoom(_ context.Context, req *livekit.DeleteRoomRequest) (*livekit.DeleteRoomResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	delete(f.rooms, req.GetRoom())
+	return &livekit.DeleteRoomResponse{}, nil
+}
+
 func newCallRouter(svc *mockLessonService) *gin.Engine {
 	return newCallRouterWithStudentSvc(svc, new(mockStudentService), new(mockTutorService))
 }
 
 func newCallRouterWithStudentSvc(svc *mockLessonService, studentSvc *mockStudentService, tutorSvc *mockTutorService) *gin.Engine {
+	return newCallRouterOn(newFakeLiveKit(), testTutorID, svc, studentSvc, tutorSvc)
+}
+
+// newCallRouterOn собирает роутер поверх заданного LiveKit и заданного тьютора.
+// Отдельный конструктор нужен двум сценариям: «тот же LiveKit, новый процесс»
+// и «та же комната, чужой тьютор».
+func newCallRouterOn(lk *fakeLiveKit, tutorID string, svc *mockLessonService, studentSvc *mockStudentService, tutorSvc *mockTutorService) *gin.Engine {
 	r := gin.New()
 	h := handlers.NewCallHandler(svc, slog.Default(), "http://livekit.test", "key", "secret", studentSvc, tutorSvc)
+	h.SetRoomAPI(lk)
 	r.GET("/public/lessons/:id/room-status", h.GetRoomStatus)
 	r.POST("/webhooks/livekit", h.LiveKitWebhook)
 	auth := r.Group("/")
-	auth.Use(withTutorID(testTutorID))
+	auth.Use(withTutorID(tutorID))
 	auth.POST("/lessons/:id/start-room", h.StartRoom)
 	auth.POST("/lessons/:id/end-room", h.EndRoom)
 	auth.POST("/lessons/:id/room-token", h.GetToken)
@@ -41,12 +100,21 @@ func newCallRouterWithStudentSvc(svc *mockLessonService, studentSvc *mockStudent
 	student.Use(withStudentID(testStudentID))
 	student.POST("/student/lessons/:id/room-token", h.GetStudentToken)
 	auth.POST("/calls/quick", h.StartQuickRoom)
+	auth.POST("/calls/quick/:id/end", h.EndQuickRoom)
+	r.GET("/public/quick/:id/status", h.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", h.GetQuickGuestToken)
 	return r
 }
 
-// startQuickRoom поднимает пробную комнату и отдаёт её id (комнаты живут в памяти
-// хендлера, поэтому гостевой токен без этого шага получить не у кого).
+// quickTutorSvc — мок профиля, без которого StartQuickRoom не соберёт имя в токен.
+func quickTutorSvc() *mockTutorService {
+	svc := new(mockTutorService)
+	svc.On("GetByID", mock.Anything, mock.Anything).Return(models.Tutor{ID: testTutorID}, nil).Maybe()
+	return svc
+}
+
+// startQuickRoom поднимает пробную комнату и отдаёт её id: гостевой токен
+// выдаётся только на комнату, существующую в LiveKit.
 func startQuickRoom(t *testing.T, r *gin.Engine) string {
 	t.Helper()
 	w := makeRequest(t, r, http.MethodPost, "/calls/quick", nil)
@@ -75,6 +143,68 @@ func quickGuestName(t *testing.T, r *gin.Engine, roomID, query string) string {
 		t.Fatalf("failed to verify token: %v", err)
 	}
 	return grants.Name
+}
+
+// Регрессия, ради которой состояние переехало в LiveKit: пробная комната
+// пережила редеплой. Второй роутер — это новый процесс поверх того же LiveKit;
+// раньше он терял мапу, и гость получал 404 «room not found or ended» посреди
+// идущего урока.
+func TestQuickRoom_SurvivesProcessRestart(t *testing.T) {
+	lk := newFakeLiveKit()
+	before := newCallRouterOn(lk, testTutorID, new(mockLessonService), new(mockStudentService), quickTutorSvc())
+	roomID := startQuickRoom(t, before)
+
+	after := newCallRouterOn(lk, testTutorID, new(mockLessonService), new(mockStudentService), quickTutorSvc())
+
+	w := makeRequest(t, after, http.MethodGet, "/public/quick/"+roomID+"/status", nil)
+	assert.Equal(t, http.StatusOK, w.Code, "статус комнаты не должен зависеть от процесса")
+	var status map[string]string
+	decodeJSON(t, w, &status)
+	assert.Equal(t, "active", status["status"])
+
+	w = makeRequest(t, after, http.MethodGet, "/public/quick/"+roomID+"/guest-token?name=Гость", nil)
+	assert.Equal(t, http.StatusOK, w.Code, "гость должен входить в комнату и после рестарта")
+
+	// Завершение тоже: раньше EndQuickRoom отдавал 404 и комната оставалась в LiveKit.
+	w = makeRequest(t, after, http.MethodPost, "/calls/quick/"+roomID+"/end", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = makeRequest(t, after, http.MethodGet, "/public/quick/"+roomID+"/status", nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, "после завершения — ended")
+}
+
+// Недоступный LiveKit — это не «урок закончился». Фронт приравнивает 404 к концу
+// урока и уводит гостя на финальный экран без возврата, поэтому сбой обязан
+// приходить как 503: на нём гость остаётся ждать и продолжает поллить.
+func TestQuickRoom_LiveKitDown_IsNotEnded(t *testing.T) {
+	lk := newFakeLiveKit()
+	r := newCallRouterOn(lk, testTutorID, new(mockLessonService), new(mockStudentService), quickTutorSvc())
+	roomID := startQuickRoom(t, r)
+
+	lk.err = errors.New("livekit unreachable")
+
+	w := makeRequest(t, r, http.MethodGet, "/public/quick/"+roomID+"/status", nil)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+
+	w = makeRequest(t, r, http.MethodGet, "/public/quick/"+roomID+"/guest-token?name=Гость", nil)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+// Владелец комнаты теперь берётся из metadata в LiveKit, а не из мапы — проверяем,
+// что проверка прав от этого не потерялась.
+func TestEndQuickRoom_ForeignTutor_Forbidden(t *testing.T) {
+	lk := newFakeLiveKit()
+	owner := newCallRouterOn(lk, testTutorID, new(mockLessonService), new(mockStudentService), quickTutorSvc())
+	roomID := startQuickRoom(t, owner)
+
+	const otherTutorID = "33333333-3333-3333-3333-333333333333"
+	stranger := newCallRouterOn(lk, otherTutorID, new(mockLessonService), new(mockStudentService), quickTutorSvc())
+
+	w := makeRequest(t, stranger, http.MethodPost, "/calls/quick/"+roomID+"/end", nil)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = makeRequest(t, owner, http.MethodGet, "/public/quick/"+roomID+"/status", nil)
+	assert.Equal(t, http.StatusOK, w.Code, "чужой запрос не должен был закрыть комнату")
 }
 
 // Без canUpdateOwnMetadata LiveKit отклоняет setMetadata, которым препод

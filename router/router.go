@@ -150,7 +150,10 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	r.POST("/auth/refresh", authLimiter, authHandler.Refresh)
 	r.POST("/auth/logout", authLimiter, authHandler.Logout)
 	r.GET("/public/lessons/:id/room-status", callHandler.GetRoomStatus)
-	r.GET("/public/quick/:id/status", callHandler.GetQuickRoomStatus)
+	// Статус гость поллит раз в 5 с, пока ждёт начала урока, и каждый вызов теперь
+	// идёт в LiveKit — поэтому лимит есть, но мягче гостевого токена: несколько
+	// ожидающих за одним NAT не должны глушить друг друга.
+	r.GET("/public/quick/:id/status", middleware.RateLimit(rate.Every(time.Second), 10), callHandler.GetQuickRoomStatus)
 	r.GET("/public/quick/:id/guest-token", middleware.RateLimit(rate.Every(3*time.Second), 5), callHandler.GetQuickGuestToken)
 	// Публичная по назначению: сюда ходит Google Календарь без авторизации,
 	// секрет — сама ссылка. Rate-limit держит перебор токенов в рамках.
