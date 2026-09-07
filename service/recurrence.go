@@ -47,15 +47,6 @@ const (
 	scopeAll       = "all"
 )
 
-// localTimeIn — «17:00» в зоне правила: правило хранит стенные часы, а не UTC.
-func localTimeIn(at time.Time, tz string) (string, error) {
-	loc, err := time.LoadLocation(tz)
-	if err != nil {
-		return "", fmt.Errorf("timezone %q: %w", tz, ErrBadRequest)
-	}
-	return at.In(loc).Format("15:04"), nil
-}
-
 type recurrenceService struct {
 	repo repository.RecurrenceRepository
 	log  *slog.Logger
@@ -149,6 +140,10 @@ func (s *recurrenceService) Retime(ctx context.Context, rule models.RecurrenceRu
 
 	targetID := rule.ID
 	if scope == scopeFollowing {
+		// Отдельного отката watermark здесь нет: Split заводит новое правило с
+		// materialized_until = cut уже внутри своего INSERT (см.
+		// repository.Split) — тот же инвариант, что и явный SetMaterializedUntil
+		// в ветке all, только выполненный за один SQL-запрос вместо двух.
 		newRule, err := s.repo.Split(ctx, rule.ID, cut, timeLocal, duration, byweekday)
 		if err != nil {
 			return err

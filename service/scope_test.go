@@ -127,8 +127,11 @@ func TestLessonUpdate_ScopeFollowing(t *testing.T) {
 	rule := models.RecurrenceRule{
 		ID: "rule-1", Freq: "weekly", IntervalN: 1, ByWeekday: []int{2},
 		TimeLocal: "17:00", TZ: "Asia/Almaty", DurationMinutes: 60,
-		StartsOn:          date(2026, time.September, 1),
-		MaterializedUntil: date(2027, time.March, 5),
+		StartsOn: date(2026, time.September, 1),
+		// Не «впритык» к RecurrenceHorizon (см. комментарий у retimeRule в
+		// retime_test.go) — иначе тест ловит окно в пару дней у
+		// Retime.Materialize() и гниёт вместе с календарём.
+		MaterializedUntil: date(2026, time.October, 1),
 	}
 	newRule := models.RecurrenceRule{
 		ID: "rule-2", Freq: "weekly", IntervalN: 1, TimeLocal: "22:00", TZ: "Asia/Almaty",
@@ -154,6 +157,7 @@ func TestLessonUpdate_ScopeFollowing(t *testing.T) {
 	// у lessonRepo этих методов больше нет вовсе.
 	lessonRepo.AssertNotCalled(t, "ReassignToRule")
 	lessonRepo.AssertExpectations(t)
+	ruleRepo.AssertExpectations(t)
 }
 
 // «Все» правит само правило и пересобирает будущие вхождения; прошедшие
@@ -167,13 +171,23 @@ func TestLessonUpdate_ScopeAll(t *testing.T) {
 	rule := models.RecurrenceRule{
 		ID: "rule-1", Freq: "weekly", IntervalN: 1, ByWeekday: []int{2},
 		TimeLocal: "17:00", TZ: "Asia/Almaty", DurationMinutes: 60,
-		StartsOn:          date(2026, time.September, 1),
-		MaterializedUntil: date(2027, time.March, 5),
+		StartsOn: date(2026, time.September, 1),
+		// Не «впритык» к RecurrenceHorizon (см. комментарий у retimeRule в
+		// retime_test.go) — иначе тест ловит окно в пару дней у
+		// Retime.Materialize() и гниёт вместе с календарём.
+		MaterializedUntil: date(2026, time.October, 1),
 	}
 
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(lesson, nil)
 	ruleRepo.On("GetByID", mock.Anything, "rule-1").Return(rule, nil)
-	lessonRepo.On("Update", mock.Anything, lessonID, mock.Anything).Return(expectedLesson, nil)
+	// Нормализация переносит запрос на день недели выбранной даты в неделе
+	// вхождения: пятница 01.05 (updateLessonReq.ScheduledAt) при вторничном
+	// вхождении 08.09 (seriesLesson().OccurrenceDate) даёт пятницу 11.09. Без
+	// матчера на конкретное время строку NormalizeSeriesStart в updateSeries
+	// можно удалить незаметно — тест не покраснеет.
+	lessonRepo.On("Update", mock.Anything, lessonID, mock.MatchedBy(func(r models.UpdateLessonRequest) bool {
+		return r.ScheduledAt.Equal(time.Date(2026, time.September, 11, 10, 0, 0, 0, time.UTC))
+	})).Return(expectedLesson, nil)
 	ruleRepo.On("UpdateTiming", mock.Anything, "rule-1", mock.Anything, 90, mock.Anything).Return(nil)
 	ruleRepo.On("SetMaterializedUntil", mock.Anything, "rule-1", mock.Anything).Return(nil)
 	ruleRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", mock.Anything, lessonID).Return(nil)
