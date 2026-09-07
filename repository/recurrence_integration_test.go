@@ -264,6 +264,85 @@ func TestDeleteFollowing_CancelsCurrentAndClosesRule(t *testing.T) {
 	assert.Zero(t, later, "джоба не вернула удалённое: правило закрыто")
 }
 
+// Архивация курса: будущие уроки уходят, завершённые остаются, а ночная джоба
+// не возвращает удалённое — правило закрыто и выпало из DueForMaterialization.
+func TestArchiveCourseSchedule_JobDoesNotBringLessonsBack(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	// Первое вхождение в прошлом: часть уроков успела стать completed.
+	first := time.Now().AddDate(0, 0, -21).Truncate(24 * time.Hour).Add(12 * time.Hour)
+	tutorID, courseID, ruleID := seedSeries(t, pool, first, 10)
+
+	_, err := pool.Exec(ctx,
+		`UPDATE lessons SET status='completed' WHERE course_id=$1 AND scheduled_at < NOW()`, courseID)
+	require.NoError(t, err)
+
+	lessonRepo := repository.NewLessonRepository(pool)
+	svc := service.NewLessonService(lessonRepo, repository.NewCourseRepository(pool),
+		repository.NewPaymentRepository(pool),
+		service.NewRecurrenceService(repository.NewRecurrenceRepository(pool)))
+
+	require.NoError(t, svc.ArchiveCourseSchedule(ctx, courseID, tutorID))
+
+	var future, past int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE scheduled_at > NOW()),
+		        count(*) FILTER (WHERE scheduled_at < NOW())
+		 FROM lessons WHERE course_id=$1`, courseID).Scan(&future, &past))
+	assert.Zero(t, future, "будущих уроков не осталось")
+	assert.Positive(t, past, "завершённые остались")
+
+	// seedSeries ставит materialized_until на неделю позже ends_on (нужно
+	// другим трём тестам), поэтому без форсирования Occurrences уже обрывает
+	// скан по НЕзакрытому ends_on (today+42 в этом тесте) раньше, чем доходит
+	// до watermark (today+49) — ExtendAll вернул бы пусто для ЛЮБОГО правила,
+	// закрытого CloseRule или нет. Форсируем watermark в прошлое (first), чтобы
+	// проверка что-то доказывала: незакрытое правило дотянулось бы Occurrences
+	// от такого watermark сквозь текущий день и материализовало бы будущие
+	// вхождения обратно; закрытое же вообще не попадёт в выборку
+	// DueForMaterialization — та фильтрует по ends_on > CURRENT_DATE, а
+	// CloseRule ставит ends_on на вчера.
+	_, err = pool.Exec(ctx,
+		`UPDATE recurrence_rules SET materialized_until = $2::date WHERE id = $1`,
+		ruleID, first)
+	require.NoError(t, err)
+
+	// Ночная джоба: правило закрыто, возвращать ей нечего.
+	rec := service.NewRecurrenceService(repository.NewRecurrenceRepository(pool))
+	_, err = rec.ExtendAll(ctx, time.Now().Add(service.RecurrenceHorizon))
+	require.NoError(t, err)
+
+	var afterJob int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM lessons WHERE course_id=$1 AND scheduled_at > NOW()`,
+		courseID).Scan(&afterJob))
+	assert.Zero(t, afterJob, "джоба не вернула уроки архивированного курса")
+
+	var endsOn *time.Time
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT ends_on FROM recurrence_rules WHERE id=$1`, ruleID).Scan(&endsOn))
+	require.NotNil(t, endsOn, "правило закрыто, а не оставлено бессрочным")
+}
+
+// «Удалить все уроки» не оставляет правил-сирот.
+func TestDeleteByCourse_LeavesNoOrphanRules(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	first := time.Now().AddDate(0, 0, 7).Truncate(24 * time.Hour).Add(12 * time.Hour)
+	tutorID, courseID, ruleID := seedSeries(t, pool, first, 5)
+
+	svc := service.NewLessonService(repository.NewLessonRepository(pool),
+		repository.NewCourseRepository(pool), repository.NewPaymentRepository(pool),
+		service.NewRecurrenceService(repository.NewRecurrenceRepository(pool)))
+
+	require.NoError(t, svc.DeleteByCourse(ctx, courseID, tutorID))
+
+	var rules int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM recurrence_rules WHERE id=$1`, ruleID).Scan(&rules))
+	assert.Zero(t, rules, "правило удалено вместе с уроками")
+}
+
 // nextWeekday — ближайший день недели wd не раньше from.
 func nextWeekday(from time.Time, wd time.Weekday) time.Time {
 	for d := 0; d < 7; d++ {
