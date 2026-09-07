@@ -323,6 +323,11 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 // Правило закрываем, а не удаляем: у прошедших уроков rule_id остаётся, и
 // история занятий сохраняет признак серии. Из DueForMaterialization закрытое
 // правило выпадает по ends_on > CURRENT_DATE.
+//
+// Порядок безопасен и при обрыве посередине: закрытие правил идёт первым и
+// сразу останавливает материализацию, поэтому оборванный вызов оставляет
+// видимое состояние «правила закрыты, устаревшие будущие уроки на месте» —
+// лечится повторной архивацией, тихой порчи нет.
 func (s *lessonService) ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error {
 	ruleIDs, err := s.repo.GetRuleIDsByCourse(ctx, courseID)
 	if err != nil {
@@ -351,15 +356,19 @@ func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tut
 	if err != nil {
 		return err
 	}
-	if err := s.repo.DeleteByCourse(ctx, courseID, tutorID); err != nil {
-		return err
-	}
-	// Уроков не осталось — InsertOccurrences не найдёт шаблона, и правило
-	// становится мусором, который ночная джоба будет сканировать вечно.
+	// Правила удаляем ДО уроков: lessons.rule_id — ON DELETE SET NULL
+	// (migrations/033_recurrence.sql), поэтому удаление правила лишь обнулит
+	// rule_id у его уроков, которых через строку всё равно снесёт DeleteByCourse.
+	// Обрыв посередине тогда не оставляет сироту: без правил уроки-сироты
+	// структурно невозможны, а сам обрыв виден как незавершённое удаление
+	// (уроки на месте) и лечится повтором.
 	for _, id := range ruleIDs {
 		if err := s.recurrence.DeleteRule(ctx, id); err != nil {
 			return err
 		}
+	}
+	if err := s.repo.DeleteByCourse(ctx, courseID, tutorID); err != nil {
+		return err
 	}
 	globalCalendarCache.Invalidate(tutorID)
 	return nil

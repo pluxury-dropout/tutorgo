@@ -735,6 +735,8 @@ func TestArchiveCourseSchedule_ClosesRulesBeforeDeleting(t *testing.T) {
 
 // «Удалить все уроки» удаляет и правила: уроков не остаётся, шаблона для
 // материализации у правила нет, хранить его незачем — иначе копятся сироты.
+// Порядок обязателен: lessons.rule_id — ON DELETE SET NULL, поэтому правила
+// удаляются раньше уроков — обрыв посередине тогда не оставляет сироту.
 func TestDeleteByCourse_RemovesRules(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	ruleRepo := new(mockRecurrenceRepo)
@@ -742,14 +744,21 @@ func TestDeleteByCourse_RemovesRules(t *testing.T) {
 	svc := service.NewLessonService(lessonRepo, courseRepo, new(mockPaymentRepo),
 		service.NewRecurrenceService(ruleRepo))
 
+	var order []string
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{ID: courseID}, nil)
-	lessonRepo.On("GetRuleIDsByCourse", mock.Anything, courseID).Return([]string{"rule-1", "rule-2"}, nil)
-	lessonRepo.On("DeleteByCourse", mock.Anything, courseID, tutorID).Return(nil)
-	ruleRepo.On("Delete", mock.Anything, "rule-1").Return(nil)
-	ruleRepo.On("Delete", mock.Anything, "rule-2").Return(nil)
+	lessonRepo.On("GetRuleIDsByCourse", mock.Anything, courseID).
+		Run(func(mock.Arguments) { order = append(order, "read") }).
+		Return([]string{"rule-1", "rule-2"}, nil)
+	ruleRepo.On("Delete", mock.Anything, "rule-1").
+		Run(func(mock.Arguments) { order = append(order, "rule-1") }).Return(nil)
+	ruleRepo.On("Delete", mock.Anything, "rule-2").
+		Run(func(mock.Arguments) { order = append(order, "rule-2") }).Return(nil)
+	lessonRepo.On("DeleteByCourse", mock.Anything, courseID, tutorID).
+		Run(func(mock.Arguments) { order = append(order, "lessons") }).Return(nil)
 
 	require.NoError(t, svc.DeleteByCourse(context.Background(), courseID, tutorID))
 
+	require.Equal(t, []string{"read", "rule-1", "rule-2", "lessons"}, order)
 	ruleRepo.AssertExpectations(t)
 }
 
