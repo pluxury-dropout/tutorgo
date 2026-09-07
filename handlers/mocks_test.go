@@ -475,6 +475,10 @@ func (m *mockLessonService) DeleteByCourse(ctx context.Context, courseID string,
 	return m.Called(ctx, courseID, tutorID).Error(0)
 }
 
+func (m *mockLessonService) ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error {
+	return m.Called(ctx, courseID, tutorID).Error(0)
+}
+
 func (m *mockLessonService) StartRoom(ctx context.Context, lessonID string, tutorID string) error {
 	return m.Called(ctx, lessonID, tutorID).Error(0)
 }

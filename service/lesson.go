@@ -18,6 +18,7 @@ type LessonService interface {
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID, scope string) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
+	ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
@@ -315,16 +316,53 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 	}
 }
 
-func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
-	_, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+// ArchiveCourseSchedule закрывает серии курса и убирает будущие уроки.
+// Завершённые остаются — так обещает диалог архивации, и на них висят
+// посещаемость, платежи и доски.
+//
+// Правило закрываем, а не удаляем: у прошедших уроков rule_id остаётся, и
+// история занятий сохраняет признак серии. Из DueForMaterialization закрытое
+// правило выпадает по ends_on > CURRENT_DATE.
+func (s *lessonService) ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error {
+	ruleIDs, err := s.repo.GetRuleIDsByCourse(ctx, courseID)
 	if err != nil {
+		return err
+	}
+	for _, id := range ruleIDs {
+		// CloseRule ставит ends_on = at − 1, то есть вчера: всё, что позже,
+		// серии больше не принадлежит.
+		if err := s.recurrence.CloseRule(ctx, id, time.Now()); err != nil {
+			return err
+		}
+	}
+	if err := s.repo.DeleteFutureByCourse(ctx, courseID, tutorID); err != nil {
+		return err
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return nil
+}
+
+func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
+	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
-	err = s.repo.DeleteByCourse(ctx, courseID, tutorID)
-	if err == nil {
-		globalCalendarCache.Invalidate(tutorID)
+	// Связь правила с курсом — только через lessons.rule_id: читаем до удаления.
+	ruleIDs, err := s.repo.GetRuleIDsByCourse(ctx, courseID)
+	if err != nil {
+		return err
 	}
-	return err
+	if err := s.repo.DeleteByCourse(ctx, courseID, tutorID); err != nil {
+		return err
+	}
+	// Уроков не осталось — InsertOccurrences не найдёт шаблона, и правило
+	// становится мусором, который ночная джоба будет сканировать вечно.
+	for _, id := range ruleIDs {
+		if err := s.recurrence.DeleteRule(ctx, id); err != nil {
+			return err
+		}
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return nil
 }
 
 func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {

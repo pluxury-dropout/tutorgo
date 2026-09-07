@@ -29,6 +29,8 @@ type LessonRepository interface {
 	EndRoomByID(ctx context.Context, lessonID string) error
 	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
 	GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error)
+	GetRuleIDsByCourse(ctx context.Context, courseID string) ([]string, error)
+	DeleteFutureByCourse(ctx context.Context, courseID, tutorID string) error
 }
 
 type lessonRepository struct {
@@ -365,6 +367,44 @@ func (r *lessonRepository) GetAllLessonsForCycles(ctx context.Context, tutorID s
 		lessons = append(lessons, cl)
 	}
 	return lessons, rows.Err()
+}
+
+// GetRuleIDsByCourse — единственный путь от курса к его правилам: прямой связи
+// в схеме нет, только через lessons.rule_id. Поэтому читать надо ДО удаления
+// уроков, иначе связь потеряна безвозвратно.
+func (r *lessonRepository) GetRuleIDsByCourse(ctx context.Context, courseID string) ([]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT rule_id::text FROM lessons
+		 WHERE course_id = $1 AND rule_id IS NOT NULL`, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// DeleteFutureByCourse убирает то, что ещё не состоялось. Завершённые,
+// отменённые и пропущенные остаются: диалог архивации обещает именно это.
+func (r *lessonRepository) DeleteFutureByCourse(ctx context.Context, courseID, tutorID string) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM lessons
+		 USING courses
+		 WHERE lessons.course_id = $1
+		   AND lessons.course_id = courses.id
+		   AND courses.tutor_id = $2
+		   AND lessons.status = 'scheduled'
+		   AND lessons.scheduled_at > NOW()`,
+		courseID, tutorID)
+	return err
 }
 
 func (r *lessonRepository) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {

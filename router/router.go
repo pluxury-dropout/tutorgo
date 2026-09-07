@@ -52,10 +52,12 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
 	studentService := service.NewStudentService(studentRepo, paymentRepo)
 	studentRefreshService := service.NewStudentRefreshTokenService(studentRefreshRepo)
-	courseService := service.NewCourseService(courseRepo, studentRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
 	recurrenceService := service.NewRecurrenceService(repository.NewRecurrenceRepository(pool))
 	lessonService := service.NewLessonService(lessonRepo, courseRepo, paymentRepo, recurrenceService)
+	// Ниже lessonService: архивация курса ходит к нему за закрытием серий.
+	// Цикла нет — lessonService зависит от courseRepo, а не от courseService.
+	courseService := service.NewCourseService(courseRepo, studentRepo, lessonService)
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)

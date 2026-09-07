@@ -87,8 +87,12 @@ var (
 	expectedStudent = models.Student{ID: "student-uuid-1", TutorID: tutorID}
 )
 
+type stubSchedule struct{}
+
+func (stubSchedule) ArchiveCourseSchedule(context.Context, string, string) error { return nil }
+
 func newCourseSvc(courseRepo *mockCourseRepo, studentRepo *mockStudentRepo) service.CourseService {
-	return service.NewCourseService(courseRepo, studentRepo)
+	return service.NewCourseService(courseRepo, studentRepo, stubSchedule{})
 }
 
 // Курс можно завести, не заполняя дату старта: она нужна отчётам, а не тому,
