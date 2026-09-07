@@ -39,6 +39,20 @@ func NewLessonRepository(pool *pgxpool.Pool) LessonRepository {
 	return &lessonRepository{pool: pool}
 }
 
+// Одна константа на все выборки урока: россыпь SQL — ровно та причина, по
+// которой rule_id и occurrence_date забыли в четырёх местах, а у событий
+// (см. eventColumns) не забыли ни в одном. Алиас `l` обязателен и там, где
+// джойна нет, иначе константу не переиспользовать.
+const lessonColumns = `l.id, l.course_id, l.scheduled_at, l.duration_minutes,
+                       l.status, l.notes, l.rule_id, l.occurrence_date`
+
+func scanLesson(row interface{ Scan(...any) error }) (models.Lesson, error) {
+	var l models.Lesson
+	err := row.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes,
+		&l.Status, &l.Notes, &l.RuleID, &l.OccurrenceDate)
+	return l, err
+}
+
 func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error) {
 	var lesson models.Lesson
 	err := r.pool.QueryRow(ctx,
@@ -54,8 +68,8 @@ func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRe
 
 func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
-		 FROM lessons WHERE course_id = $1 ORDER BY scheduled_at`, courseID)
+		`SELECT `+lessonColumns+` FROM lessons l
+		 WHERE l.course_id = $1 ORDER BY l.scheduled_at`, courseID)
 	if err != nil {
 		return nil, err
 	}
@@ -63,8 +77,8 @@ func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]
 
 	lessons := []models.Lesson{}
 	for rows.Next() {
-		var lesson models.Lesson
-		if err := rows.Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes); err != nil {
+		lesson, err := scanLesson(rows)
+		if err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, lesson)
@@ -81,9 +95,8 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
-		 FROM lessons WHERE course_id = $1
-		 ORDER BY scheduled_at DESC
+		`SELECT `+lessonColumns+` FROM lessons l WHERE l.course_id = $1
+		 ORDER BY l.scheduled_at DESC
 		 LIMIT $2 OFFSET $3`,
 		courseID, p.Limit, p.Offset())
 	if err != nil {
@@ -93,8 +106,8 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 
 	lessons := []models.Lesson{}
 	for rows.Next() {
-		var l models.Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
+		l, err := scanLesson(rows)
+		if err != nil {
 			return nil, 0, err
 		}
 		lessons = append(lessons, l)
@@ -103,12 +116,8 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 }
 
 func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
-		 FROM lessons WHERE id = $1`, id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
-	return lesson, err
+	return scanLesson(r.pool.QueryRow(ctx,
+		`SELECT `+lessonColumns+` FROM lessons l WHERE l.id = $1`, id))
 }
 
 // Cancel вместо Delete для вхождения серии: удали строку целиком — и ночная
@@ -130,16 +139,10 @@ func (r *lessonRepository) MarkOverride(ctx context.Context, id string) error {
 }
 
 func (r *lessonRepository) GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
-		        l.rule_id, l.occurrence_date
-		 FROM lessons l
+	return scanLesson(r.pool.QueryRow(ctx,
+		`SELECT `+lessonColumns+` FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
-		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes,
-		&lesson.RuleID, &lesson.OccurrenceDate)
-	return lesson, err
+		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID))
 }
 
 func (r *lessonRepository) Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error) {
@@ -225,7 +228,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 
 func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes
+		`SELECT `+lessonColumns+`
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 WHERE l.course_id = $1
@@ -241,8 +244,8 @@ func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tut
 
 	lessons := []models.Lesson{}
 	for rows.Next() {
-		var l models.Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
+		l, err := scanLesson(rows)
+		if err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, l)
