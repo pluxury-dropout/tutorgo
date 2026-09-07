@@ -134,6 +134,11 @@ func TestRetime_ScopeAllMovesWeekday(t *testing.T) {
 		`SELECT id FROM lessons WHERE rule_id=$1::uuid AND occurrence_date=$2::date`,
 		ruleID, second).Scan(&secondID))
 
+	// Контракт Retime («переставляет только rule_id/occurrence_date») требует
+	// обновить свою строку ДО вызова — в проде это делает lessonService.Update.
+	_, err = pool.Exec(ctx, `UPDATE lessons SET scheduled_at=$2 WHERE id=$1`, secondID, newStart)
+	require.NoError(t, err)
+
 	require.NoError(t, svc.Retime(ctx, rule, secondID, second.Truncate(24*time.Hour), newStart, 60, "all"))
 
 	var byweekday []int
@@ -141,12 +146,17 @@ func TestRetime_ScopeAllMovesWeekday(t *testing.T) {
 		`SELECT byweekday FROM recurrence_rules WHERE id=$1`, ruleID).Scan(&byweekday))
 	assert.Equal(t, []int{6}, byweekday, "правило переехало на субботу")
 
-	var onSaturday, onThursday int
+	var total, onSaturday, onThursday int
 	require.NoError(t, pool.QueryRow(ctx,
-		`SELECT count(*) FILTER (WHERE EXTRACT(ISODOW FROM occurrence_date) = 6),
+		`SELECT count(*),
+		        count(*) FILTER (WHERE EXTRACT(ISODOW FROM occurrence_date) = 6),
 		        count(*) FILTER (WHERE EXTRACT(ISODOW FROM occurrence_date) = 4)
-		 FROM lessons WHERE course_id=$1`, courseID).Scan(&onSaturday, &onThursday))
-	assert.Positive(t, onSaturday)
+		 FROM lessons WHERE course_id=$1`, courseID).Scan(&total, &onSaturday, &onThursday))
+	// Якорь (реассайнутая вторая) плюс три добитых субботы до ends_on:
+	// ends_on правило не двигает, только time_local/byweekday, поэтому
+	// материализация останавливается там же, где остановилась бы старая серия.
+	assert.Equal(t, 5, total, "первая осталась, вторая переехала, ends_on добил ещё три субботы")
+	assert.Equal(t, 4, onSaturday, "якорь плюс три добитых субботы")
 	assert.Equal(t, 1, onThursday, "первое вхождение — в прошлом относительно cut, осталось на четверге")
 }
 
@@ -178,6 +188,11 @@ func TestRetime_ScopeAllSparesOverriddenOccurrence(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx,
 		`SELECT id FROM lessons WHERE rule_id=$1::uuid AND occurrence_date=$2::date`,
 		ruleID, first).Scan(&firstID))
+
+	// Контракт Retime («переставляет только rule_id/occurrence_date») требует
+	// обновить свою строку ДО вызова — в проде это делает lessonService.Update.
+	_, err = pool.Exec(ctx, `UPDATE lessons SET scheduled_at=$2 WHERE id=$1`, firstID, newStart)
+	require.NoError(t, err)
 
 	require.NoError(t, svc.Retime(ctx, rule, firstID, first.Truncate(24*time.Hour), newStart, 60, "all"))
 
@@ -228,8 +243,19 @@ func TestDeleteFollowing_CancelsCurrentAndClosesRule(t *testing.T) {
 		courseID, third).Scan(&later))
 	assert.Zero(t, later, "последующие удалены")
 
+	// seedSeries ставит materialized_until на неделю позже ends_on (нужно
+	// другим трём тестам), поэтому Occurrences обрывает скан по ends_on раньше,
+	// чем доходит до watermark, — ExtendAll вернул бы пусто для ЛЮБОГО правила,
+	// не только закрытого. Форсируем watermark в точку до ends_on, чтобы
+	// проверка что-то доказывала: незакрытое правило тут действительно
+	// материализовало бы удалённые вхождения обратно.
+	_, err := pool.Exec(ctx,
+		`UPDATE recurrence_rules SET materialized_until = $2::date WHERE id = $1`,
+		ruleID, third)
+	require.NoError(t, err)
+
 	rec := service.NewRecurrenceService(repository.NewRecurrenceRepository(pool))
-	_, err := rec.ExtendAll(ctx, time.Now().Add(service.RecurrenceHorizon))
+	_, err = rec.ExtendAll(ctx, time.Now().Add(service.RecurrenceHorizon))
 	require.NoError(t, err)
 
 	require.NoError(t, pool.QueryRow(ctx,
