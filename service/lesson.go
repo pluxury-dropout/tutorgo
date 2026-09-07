@@ -253,10 +253,30 @@ func (s *lessonService) Update(ctx context.Context, id string, req models.Update
 	return s.updateSeries(ctx, lesson, req, tutorID, scope)
 }
 
-// updateSeries переписывается в Задаче 3 (NormalizeSeriesStart/swapWeekday) —
-// сейчас только заглушка, чтобы пакет собирался.
 func (s *lessonService) updateSeries(ctx context.Context, lesson models.Lesson, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error) {
-	return models.Lesson{}, fmt.Errorf("not implemented")
+	rule, err := s.recurrence.GetRule(ctx, *lesson.RuleID)
+	if err != nil {
+		return models.Lesson{}, err
+	}
+	// Серию задают день недели и время; выбранная в форме неделя роли не играет.
+	// Без нормализации строка урока и occurrence_date разъедутся.
+	req.ScheduledAt, err = NormalizeSeriesStart(rule, *lesson.OccurrenceDate, req.ScheduledAt)
+	if err != nil {
+		return models.Lesson{}, err
+	}
+
+	// Своя строка идёт первой: если она прошла, а Retime упал, урок стоит на
+	// новом времени при нетронутой серии — состояние видимое и чинится повтором.
+	updated, err := s.repo.Update(ctx, lesson.ID, req)
+	if err != nil {
+		return models.Lesson{}, err
+	}
+	if err := s.recurrence.Retime(ctx, rule, lesson.ID, *lesson.OccurrenceDate,
+		req.ScheduledAt, req.DurationMinutes, scope); err != nil {
+		return models.Lesson{}, err
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return updated, nil
 }
 
 func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope string) error {

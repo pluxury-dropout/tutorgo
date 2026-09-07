@@ -119,27 +119,28 @@ func TestLessonUpdate_PlainLessonNoOverride(t *testing.T) {
 // «Это и все следующие» разрезает правило: старое закрывается вчерашним днём,
 // новое начинается с этого вхождения и материализуется заново.
 func TestLessonUpdate_ScopeFollowing(t *testing.T) {
-	t.Skip("переписывается в Задаче 3")
 	lessonRepo := new(mockLessonRepo)
 	ruleRepo := new(mockRecurrenceRepo)
 	svc := scopedSvc(lessonRepo, ruleRepo)
 
 	lesson := seriesLesson()
+	rule := models.RecurrenceRule{
+		ID: "rule-1", Freq: "weekly", IntervalN: 1, ByWeekday: []int{2},
+		TimeLocal: "17:00", TZ: "Asia/Almaty", DurationMinutes: 60,
+		StartsOn:          date(2026, time.September, 1),
+		MaterializedUntil: date(2027, time.March, 5),
+	}
 	newRule := models.RecurrenceRule{
 		ID: "rule-2", Freq: "weekly", IntervalN: 1, TimeLocal: "22:00", TZ: "Asia/Almaty",
 		DurationMinutes: 90, StartsOn: *lesson.OccurrenceDate, MaterializedUntil: *lesson.OccurrenceDate,
 	}
 
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(lesson, nil)
-	// Зона нового времени берётся из старого правила: время в правиле — стенные
-	// часы, а запрос приходит в UTC.
-	ruleRepo.On("GetByID", mock.Anything, "rule-1").
-		Return(models.RecurrenceRule{ID: "rule-1", TZ: "Asia/Almaty"}, nil)
-	ruleRepo.On("Split", mock.Anything, "rule-1", *lesson.OccurrenceDate, mock.Anything, 90).Return(newRule, nil)
-	lessonRepo.On("Update", mock.Anything, lessonID, updateLessonReq).Return(expectedLesson, nil)
-	lessonRepo.On("ReassignToRule", mock.Anything, lessonID, "rule-2", *lesson.OccurrenceDate).Return(nil)
-	// Будущие вхождения старого правила уходят: их пересоздаст новое.
-	lessonRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", *lesson.OccurrenceDate).Return(nil)
+	ruleRepo.On("GetByID", mock.Anything, "rule-1").Return(rule, nil)
+	ruleRepo.On("Split", mock.Anything, "rule-1", mock.Anything, mock.Anything, 90, mock.Anything).Return(newRule, nil)
+	lessonRepo.On("Update", mock.Anything, lessonID, mock.Anything).Return(expectedLesson, nil)
+	ruleRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", mock.Anything, lessonID).Return(nil)
+	ruleRepo.On("ReassignToRule", mock.Anything, lessonID, "rule-2", mock.Anything).Return(nil)
 	ruleRepo.On("GetByID", mock.Anything, "rule-2").Return(newRule, nil)
 	ruleRepo.On("InsertOccurrences", mock.Anything, "rule-2", mock.Anything).Return(0, nil)
 	ruleRepo.On("SetMaterializedUntil", mock.Anything, "rule-2", mock.Anything).Return(nil)
@@ -147,28 +148,37 @@ func TestLessonUpdate_ScopeFollowing(t *testing.T) {
 	_, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "following")
 
 	require.NoError(t, err)
+	ruleRepo.AssertNotCalled(t, "UpdateTiming")
+	lessonRepo.AssertNotCalled(t, "MarkOverride")
+	// ReassignToRule и DeleteFutureByRule переехали в recurrence-репозиторий:
+	// у lessonRepo этих методов больше нет вовсе.
+	lessonRepo.AssertNotCalled(t, "ReassignToRule")
 	lessonRepo.AssertExpectations(t)
-	ruleRepo.AssertExpectations(t)
 }
 
 // «Все» правит само правило и пересобирает будущие вхождения; прошедшие
 // остаются как есть — они уже состоялись.
 func TestLessonUpdate_ScopeAll(t *testing.T) {
-	t.Skip("переписывается в Задаче 3")
 	lessonRepo := new(mockLessonRepo)
 	ruleRepo := new(mockRecurrenceRepo)
 	svc := scopedSvc(lessonRepo, ruleRepo)
 
 	lesson := seriesLesson()
-	rule := models.RecurrenceRule{ID: "rule-1", TZ: "Asia/Almaty", StartsOn: date(2026, time.September, 1)}
+	rule := models.RecurrenceRule{
+		ID: "rule-1", Freq: "weekly", IntervalN: 1, ByWeekday: []int{2},
+		TimeLocal: "17:00", TZ: "Asia/Almaty", DurationMinutes: 60,
+		StartsOn:          date(2026, time.September, 1),
+		MaterializedUntil: date(2027, time.March, 5),
+	}
 
 	lessonRepo.On("GetByIDForTutor", mock.Anything, lessonID, tutorID).Return(lesson, nil)
-	ruleRepo.On("UpdateTiming", mock.Anything, "rule-1", mock.Anything, 90).Return(nil)
-	lessonRepo.On("Update", mock.Anything, lessonID, updateLessonReq).Return(expectedLesson, nil)
-	lessonRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", *lesson.OccurrenceDate).Return(nil)
 	ruleRepo.On("GetByID", mock.Anything, "rule-1").Return(rule, nil)
-	ruleRepo.On("InsertOccurrences", mock.Anything, "rule-1", mock.Anything).Return(0, nil)
+	lessonRepo.On("Update", mock.Anything, lessonID, mock.Anything).Return(expectedLesson, nil)
+	ruleRepo.On("UpdateTiming", mock.Anything, "rule-1", mock.Anything, 90, mock.Anything).Return(nil)
 	ruleRepo.On("SetMaterializedUntil", mock.Anything, "rule-1", mock.Anything).Return(nil)
+	ruleRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", mock.Anything, lessonID).Return(nil)
+	ruleRepo.On("ReassignToRule", mock.Anything, lessonID, "rule-1", mock.Anything).Return(nil)
+	ruleRepo.On("InsertOccurrences", mock.Anything, "rule-1", mock.Anything).Return(0, nil)
 
 	_, err := svc.Update(context.Background(), lessonID, updateLessonReq, tutorID, "all")
 
@@ -278,6 +288,53 @@ func TestEventUpdate_RenameOnlyNoOverride(t *testing.T) {
 
 	require.NoError(t, err)
 	repo.AssertNotCalled(t, "MarkOverride")
+}
+
+// «Изменить все» у события ходит через тот же Retime, что и у урока: раньше
+// это была вторая копия логики, и баг со scope=all жил в обеих.
+func TestEventUpdate_ScopeAllGoesThroughRetime(t *testing.T) {
+	eventRepo := new(mockEventRepo)
+	ruleRepo := new(mockRecurrenceRepo)
+	svc := service.NewEventService(eventRepo, service.NewRecurrenceService(ruleRepo))
+
+	ruleID := "rule-1"
+	occ := date(2026, time.September, 8) // вторник
+	rule := models.RecurrenceRule{
+		ID: ruleID, Freq: "weekly", IntervalN: 1, ByWeekday: []int{2},
+		TimeLocal: "17:00", TZ: "Asia/Almaty", DurationMinutes: 90,
+		StartsOn: date(2026, time.September, 1),
+		// Материализовано на месяц вперёд, а не «впритык» к RecurrenceHorizon
+		// (см. комментарий у retimeRule в retime_test.go) — иначе тест ловит
+		// окно в пару дней у Retime.Materialize() и гниёт вместе с календарём.
+		MaterializedUntil: date(2026, time.October, 1),
+	}
+	current := models.Event{
+		ID: "e1", Title: "Спортзал", Kind: "personal", StartsAt: scheduledAt,
+		DurationMinutes: 90, RuleID: &ruleID, OccurrenceDate: &occ,
+	}
+	req := models.UpdateEventRequest{
+		Title: "Спортзал", Kind: "personal",
+		StartsAt:        time.Date(2026, time.September, 8, 5, 0, 0, 0, time.UTC),
+		DurationMinutes: 90,
+	}
+
+	eventRepo.On("GetByID", mock.Anything, "e1", tutorID).Return(current, nil)
+	ruleRepo.On("GetByID", mock.Anything, ruleID).Return(rule, nil)
+	eventRepo.On("Update", mock.Anything, "e1", tutorID, mock.Anything).Return(models.Event{ID: "e1"}, nil)
+	ruleRepo.On("UpdateTiming", mock.Anything, ruleID, "10:00", 90, []int{2}).Return(nil)
+	// Ключевая проверка: граница откатывается на дату вхождения, иначе
+	// Materialize выйдет сразу и будущее останется удалённым.
+	ruleRepo.On("SetMaterializedUntil", mock.Anything, ruleID, occ).Return(nil).Once()
+	ruleRepo.On("DeleteFutureByRule", mock.Anything, ruleID, occ.AddDate(0, 0, -1), "e1").Return(nil)
+	ruleRepo.On("ReassignToRule", mock.Anything, "e1", ruleID, occ).Return(nil)
+	ruleRepo.On("InsertOccurrences", mock.Anything, ruleID, mock.Anything).Return(0, nil)
+	ruleRepo.On("SetMaterializedUntil", mock.Anything, ruleID, mock.Anything).Return(nil)
+
+	_, err := svc.Update(context.Background(), "e1", tutorID, req, "all")
+
+	require.NoError(t, err)
+	ruleRepo.AssertExpectations(t)
+	eventRepo.AssertNotCalled(t, "MarkOverride")
 }
 
 // Одиночное событие вне серии не метится.

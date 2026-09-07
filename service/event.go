@@ -82,9 +82,26 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 	}
 
 	if scope != scopeOne && current.RuleID != nil && current.OccurrenceDate != nil {
-		if err := s.applyToSeries(ctx, current, req, scope); err != nil {
+		rule, err := s.recurrence.GetRule(ctx, *current.RuleID)
+		if err != nil {
 			return models.Event{}, err
 		}
+		req.StartsAt, err = NormalizeSeriesStart(rule, *current.OccurrenceDate, req.StartsAt)
+		if err != nil {
+			return models.Event{}, err
+		}
+		e, err := s.repo.Update(ctx, id, tutorID, req)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Event{}, fmt.Errorf("event: %w", ErrNotFound)
+		}
+		if err != nil {
+			return e, err
+		}
+		if err := s.recurrence.Retime(ctx, rule, current.ID, *current.OccurrenceDate,
+			req.StartsAt, req.DurationMinutes, scope); err != nil {
+			return models.Event{}, err
+		}
+		return e, nil
 	}
 
 	e, err := s.repo.Update(ctx, id, tutorID, req)
@@ -105,12 +122,6 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 		}
 	}
 	return e, nil
-}
-
-// applyToSeries переписывается в Задаче 3 (NormalizeSeriesStart/swapWeekday) —
-// сейчас только заглушка, чтобы пакет собирался.
-func (s *eventService) applyToSeries(ctx context.Context, current models.Event, req models.UpdateEventRequest, scope string) error {
-	return fmt.Errorf("not implemented")
 }
 
 func (s *eventService) Delete(ctx context.Context, id, tutorID, scope string) error {

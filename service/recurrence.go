@@ -29,6 +29,15 @@ type RecurrenceService interface {
 	// PruneFuture убирает будущие вхождения правила: удаление «это и все
 	// следующие» и «все» ходят через него.
 	PruneFuture(ctx context.Context, ruleID string, after time.Time) error
+	// Retime переносит серию, взяв за образец вхождение occurrenceID.
+	//
+	// Вызывающий обязан обновить свою строку (время, заметки, статус) ДО вызова:
+	// Retime переставляет только rule_id/occurrence_date и пересобирает будущее.
+	//
+	// scope = following — правило разрезается, вхождение уходит в новую ветку;
+	//         all       — правится правило целиком, прошедшие не трогаются.
+	Retime(ctx context.Context, rule models.RecurrenceRule, occurrenceID string,
+		from, newStart time.Time, duration int, scope string) error
 }
 
 // Область правки вхождения серии.
@@ -105,6 +114,70 @@ func (s *recurrenceService) PruneFuture(ctx context.Context, ruleID string, afte
 // принадлежит. Само вхождение отменяет вызывающий — здесь только правило.
 func (s *recurrenceService) CloseRule(ctx context.Context, ruleID string, at time.Time) error {
 	return s.repo.SetEndsOn(ctx, ruleID, at.AddDate(0, 0, -1))
+}
+
+func (s *recurrenceService) Retime(ctx context.Context, rule models.RecurrenceRule, occurrenceID string,
+	from, newStart time.Time, duration int, scope string) error {
+
+	if scope != scopeFollowing && scope != scopeAll {
+		return fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
+
+	normalized, err := NormalizeSeriesStart(rule, from, newStart)
+	if err != nil {
+		return err
+	}
+	loc, err := time.LoadLocation(rule.TZ)
+	if err != nil {
+		return fmt.Errorf("timezone %q: %w", rule.TZ, ErrBadRequest)
+	}
+	local := normalized.In(loc)
+	newDate := dayOf(local)
+	timeLocal := local.Format("15:04")
+
+	byweekday := rule.ByWeekday
+	if rule.Freq == "weekly" && isoWeekday(newDate) != isoWeekday(from) {
+		byweekday = swapWeekday(rule, isoWeekday(from), isoWeekday(newDate))
+	}
+
+	// cut — дата, с которой серия пересобирается. При переезде на более ранний
+	// день недели это новая дата: старое вхождение того дня обязано уйти.
+	cut := dayOf(from)
+	if newDate.Before(cut) {
+		cut = newDate
+	}
+
+	targetID := rule.ID
+	if scope == scopeFollowing {
+		newRule, err := s.repo.Split(ctx, rule.ID, cut, timeLocal, duration, byweekday)
+		if err != nil {
+			return err
+		}
+		targetID = newRule.ID
+	} else {
+		if err := s.repo.UpdateTiming(ctx, rule.ID, timeLocal, duration, byweekday); err != nil {
+			return err
+		}
+		// Границу откатываем ДО разрушающего удаления. Обрыв на любом следующем
+		// шаге оставит правило в выборке DueForMaterialization, и ночная джоба
+		// долечит; обратный порядок оставил бы дыру навсегда — уже без ошибки
+		// в коде. Дублей не будет: (rule_id, occurrence_date) уникален.
+		if err := s.repo.SetMaterializedUntil(ctx, rule.ID, cut); err != nil {
+			return err
+		}
+	}
+
+	// Чистим ИСХОДНОЕ правило: при following целевое только что создано и пусто,
+	// а будущее старой ветки иначе живёт параллельно новой. Граница
+	// включительная, поэтому в after (семантика строгого >) уходит cut − 1 день.
+	if err := s.repo.DeleteFutureByRule(ctx, rule.ID, cut.AddDate(0, 0, -1), occurrenceID); err != nil {
+		return err
+	}
+	if err := s.repo.ReassignToRule(ctx, occurrenceID, targetID, newDate); err != nil {
+		return err
+	}
+	_, err = s.Materialize(ctx, targetID, time.Now().Add(RecurrenceHorizon))
+	return err
 }
 
 func (s *recurrenceService) Materialize(ctx context.Context, ruleID string, horizon time.Time) (int, error) {
