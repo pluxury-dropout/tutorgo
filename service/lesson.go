@@ -227,6 +227,9 @@ func (s *lessonService) GetByID(ctx context.Context, id string, tutorID string) 
 //         following — это и все следующие: правило разрезается на две ветки;
 //         all       — всё правило целиком, прошедшие вхождения не трогаются.
 func (s *lessonService) Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error) {
+	if !validScope(scope) {
+		return models.Lesson{}, fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	lesson, err := s.repo.GetByIDForTutor(ctx, id, tutorID)
 	if err != nil {
 		return models.Lesson{}, fmt.Errorf("lesson: %w", ErrNotFound)
@@ -272,15 +275,22 @@ func (s *lessonService) updateSeries(ctx context.Context, lesson models.Lesson, 
 	if err != nil {
 		return models.Lesson{}, err
 	}
+	// defer сразу после успешного repo.Update: строка уже подвинута, и кеш
+	// обязан протухнуть даже если Retime дальше упадёт с ошибкой (в т.ч.
+	// ErrConflict из пре-флайта занятой даты) — иначе календарь молчит про
+	// изменение, которое всё-таки произошло.
+	defer globalCalendarCache.Invalidate(tutorID)
 	if err := s.recurrence.Retime(ctx, rule, lesson.ID, *lesson.OccurrenceDate,
 		req.ScheduledAt, req.DurationMinutes, scope); err != nil {
 		return models.Lesson{}, err
 	}
-	globalCalendarCache.Invalidate(tutorID)
 	return updated, nil
 }
 
 func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope string) error {
+	if !validScope(scope) {
+		return fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	lesson, err := s.repo.GetByIDForTutor(ctx, id, tutorID)
 	if err != nil {
 		return fmt.Errorf("lesson: %w", ErrNotFound)

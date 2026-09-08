@@ -73,6 +73,9 @@ func (s *eventService) GetByRange(ctx context.Context, tutorID, from, to string)
 // Update правит вхождение в одной из трёх областей — см. LessonService.Update,
 // семантика та же: one, following, all.
 func (s *eventService) Update(ctx context.Context, id, tutorID string, req models.UpdateEventRequest, scope string) (models.Event, error) {
+	if !validScope(scope) {
+		return models.Event{}, fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	if req.Kind == "" {
 		req.Kind = "personal"
 	}
@@ -125,6 +128,9 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 }
 
 func (s *eventService) Delete(ctx context.Context, id, tutorID, scope string) error {
+	if !validScope(scope) {
+		return fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	current, err := s.repo.GetByID(ctx, id, tutorID)
 	if err != nil {
 		return fmt.Errorf("event: %w", ErrNotFound)

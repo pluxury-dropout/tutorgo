@@ -92,9 +92,38 @@ func TestRetime_SwapsWeekday(t *testing.T) {
 	newStart := time.Date(2026, time.September, 9, 5, 0, 0, 0, time.UTC) // среда, 10:00 Алматы
 	newDate := date(2026, time.September, 9)
 
+	repo.On("OccurrenceExists", mock.Anything, "rule-1", newDate, occID).Return(false, nil)
 	repo.On("UpdateTiming", mock.Anything, "rule-1", "10:00", 60, []int{3, 4}).Return(nil)
 	repo.On("SetMaterializedUntil", mock.Anything, "rule-1", from).Return(nil)
 	// cut = min(вт 8, ср 9) = 8; удаляем всё от 8-го, кроме правимого вхождения.
+	repo.On("DeleteFutureByRule", mock.Anything, "rule-1", from.AddDate(0, 0, -1), occID).Return(nil)
+	repo.On("ReassignToRule", mock.Anything, occID, "rule-1", newDate).Return(nil)
+	repo.On("GetByID", mock.Anything, "rule-1").Return(rule, nil)
+	repo.On("InsertOccurrences", mock.Anything, "rule-1", mock.Anything).Return(0, nil)
+	repo.On("SetMaterializedUntil", mock.Anything, "rule-1", mock.Anything).Return(nil)
+
+	require.NoError(t, svc.Retime(context.Background(), rule, occID, from, newStart, 60, "all"))
+	repo.AssertExpectations(t)
+}
+
+// Пустой byweekday — поддерживаемое состояние: CreateRule нормализует nil в
+// []int{}, а Occurrences в этом случае берёт день недели из starts_on (§2.1
+// спеки). swapWeekday обязан материализовать набор тем же способом перед
+// подменой, иначе перенос вторника на среду потеряет день вовсе, а не заменит.
+func TestRetime_SwapsWeekdayFromEmptyByWeekday(t *testing.T) {
+	repo := new(mockRecurrenceRepo)
+	svc := service.NewRecurrenceService(repo)
+	rule := retimeRule()
+	rule.ByWeekday = []int{}                                             // starts_on — вторник 01.09, тот же день недели, что и from
+	from := date(2026, time.September, 8)                                // вторник
+	newStart := time.Date(2026, time.September, 9, 5, 0, 0, 0, time.UTC) // среда, 10:00 Алматы
+	newDate := date(2026, time.September, 9)
+
+	repo.On("OccurrenceExists", mock.Anything, "rule-1", newDate, occID).Return(false, nil)
+	// {} материализуется в {isoWeekday(starts_on)} = {2}, вторник заменяется на
+	// среду: результат {3}, а не {2,3} и не пустой набор.
+	repo.On("UpdateTiming", mock.Anything, "rule-1", "10:00", 60, []int{3}).Return(nil)
+	repo.On("SetMaterializedUntil", mock.Anything, "rule-1", from).Return(nil)
 	repo.On("DeleteFutureByRule", mock.Anything, "rule-1", from.AddDate(0, 0, -1), occID).Return(nil)
 	repo.On("ReassignToRule", mock.Anything, occID, "rule-1", newDate).Return(nil)
 	repo.On("GetByID", mock.Anything, "rule-1").Return(rule, nil)
@@ -115,6 +144,7 @@ func TestRetime_MovingEarlierPullsCutBack(t *testing.T) {
 	newStart := time.Date(2026, time.September, 8, 5, 0, 0, 0, time.UTC) // вторник
 	cut := date(2026, time.September, 8)
 
+	repo.On("OccurrenceExists", mock.Anything, "rule-1", cut, occID).Return(false, nil)
 	repo.On("UpdateTiming", mock.Anything, "rule-1", "10:00", 60, []int{2}).Return(nil)
 	repo.On("SetMaterializedUntil", mock.Anything, "rule-1", cut).Return(nil)
 	repo.On("DeleteFutureByRule", mock.Anything, "rule-1", cut.AddDate(0, 0, -1), occID).Return(nil)
@@ -125,6 +155,28 @@ func TestRetime_MovingEarlierPullsCutBack(t *testing.T) {
 
 	require.NoError(t, svc.Retime(context.Background(), rule, occID, from, newStart, 60, "all"))
 	repo.AssertExpectations(t)
+}
+
+// Целевая дата уже занята вхождением, которое DeleteFutureByRule щадит
+// (перенесённым, проведённым или отменённым) — Retime обязан упасть ДО первой
+// записи, а не после того, как ReassignToRule упрётся в уникальный индекс.
+func TestRetime_ScopeAllRejectsOccupiedDate(t *testing.T) {
+	repo := new(mockRecurrenceRepo)
+	svc := service.NewRecurrenceService(repo)
+	rule := retimeRule()
+	from := date(2026, time.September, 8)                                // вторник
+	newStart := time.Date(2026, time.September, 9, 5, 0, 0, 0, time.UTC) // среда, 10:00 Алматы
+	newDate := date(2026, time.September, 9)
+
+	repo.On("OccurrenceExists", mock.Anything, "rule-1", newDate, occID).Return(true, nil)
+
+	err := svc.Retime(context.Background(), rule, occID, from, newStart, 60, "all")
+
+	require.ErrorIs(t, err, service.ErrConflict)
+	repo.AssertNotCalled(t, "UpdateTiming")
+	repo.AssertNotCalled(t, "SetMaterializedUntil")
+	repo.AssertNotCalled(t, "DeleteFutureByRule")
+	repo.AssertNotCalled(t, "ReassignToRule")
 }
 
 // «Это и все следующие» разрезает правило: чистим ИСХОДНОЕ правило, а

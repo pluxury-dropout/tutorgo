@@ -47,6 +47,13 @@ const (
 	scopeAll       = "all"
 )
 
+// validScope отсекает мусор в ?scope= до первой записи: иначе неизвестное
+// значение уходит в серийную ветку, урок записывается без is_override, и
+// ближайшее «изменить все» молча сотрёт перенос.
+func validScope(s string) bool {
+	return s == scopeOne || s == scopeFollowing || s == scopeAll
+}
+
 type recurrenceService struct {
 	repo repository.RecurrenceRepository
 	log  *slog.Logger
@@ -129,6 +136,23 @@ func (s *recurrenceService) Retime(ctx context.Context, rule models.RecurrenceRu
 	byweekday := rule.ByWeekday
 	if rule.Freq == "weekly" && isoWeekday(newDate) != isoWeekday(from) {
 		byweekday = swapWeekday(rule, isoWeekday(from), isoWeekday(newDate))
+	}
+
+	// Целевую дату мог занять урок, который DeleteFutureByRule щадит:
+	// перенесённый руками, проведённый или отменённый. Спрашиваем до первой
+	// записи — иначе ReassignToRule упрётся в уникальный индекс уже после
+	// того, как будущее снесено, и пользователь получит 500 плюс пустую
+	// серию до ночной джобы. У following этой беды нет: Split рождает
+	// пустое правило.
+	if scope == scopeAll && !newDate.Equal(dayOf(from)) {
+		occupied, err := s.repo.OccurrenceExists(ctx, rule.ID, newDate, occurrenceID)
+		if err != nil {
+			return err
+		}
+		if occupied {
+			return fmt.Errorf("на %s уже есть занятие этой серии: %w",
+				newDate.Format("02.01.2006"), ErrConflict)
+		}
 	}
 
 	// cut — дата, с которой серия пересобирается. При переезде на более ранний

@@ -38,6 +38,10 @@ func (m *mockRecurrenceRepo) ReassignToRule(ctx context.Context, occurrenceID, r
 func (m *mockRecurrenceRepo) SetEndsOn(ctx context.Context, ruleID string, endsOn time.Time) error {
 	return m.Called(ctx, ruleID, endsOn).Error(0)
 }
+func (m *mockRecurrenceRepo) OccurrenceExists(ctx context.Context, ruleID string, date time.Time, exceptID string) (bool, error) {
+	args := m.Called(ctx, ruleID, date, exceptID)
+	return args.Bool(0), args.Error(1)
+}
 
 func seriesLesson() models.Lesson {
 	ruleID := "rule-1"
@@ -56,8 +60,8 @@ func scopedSvc(lessonRepo *mockLessonRepo, ruleRepo *mockRecurrenceRepo) service
 // Перенос одного вхождения не трогает правило: иначе перетаскивание урока
 // мышью незаметно сдвигало бы всю серию. Само вхождение при этом помечается
 // вручную правленным — иначе ближайшее «это и все следующие» снесёт перенос
-// (DeleteFutureByRule смотрит ровно на is_override) и материализация вернёт
-// урок на место по расписанию.
+// (DeleteFutureByRule в recurrence-репозитории смотрит ровно на is_override) и
+// материализация вернёт урок на место по расписанию.
 func TestLessonUpdate_ScopeOne(t *testing.T) {
 	lessonRepo := new(mockLessonRepo)
 	ruleRepo := new(mockRecurrenceRepo)
@@ -153,9 +157,6 @@ func TestLessonUpdate_ScopeFollowing(t *testing.T) {
 	require.NoError(t, err)
 	ruleRepo.AssertNotCalled(t, "UpdateTiming")
 	lessonRepo.AssertNotCalled(t, "MarkOverride")
-	// ReassignToRule и DeleteFutureByRule переехали в recurrence-репозиторий:
-	// у lessonRepo этих методов больше нет вовсе.
-	lessonRepo.AssertNotCalled(t, "ReassignToRule")
 	lessonRepo.AssertExpectations(t)
 	ruleRepo.AssertExpectations(t)
 }
@@ -188,6 +189,8 @@ func TestLessonUpdate_ScopeAll(t *testing.T) {
 	lessonRepo.On("Update", mock.Anything, lessonID, mock.MatchedBy(func(r models.UpdateLessonRequest) bool {
 		return r.ScheduledAt.Equal(time.Date(2026, time.September, 11, 10, 0, 0, 0, time.UTC))
 	})).Return(expectedLesson, nil)
+	// Пре-флайт занятой даты: целевая пятница 11.09 у этой серии ничем не занята.
+	ruleRepo.On("OccurrenceExists", mock.Anything, "rule-1", date(2026, time.September, 11), lessonID).Return(false, nil)
 	ruleRepo.On("UpdateTiming", mock.Anything, "rule-1", mock.Anything, 90, mock.Anything).Return(nil)
 	ruleRepo.On("SetMaterializedUntil", mock.Anything, "rule-1", mock.Anything).Return(nil)
 	ruleRepo.On("DeleteFutureByRule", mock.Anything, "rule-1", mock.Anything, lessonID).Return(nil)
@@ -202,6 +205,10 @@ func TestLessonUpdate_ScopeAll(t *testing.T) {
 	// правка «все» обошла бы его стороной.
 	lessonRepo.AssertNotCalled(t, "MarkOverride")
 	lessonRepo.AssertExpectations(t)
+	// Без этой строки тест не доказывает ничего о главном дефекте: если убрать
+	// из updateSeries весь вызов Retime, ruleRepo.On(...) остаются неиспользованными
+	// ожиданиями, и только AssertExpectations на ruleRepo это ловит.
+	ruleRepo.AssertExpectations(t)
 }
 
 // Отменённое вхождение остаётся строкой: удали его целиком — и ночная

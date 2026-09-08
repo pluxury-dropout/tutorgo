@@ -111,6 +111,90 @@ func TestRetime_ScopeAllKeepsEveryOccurrence(t *testing.T) {
 	assert.Equal(t, 6, atNewTime, "с пятого по десятое — на новом времени")
 }
 
+// seedEventSeries создаёт репетитора, правило и count еженедельных событий
+// начиная с first. В отличие от seedSeries события привязаны к tutor_id
+// напрямую — курс им не нужен. Каскад от tutors сносит всё остальное.
+func seedEventSeries(t *testing.T, pool *pgxpool.Pool, first time.Time, count int) (tutorID, ruleID string) {
+	ctx := context.Background()
+	email := fmt.Sprintf("retime-event-%d@example.com", time.Now().UnixNano())
+
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO tutors (email, password_hash, first_name, last_name)
+		 VALUES ($1, 'x', 'Test', 'Tutor') RETURNING id`, email).Scan(&tutorID))
+	t.Cleanup(func() {
+		_, err := pool.Exec(context.Background(), `DELETE FROM tutors WHERE id=$1`, tutorID)
+		assert.NoError(t, err)
+	})
+
+	// ends_on обязателен — та же причина, что в seedSeries: без него правило
+	// бессрочно, и Materialize в хвосте Retime дольёт его вплоть до
+	// RecurrenceHorizon, а точный счёт вхождений ниже станет плавающим.
+	lastOccurrence := first.AddDate(0, 0, 7*(count-1))
+	horizon := first.AddDate(0, 0, 7*count)
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO recurrence_rules
+		     (tutor_id, freq, interval_n, byweekday, time_local, tz, duration_minutes,
+		      starts_on, ends_on, materialized_until)
+		 VALUES ($1, 'weekly', 1, $2::smallint[], '17:00', 'Asia/Almaty', 60, $3::date, $4::date, $5::date)
+		 RETURNING id`,
+		tutorID, []int{int(first.Weekday()+6)%7 + 1}, first, lastOccurrence, horizon).Scan(&ruleID))
+
+	for i := 0; i < count; i++ {
+		at := first.AddDate(0, 0, 7*i)
+		_, err := pool.Exec(ctx,
+			`INSERT INTO events (tutor_id, title, kind, starts_at, duration_minutes, rule_id, occurrence_date)
+			 VALUES ($1, 'Спортзал', 'personal', $2, 60, $3::uuid, $4::date)`,
+			tutorID, at, ruleID, at)
+		require.NoError(t, err)
+	}
+	return tutorID, ruleID
+}
+
+// «Изменить все» на серии СОБЫТИЙ (спека §6.2.2, п.2): пятое вхождение — якорь,
+// первые четыре остаются на старом времени, с пятого по десятое встают на
+// новое. Дефект A прямо сейчас портит данные именно у событий: events-половина
+// DeleteFutureByRule (другой предикат — NOT cancelled вместо status='scheduled'),
+// ReassignToRule и JOIN LATERAL в InsertOccurrences нигде в репозитории не
+// выполняются на живой БД, кроме этого теста — на моках «шаблон не нашёлся»
+// подделать нечем.
+func TestRetime_ScopeAllKeepsEveryEventOccurrence(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	first := nextWeekday(time.Now().AddDate(0, 0, 1), time.Thursday).
+		Truncate(24 * time.Hour).Add(12 * time.Hour)
+	tutorID, ruleID := seedEventSeries(t, pool, first, 10)
+
+	repo := repository.NewRecurrenceRepository(pool)
+	svc := service.NewRecurrenceService(repo)
+	rule, err := repo.GetByID(ctx, ruleID)
+	require.NoError(t, err)
+
+	fifth := first.AddDate(0, 0, 7*4)
+	newStart := time.Date(fifth.Year(), fifth.Month(), fifth.Day(), 5, 0, 0, 0, time.UTC) // 10:00 Алматы
+
+	var fifthID string
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT id FROM events WHERE rule_id=$1::uuid AND occurrence_date=$2::date`,
+		ruleID, fifth).Scan(&fifthID))
+
+	// Контракт Retime («переставляет только rule_id/occurrence_date») требует,
+	// чтобы своя строка была обновлена ДО вызова — в проде это делает
+	// eventService.Update.
+	_, err = pool.Exec(ctx, `UPDATE events SET starts_at=$2 WHERE id=$1`, fifthID, newStart)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.Retime(ctx, rule, fifthID, fifth.Truncate(24*time.Hour), newStart, 60, "all"))
+
+	var total, atNewTime int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*),
+		        count(*) FILTER (WHERE (starts_at AT TIME ZONE 'Asia/Almaty')::time = '10:00')
+		 FROM events WHERE tutor_id=$1`, tutorID).Scan(&total, &atNewTime))
+
+	assert.Equal(t, 10, total, "ни одно вхождение не потеряно и не задвоено")
+	assert.Equal(t, 6, atNewTime, "с пятого по десятое — на новом времени")
+}
+
 // Перенос серии со своего дня недели на другой: byweekday правила меняется,
 // все будущие вхождения встают на новый день, прошедшие остаются на старом.
 func TestRetime_ScopeAllMovesWeekday(t *testing.T) {
@@ -290,7 +374,10 @@ func TestArchiveCourseSchedule_JobDoesNotBringLessonsBack(t *testing.T) {
 		        count(*) FILTER (WHERE scheduled_at < NOW())
 		 FROM lessons WHERE course_id=$1`, courseID).Scan(&future, &past))
 	assert.Zero(t, future, "будущих уроков не осталось")
-	assert.Positive(t, past, "завершённые остались")
+	// Точный счёт был бы флаки: first = now−21d усечён до суток и сдвинут на
+	// +12ч, поэтому урок дня 0 попадает в прошлое только если тест бежит после
+	// полудня UTC — ожидаемое значение 3 или 4 в зависимости от времени запуска.
+	assert.GreaterOrEqual(t, past, 3, "завершённые остались")
 
 	// seedSeries ставит materialized_until на неделю позже ends_on (нужно
 	// другим трём тестам), поэтому без форсирования Occurrences уже обрывает

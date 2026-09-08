@@ -56,16 +56,14 @@ func scanLesson(row interface{ Scan(...any) error }) (models.Lesson, error) {
 }
 
 func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status, rule_id, occurrence_date)
+	return scanLesson(r.pool.QueryRow(ctx,
+		`INSERT INTO lessons AS l (course_id, scheduled_at, duration_minutes, notes, status, rule_id, occurrence_date)
 		 VALUES ($1, $2, $3, $4,
 		         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END,
 		         NULLIF($5, '')::uuid, $6::date)
-		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
+		 RETURNING `+lessonColumns,
 		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes, req.RuleID, req.OccurrenceDate,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
-	return lesson, err
+	))
 }
 
 func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error) {
@@ -133,8 +131,9 @@ func (r *lessonRepository) Cancel(ctx context.Context, id string) error {
 
 // MarkOverride помечает вхождение вручную правленным. Ставится при правке
 // «только это»: без метки ближайшее «это и все следующие» снесёт строку
-// (DeleteFutureByRule смотрит ровно на is_override), а материализация вернёт
-// урок на место по расписанию правила — перенос молча пропадёт.
+// (DeleteFutureByRule в recurrence-репозитории смотрит ровно на is_override), а
+// материализация вернёт урок на место по расписанию правила — перенос молча
+// пропадёт.
 func (r *lessonRepository) MarkOverride(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE lessons SET is_override = TRUE WHERE id = $1`, id)
 	return err
@@ -148,14 +147,12 @@ func (r *lessonRepository) GetByIDForTutor(ctx context.Context, id string, tutor
 }
 
 func (r *lessonRepository) Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`UPDATE lessons SET scheduled_at=$1, duration_minutes=$2, status=$3, notes=$4
-		 WHERE id=$5
-		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
+	return scanLesson(r.pool.QueryRow(ctx,
+		`UPDATE lessons AS l SET scheduled_at=$1, duration_minutes=$2, status=$3, notes=$4
+		 WHERE l.id=$5
+		 RETURNING `+lessonColumns,
 		req.ScheduledAt, req.DurationMinutes, req.Status, req.Notes, id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
-	return lesson, err
+	))
 }
 
 func (r *lessonRepository) Delete(ctx context.Context, id string) error {

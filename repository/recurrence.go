@@ -20,6 +20,11 @@ type RecurrenceRepository interface {
 	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time, exceptID string) error
 	ReassignToRule(ctx context.Context, occurrenceID, ruleID string, occurrenceDate time.Time) error
 	SetEndsOn(ctx context.Context, ruleID string, endsOn time.Time) error
+	// OccurrenceExists отвечает, занята ли дата правила вхождением, которое
+	// DeleteFutureByRule не тронет: вручную перенесённым, проведённым или
+	// отменённым. Спрашивать надо ДО первой записи — иначе ReassignToRule упрётся
+	// в уникальный индекс уже после того, как будущее снесено.
+	OccurrenceExists(ctx context.Context, ruleID string, date time.Time, exceptID string) (bool, error)
 }
 
 type recurrenceRepository struct {
@@ -186,11 +191,14 @@ func (r *recurrenceRepository) InsertOccurrences(ctx context.Context, ruleID str
 // другие — осознанные решения пользователя. exceptID щадит вхождение, которое
 // вызывающий переставляет сам; пустая строка означает «щадить нечего».
 func (r *recurrenceRepository) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time, exceptID string) error {
+	// id IS DISTINCT FROM NULLIF($3,'')::uuid, а не ($3 = '' OR id <> $3::uuid):
+	// второе работает только пока планировщик выходит из OR на TRUE и не успевает
+	// скастовать '' в uuid. Порядок операндов планировщика — не контракт.
 	if _, err := r.pool.Exec(ctx,
 		`DELETE FROM lessons
 		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
 		   AND is_override = FALSE AND status = 'scheduled'
-		   AND ($3 = '' OR id <> $3::uuid)`, ruleID, after, exceptID,
+		   AND id IS DISTINCT FROM NULLIF($3, '')::uuid`, ruleID, after, exceptID,
 	); err != nil {
 		return err
 	}
@@ -198,8 +206,25 @@ func (r *recurrenceRepository) DeleteFutureByRule(ctx context.Context, ruleID st
 		`DELETE FROM events
 		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
 		   AND is_override = FALSE AND NOT cancelled
-		   AND ($3 = '' OR id <> $3::uuid)`, ruleID, after, exceptID)
+		   AND id IS DISTINCT FROM NULLIF($3, '')::uuid`, ruleID, after, exceptID)
 	return err
+}
+
+// OccurrenceExists — по обеим таблицам, как и остальные методы «по rule_id»:
+// правило владеет либо уроками, либо событиями.
+func (r *recurrenceRepository) OccurrenceExists(ctx context.Context, ruleID string, date time.Time, exceptID string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+		     SELECT 1 FROM lessons
+		     WHERE rule_id = $1::uuid AND occurrence_date = $2::date
+		       AND id IS DISTINCT FROM NULLIF($3, '')::uuid
+		     UNION ALL
+		     SELECT 1 FROM events
+		     WHERE rule_id = $1::uuid AND occurrence_date = $2::date
+		       AND id IS DISTINCT FROM NULLIF($3, '')::uuid
+		 )`, ruleID, date, exceptID).Scan(&exists)
+	return exists, err
 }
 
 // ReassignToRule переводит вхождение в другое правило и на другую дату.
