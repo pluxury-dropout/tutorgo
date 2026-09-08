@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
-import { useAttendance, useUpdateAttendance, useDeleteLesson } from '@/lib/hooks/useLessons'
+import { useAttendance, useUpdateAttendance } from '@/lib/hooks/useLessons'
 import { useCourseEnrollments } from '@/lib/hooks/useCourses'
 import { useUpdateLessonStatus } from '@/lib/hooks/useCalendar'
 import { STATUS_LABELS } from '@/lib/lessonStatus'
@@ -12,9 +12,8 @@ import { STATUS_LABELS } from '@/lib/lessonStatus'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTitle } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RecurrenceScopeDialog } from '@/components/calendar/RecurrenceScopeDialog'
-import type { LessonStatus, RecurrenceScope } from '@/types/api'
-import { Video, Link2, Trash2 } from 'lucide-react'
+import type { LessonStatus } from '@/types/api'
+import { Video, Link2 } from 'lucide-react'
 
 export interface QuickLesson {
   id:              string
@@ -25,8 +24,6 @@ export interface QuickLesson {
   isGroup:         boolean
   scheduledAt:     string
   durationMinutes: number
-  /** Заполнен только у вхождения серии — правка тогда спрашивает область. */
-  ruleId?:         string
 }
 
 interface Props {
@@ -59,20 +56,6 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
   // в кеше запроса — копировать их в state значило бы держать две версии правды.
   const [overrides, setOverrides] = useState<Map<string, Attendance>>(new Map())
 
-  // datetime-local хочет местное время без зоны — toISOString() отдал бы UTC.
-  const [startsAt, setStartsAt] = useState(() => {
-    const d = new Date(lesson.scheduledAt)
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
-  })
-  const [duration, setDuration] = useState(lesson.durationMinutes)
-
-  // У вхождения серии сначала спрашиваем область; одиночный урок правится
-  // сразу, лишний диалог там был бы шумом.
-  const [asking, setAsking] = useState<'edit' | 'delete' | null>(null)
-  const isSeries = !!lesson.ruleId
-
-  const deleteLesson = useDeleteLesson(lesson.courseId)
-
   const updateStatus     = useUpdateLessonStatus(lesson.id)
   const { data: enrollments = [] } = useCourseEnrollments(lesson.isGroup ? lesson.courseId : '')
   const { data: existing = [] }    = useAttendance(lesson.isGroup ? lesson.id : '')
@@ -92,16 +75,13 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
     setOverrides((prev) => new Map(prev).set(studentId, next))
   }
 
-  async function save(scope: RecurrenceScope) {
+  async function handleSave() {
     try {
       await updateStatus.mutateAsync({
-        data: {
-          scheduled_at:     new Date(startsAt).toISOString(),
-          duration_minutes: duration,
-          status,
-          notes,
-        },
-        scope,
+        scheduled_at:     lesson.scheduledAt,
+        duration_minutes: lesson.durationMinutes,
+        status,
+        notes,
       })
       if (lesson.isGroup && enrollments.length > 0) {
         await updateAttendance.mutateAsync(
@@ -114,19 +94,6 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
       toast.error('Ошибка сохранения')
     }
   }
-
-  async function remove(scope: RecurrenceScope) {
-    try {
-      await deleteLesson.mutateAsync({ id: lesson.id, scope })
-      toast.success(scope === 'one' && isSeries ? 'Урок отменён' : 'Урок удалён')
-      onClose()
-    } catch {
-      toast.error('Не удалось удалить урок')
-    }
-  }
-
-  function handleSave()   { if (isSeries) { setAsking('edit');   return } save('one') }
-  function handleDelete() { if (isSeries) { setAsking('delete'); return } remove('one') }
 
   const start   = new Date(lesson.scheduledAt)
   const end     = new Date(start.getTime() + lesson.durationMinutes * 60_000)
@@ -145,29 +112,6 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
       </div>
 
       <div className="space-y-3 py-1">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Начало</label>
-            <input
-              type="datetime-local"
-              value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="w-24">
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Минут</label>
-            <input
-              type="number"
-              min={15}
-              step={15}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Статус</label>
           <Select value={status} onValueChange={(v) => setStatus(v as LessonStatus)}>
@@ -251,18 +195,13 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
       </div>
 
       <div className="flex items-center justify-between pt-2">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
-            <Trash2 className="size-4" /> Удалить
-          </Button>
-          <button
-            type="button"
-            onClick={() => { router.push(`/courses/${lesson.courseId}`); onClose() }}
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
-          >
-            Перейти к курсу →
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => { router.push(`/courses/${lesson.courseId}`); onClose() }}
+          className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
+        >
+          Перейти к курсу →
+        </button>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
           <Button onClick={handleSave} disabled={isPending}>
@@ -270,13 +209,6 @@ function QuickLessonForm({ lesson, onClose }: { lesson: QuickLesson; onClose: ()
           </Button>
         </div>
       </div>
-
-      <RecurrenceScopeDialog
-        open={!!asking}
-        action={asking ?? 'edit'}
-        onPick={(scope) => (asking === 'delete' ? remove(scope) : save(scope))}
-        onClose={() => setAsking(null)}
-      />
     </>
   )
 }
