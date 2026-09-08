@@ -73,6 +73,9 @@ func (s *eventService) GetByRange(ctx context.Context, tutorID, from, to string)
 // Update правит вхождение в одной из трёх областей — см. LessonService.Update,
 // семантика та же: one, following, all.
 func (s *eventService) Update(ctx context.Context, id, tutorID string, req models.UpdateEventRequest, scope string) (models.Event, error) {
+	if !validScope(scope) {
+		return models.Event{}, fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	if req.Kind == "" {
 		req.Kind = "personal"
 	}
@@ -82,9 +85,26 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 	}
 
 	if scope != scopeOne && current.RuleID != nil && current.OccurrenceDate != nil {
-		if err := s.applyToSeries(ctx, current, req, scope); err != nil {
+		rule, err := s.recurrence.GetRule(ctx, *current.RuleID)
+		if err != nil {
 			return models.Event{}, err
 		}
+		req.StartsAt, err = NormalizeSeriesStart(rule, *current.OccurrenceDate, req.StartsAt)
+		if err != nil {
+			return models.Event{}, err
+		}
+		e, err := s.repo.Update(ctx, id, tutorID, req)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Event{}, fmt.Errorf("event: %w", ErrNotFound)
+		}
+		if err != nil {
+			return e, err
+		}
+		if err := s.recurrence.Retime(ctx, rule, current.ID, *current.OccurrenceDate,
+			req.StartsAt, req.DurationMinutes, scope); err != nil {
+			return models.Event{}, err
+		}
+		return e, nil
 	}
 
 	e, err := s.repo.Update(ctx, id, tutorID, req)
@@ -107,41 +127,10 @@ func (s *eventService) Update(ctx context.Context, id, tutorID string, req model
 	return e, nil
 }
 
-// applyToSeries правит правило и сносит будущие вхождения — их пересоздаст
-// материализация уже по новому времени.
-func (s *eventService) applyToSeries(ctx context.Context, current models.Event, req models.UpdateEventRequest, scope string) error {
-	rule, err := s.recurrence.GetRule(ctx, *current.RuleID)
-	if err != nil {
-		return err
-	}
-	timeLocal, err := localTimeIn(req.StartsAt, rule.TZ)
-	if err != nil {
-		return err
-	}
-
-	ruleID := rule.ID
-	if scope == scopeFollowing {
-		newRule, err := s.recurrence.SplitRule(ctx, rule.ID, *current.OccurrenceDate, timeLocal, req.DurationMinutes)
-		if err != nil {
-			return err
-		}
-		ruleID = newRule.ID
-		if err := s.repo.ReassignToRule(ctx, current.ID, ruleID, *current.OccurrenceDate); err != nil {
-			return err
-		}
-	} else if err := s.recurrence.UpdateRuleTiming(ctx, rule.ID, timeLocal, req.DurationMinutes); err != nil {
-		return err
-	}
-
-	if err := s.repo.DeleteFutureByRule(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {
-		return err
-	}
-	// Не вышло материализовать — догонит ночная джоба.
-	_, _ = s.recurrence.Materialize(ctx, ruleID, time.Now().Add(RecurrenceHorizon))
-	return nil
-}
-
 func (s *eventService) Delete(ctx context.Context, id, tutorID, scope string) error {
+	if !validScope(scope) {
+		return fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	current, err := s.repo.GetByID(ctx, id, tutorID)
 	if err != nil {
 		return fmt.Errorf("event: %w", ErrNotFound)
@@ -159,7 +148,7 @@ func (s *eventService) Delete(ctx context.Context, id, tutorID, scope string) er
 
 	switch scope {
 	case scopeFollowing:
-		if err := s.repo.DeleteFutureByRule(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {
+		if err := s.recurrence.PruneFuture(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {
 			return err
 		}
 		if err := s.recurrence.CloseRule(ctx, *current.RuleID, *current.OccurrenceDate); err != nil {

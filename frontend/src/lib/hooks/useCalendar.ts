@@ -2,14 +2,17 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData, type QueryClie
 import { calendarApi } from '@/lib/api/calendar'
 import { lessonsApi, LessonUpdateInput } from '@/lib/api/lessons'
 import { patchEntry, feedRange, inRange, type CalendarEntry, type TimePatch } from '@/lib/calendarPatch'
+import type { RecurrenceScope } from '@/types/api'
 
 /** Статус урока из поповера: «провёл», «отменил». Красится сразу — ждать
  *  сервер ради смены цвета блока незачем. */
 export function useUpdateLessonStatus(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: LessonUpdateInput) => lessonsApi.update(id, data),
-    onMutate: (data) =>
+    // scope нужен только вхождению серии; одиночному уроку сервер его игнорирует.
+    mutationFn: ({ data, scope }: { data: LessonUpdateInput; scope?: RecurrenceScope }) =>
+      lessonsApi.update(id, data, scope),
+    onMutate: ({ data }) =>
       patchCalendarEntry(
         qc, id,
         { starts_at: data.scheduled_at, duration_minutes: data.duration_minutes },

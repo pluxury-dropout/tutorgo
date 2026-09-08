@@ -22,13 +22,20 @@ type CourseService interface {
 	SetHomework(ctx context.Context, id string, tutorID string, homework string) error
 }
 
+// courseSchedule — узкий выход к расписанию: courseService собран из
+// courseRepo и studentRepo и до уроков с правилами сам не достаёт.
+type courseSchedule interface {
+	ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error
+}
+
 type courseService struct {
 	repo        repository.CourseRepository
 	studentRepo repository.StudentRepository
+	schedule    courseSchedule
 }
 
-func NewCourseService(repo repository.CourseRepository, studentRepo repository.StudentRepository) CourseService {
-	return &courseService{repo: repo, studentRepo: studentRepo}
+func NewCourseService(repo repository.CourseRepository, studentRepo repository.StudentRepository, schedule courseSchedule) CourseService {
+	return &courseService{repo: repo, studentRepo: studentRepo, schedule: schedule}
 }
 
 func (s *courseService) Create(ctx context.Context, req models.CreateCourseRequest, tutorID string) (models.Course, error) {
@@ -80,7 +87,12 @@ func (s *courseService) Delete(ctx context.Context, id string, tutorID string) e
 	if err != nil {
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.Delete(ctx, id, tutorID)
+	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
+		return err
+	}
+	// Архивация обещает: завершённые остаются, будущие уходят. Без этого
+	// правило курса живёт дальше и продолжает материализовать уроки.
+	return s.schedule.ArchiveCourseSchedule(ctx, id, tutorID)
 }
 
 func (s *courseService) GetArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {

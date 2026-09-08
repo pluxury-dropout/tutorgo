@@ -18,6 +18,7 @@ type LessonService interface {
 	Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error)
 	Delete(ctx context.Context, id string, tutorID, scope string) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
+	ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetCurrentCycles(ctx context.Context, tutorID string) ([]models.CurrentCycleInfo, error)
 	GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error)
@@ -226,6 +227,9 @@ func (s *lessonService) GetByID(ctx context.Context, id string, tutorID string) 
 //         following — это и все следующие: правило разрезается на две ветки;
 //         all       — всё правило целиком, прошедшие вхождения не трогаются.
 func (s *lessonService) Update(ctx context.Context, id string, req models.UpdateLessonRequest, tutorID, scope string) (models.Lesson, error) {
+	if !validScope(scope) {
+		return models.Lesson{}, fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	lesson, err := s.repo.GetByIDForTutor(ctx, id, tutorID)
 	if err != nil {
 		return models.Lesson{}, fmt.Errorf("lesson: %w", ErrNotFound)
@@ -258,47 +262,35 @@ func (s *lessonService) updateSeries(ctx context.Context, lesson models.Lesson, 
 	if err != nil {
 		return models.Lesson{}, err
 	}
-	timeLocal, err := localTimeIn(req.ScheduledAt, rule.TZ)
+	// Серию задают день недели и время; выбранная в форме неделя роли не играет.
+	// Без нормализации строка урока и occurrence_date разъедутся.
+	req.ScheduledAt, err = NormalizeSeriesStart(rule, *lesson.OccurrenceDate, req.ScheduledAt)
 	if err != nil {
 		return models.Lesson{}, err
 	}
 
-	ruleID := rule.ID
-	if scope == scopeFollowing {
-		// Ветвление: старое правило закрывается днём раньше, а этот урок
-		// становится первым вхождением новой ветки.
-		newRule, err := s.recurrence.SplitRule(ctx, rule.ID, *lesson.OccurrenceDate, timeLocal, req.DurationMinutes)
-		if err != nil {
-			return models.Lesson{}, err
-		}
-		ruleID = newRule.ID
-	} else if err := s.recurrence.UpdateRuleTiming(ctx, rule.ID, timeLocal, req.DurationMinutes); err != nil {
-		return models.Lesson{}, err
-	}
-
+	// Своя строка идёт первой: если она прошла, а Retime упал, урок стоит на
+	// новом времени при нетронутой серии — состояние видимое и чинится повтором.
 	updated, err := s.repo.Update(ctx, lesson.ID, req)
 	if err != nil {
 		return models.Lesson{}, err
 	}
-	if ruleID != rule.ID {
-		if err := s.repo.ReassignToRule(ctx, lesson.ID, ruleID, *lesson.OccurrenceDate); err != nil {
-			return models.Lesson{}, err
-		}
-	}
-
-	// Будущие вхождения пересоздаст материализация — уже по новому времени.
-	// Вручную перенесённые (is_override) она не трогает.
-	if err := s.repo.DeleteFutureByRule(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
+	// defer сразу после успешного repo.Update: строка уже подвинута, и кеш
+	// обязан протухнуть даже если Retime дальше упадёт с ошибкой (в т.ч.
+	// ErrConflict из пре-флайта занятой даты) — иначе календарь молчит про
+	// изменение, которое всё-таки произошло.
+	defer globalCalendarCache.Invalidate(tutorID)
+	if err := s.recurrence.Retime(ctx, rule, lesson.ID, *lesson.OccurrenceDate,
+		req.ScheduledAt, req.DurationMinutes, scope); err != nil {
 		return models.Lesson{}, err
 	}
-	if _, err := s.recurrence.Materialize(ctx, ruleID, time.Now().Add(RecurrenceHorizon)); err != nil {
-		return updated, nil // горизонт догонит ночная джоба
-	}
-	globalCalendarCache.Invalidate(tutorID)
 	return updated, nil
 }
 
 func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope string) error {
+	if !validScope(scope) {
+		return fmt.Errorf("scope %q: %w", scope, ErrBadRequest)
+	}
 	lesson, err := s.repo.GetByIDForTutor(ctx, id, tutorID)
 	if err != nil {
 		return fmt.Errorf("lesson: %w", ErrNotFound)
@@ -311,7 +303,7 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 
 	switch scope {
 	case scopeFollowing:
-		if err := s.repo.DeleteFutureByRule(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
+		if err := s.recurrence.PruneFuture(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
 			return err
 		}
 		if err := s.recurrence.CloseRule(ctx, *lesson.RuleID, *lesson.OccurrenceDate); err != nil {
@@ -322,7 +314,7 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 	case scopeAll:
 		// Порядок важен: удаление правила обнуляет rule_id у уроков
 		// (ON DELETE SET NULL), и найти вхождения станет нечем.
-		if err := s.repo.DeleteFutureByRule(ctx, *lesson.RuleID, time.Time{}); err != nil {
+		if err := s.recurrence.PruneFuture(ctx, *lesson.RuleID, time.Time{}); err != nil {
 			return err
 		}
 		return s.recurrence.DeleteRule(ctx, *lesson.RuleID)
@@ -334,16 +326,62 @@ func (s *lessonService) Delete(ctx context.Context, id string, tutorID, scope st
 	}
 }
 
-func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
-	_, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+// ArchiveCourseSchedule закрывает серии курса и убирает будущие уроки.
+// Завершённые остаются — так обещает диалог архивации, и на них висят
+// посещаемость, платежи и доски.
+//
+// Правило закрываем, а не удаляем: у прошедших уроков rule_id остаётся, и
+// история занятий сохраняет признак серии. Из DueForMaterialization закрытое
+// правило выпадает по ends_on > CURRENT_DATE.
+//
+// Порядок безопасен и при обрыве посередине: закрытие правил идёт первым и
+// сразу останавливает материализацию, поэтому оборванный вызов оставляет
+// видимое состояние «правила закрыты, устаревшие будущие уроки на месте» —
+// лечится повторной архивацией, тихой порчи нет.
+func (s *lessonService) ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error {
+	ruleIDs, err := s.repo.GetRuleIDsByCourse(ctx, courseID)
 	if err != nil {
+		return err
+	}
+	for _, id := range ruleIDs {
+		// CloseRule ставит ends_on = at − 1, то есть вчера: всё, что позже,
+		// серии больше не принадлежит.
+		if err := s.recurrence.CloseRule(ctx, id, time.Now()); err != nil {
+			return err
+		}
+	}
+	if err := s.repo.DeleteFutureByCourse(ctx, courseID, tutorID); err != nil {
+		return err
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return nil
+}
+
+func (s *lessonService) DeleteByCourse(ctx context.Context, courseID string, tutorID string) error {
+	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
-	err = s.repo.DeleteByCourse(ctx, courseID, tutorID)
-	if err == nil {
-		globalCalendarCache.Invalidate(tutorID)
+	// Связь правила с курсом — только через lessons.rule_id: читаем до удаления.
+	ruleIDs, err := s.repo.GetRuleIDsByCourse(ctx, courseID)
+	if err != nil {
+		return err
 	}
-	return err
+	// Правила удаляем ДО уроков: lessons.rule_id — ON DELETE SET NULL
+	// (migrations/033_recurrence.sql), поэтому удаление правила лишь обнулит
+	// rule_id у его уроков, которых через строку всё равно снесёт DeleteByCourse.
+	// Обрыв посередине тогда не оставляет сироту: без правил уроки-сироты
+	// структурно невозможны, а сам обрыв виден как незавершённое удаление
+	// (уроки на месте) и лечится повтором.
+	for _, id := range ruleIDs {
+		if err := s.recurrence.DeleteRule(ctx, id); err != nil {
+			return err
+		}
+	}
+	if err := s.repo.DeleteByCourse(ctx, courseID, tutorID); err != nil {
+		return err
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return nil
 }
 
 func (s *lessonService) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {

@@ -87,8 +87,21 @@ var (
 	expectedStudent = models.Student{ID: "student-uuid-1", TutorID: tutorID}
 )
 
+// mockSchedule — тестовый двойник courseSchedule. Заглушка без mock.Mock не
+// годится: она не различает вызванный ArchiveCourseSchedule и удалённую
+// строку вызова, а это и есть строка, ради которой существует вся задача.
+type mockSchedule struct{ mock.Mock }
+
+func (m *mockSchedule) ArchiveCourseSchedule(ctx context.Context, courseID, tutorID string) error {
+	return m.Called(ctx, courseID, tutorID).Error(0)
+}
+
+// Большинству тестов курса расписание безразлично — им нужен мок, который
+// молча отвечает nil на любой вызов, а не подтверждение факта вызова.
 func newCourseSvc(courseRepo *mockCourseRepo, studentRepo *mockStudentRepo) service.CourseService {
-	return service.NewCourseService(courseRepo, studentRepo)
+	schedule := new(mockSchedule)
+	schedule.On("ArchiveCourseSchedule", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	return service.NewCourseService(courseRepo, studentRepo, schedule)
 }
 
 // Курс можно завести, не заполняя дату старта: она нужна отчётам, а не тому,
@@ -273,18 +286,42 @@ func TestCourseUpdate_RepoError(t *testing.T) {
 
 // Delete
 
+// Архивация курса обязана дойти до расписания — иначе правило курса живёт
+// дальше и продолжает материализовать уроки после архивации (см. брифе
+// Задачи 6). Проверяем именно вызов ArchiveCourseSchedule с теми же id.
 func TestCourseDelete_Success(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
-	svc := newCourseSvc(courseRepo, studentRepo)
+	schedule := new(mockSchedule)
+	svc := service.NewCourseService(courseRepo, studentRepo, schedule)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
 	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(nil)
+	schedule.On("ArchiveCourseSchedule", mock.Anything, courseID, tutorID).Return(nil)
 
 	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.NoError(t, err)
 	courseRepo.AssertExpectations(t)
+	schedule.AssertExpectations(t)
+}
+
+// Ошибка архивации не должна проглатываться: тихая порча здесь — самый
+// вероятный будущий регресс (строку легко «случайно» обернуть в игнор).
+func TestCourseDelete_ScheduleError(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	schedule := new(mockSchedule)
+	svc := service.NewCourseService(courseRepo, studentRepo, schedule)
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(nil)
+	schedule.On("ArchiveCourseSchedule", mock.Anything, courseID, tutorID).Return(errors.New("archive failed"))
+
+	err := svc.Delete(context.Background(), courseID, tutorID)
+
+	assert.Error(t, err)
+	schedule.AssertExpectations(t)
 }
 
 func TestCourseDelete_CourseNotFound(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // mock
@@ -96,6 +97,14 @@ func (m *mockLessonRepo) GetRanksForCourses(ctx context.Context, courseIDs []str
 func (m *mockLessonRepo) GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error) {
 	args := m.Called(ctx, tutorID)
 	return args.Get(0).([]models.CalendarLesson), args.Error(1)
+}
+
+func (m *mockLessonRepo) GetRuleIDsByCourse(ctx context.Context, courseID string) ([]string, error) {
+	args := m.Called(ctx, courseID)
+	return args.Get(0).([]string), args.Error(1)
+}
+func (m *mockLessonRepo) DeleteFutureByCourse(ctx context.Context, courseID, tutorID string) error {
+	return m.Called(ctx, courseID, tutorID).Error(0)
 }
 
 // fixtures
@@ -697,5 +706,59 @@ func TestLessonCreate_NeitherCourseNorStudent(t *testing.T) {
 	lessonRepo.AssertNotCalled(t, "Create")
 	courseRepo.AssertNotCalled(t, "GetOrCreateIndividual")
 	courseRepo.AssertNotCalled(t, "GetByID")
+}
+
+// Архивация закрывает серии курса и убирает будущие уроки: завершённые
+// остаются — это ровно то, что обещает диалог архивации.
+//
+// Порядок обязателен: правило связано с курсом только через lessons.rule_id,
+// и после удаления уроков связь не восстановить.
+func TestArchiveCourseSchedule_ClosesRulesBeforeDeleting(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	ruleRepo := new(mockRecurrenceRepo)
+	svc := scopedSvc(lessonRepo, ruleRepo)
+
+	var order []string
+	lessonRepo.On("GetRuleIDsByCourse", mock.Anything, courseID).
+		Run(func(mock.Arguments) { order = append(order, "read") }).
+		Return([]string{"rule-1"}, nil)
+	ruleRepo.On("SetEndsOn", mock.Anything, "rule-1", mock.Anything).
+		Run(func(mock.Arguments) { order = append(order, "close") }).Return(nil)
+	lessonRepo.On("DeleteFutureByCourse", mock.Anything, courseID, tutorID).
+		Run(func(mock.Arguments) { order = append(order, "delete") }).Return(nil)
+
+	require.NoError(t, svc.ArchiveCourseSchedule(context.Background(), courseID, tutorID))
+
+	require.Equal(t, []string{"read", "close", "delete"}, order)
+	lessonRepo.AssertExpectations(t)
+}
+
+// «Удалить все уроки» удаляет и правила: уроков не остаётся, шаблона для
+// материализации у правила нет, хранить его незачем — иначе копятся сироты.
+// Порядок обязателен: lessons.rule_id — ON DELETE SET NULL, поэтому правила
+// удаляются раньше уроков — обрыв посередине тогда не оставляет сироту.
+func TestDeleteByCourse_RemovesRules(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	ruleRepo := new(mockRecurrenceRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := service.NewLessonService(lessonRepo, courseRepo, new(mockPaymentRepo),
+		service.NewRecurrenceService(ruleRepo))
+
+	var order []string
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{ID: courseID}, nil)
+	lessonRepo.On("GetRuleIDsByCourse", mock.Anything, courseID).
+		Run(func(mock.Arguments) { order = append(order, "read") }).
+		Return([]string{"rule-1", "rule-2"}, nil)
+	ruleRepo.On("Delete", mock.Anything, "rule-1").
+		Run(func(mock.Arguments) { order = append(order, "rule-1") }).Return(nil)
+	ruleRepo.On("Delete", mock.Anything, "rule-2").
+		Run(func(mock.Arguments) { order = append(order, "rule-2") }).Return(nil)
+	lessonRepo.On("DeleteByCourse", mock.Anything, courseID, tutorID).
+		Run(func(mock.Arguments) { order = append(order, "lessons") }).Return(nil)
+
+	require.NoError(t, svc.DeleteByCourse(context.Background(), courseID, tutorID))
+
+	require.Equal(t, []string{"read", "rule-1", "rule-2", "lessons"}, order)
+	ruleRepo.AssertExpectations(t)
 }
 

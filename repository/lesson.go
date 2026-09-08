@@ -19,8 +19,6 @@ type LessonRepository interface {
 	Delete(ctx context.Context, id string) error
 	Cancel(ctx context.Context, id string) error
 	MarkOverride(ctx context.Context, id string) error
-	ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error
-	DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error
 	DeleteByCourse(ctx context.Context, courseID string, tutorID string) error
 	GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error)
 	GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error)
@@ -31,6 +29,8 @@ type LessonRepository interface {
 	EndRoomByID(ctx context.Context, lessonID string) error
 	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
 	GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error)
+	GetRuleIDsByCourse(ctx context.Context, courseID string) ([]string, error)
+	DeleteFutureByCourse(ctx context.Context, courseID, tutorID string) error
 }
 
 type lessonRepository struct {
@@ -41,23 +41,35 @@ func NewLessonRepository(pool *pgxpool.Pool) LessonRepository {
 	return &lessonRepository{pool: pool}
 }
 
+// Одна константа на все выборки урока: россыпь SQL — ровно та причина, по
+// которой rule_id и occurrence_date забыли в четырёх местах, а у событий
+// (см. eventColumns) не забыли ни в одном. Алиас `l` обязателен и там, где
+// джойна нет, иначе константу не переиспользовать.
+const lessonColumns = `l.id, l.course_id, l.scheduled_at, l.duration_minutes,
+                       l.status, l.notes, l.rule_id, l.occurrence_date`
+
+func scanLesson(row interface{ Scan(...any) error }) (models.Lesson, error) {
+	var l models.Lesson
+	err := row.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes,
+		&l.Status, &l.Notes, &l.RuleID, &l.OccurrenceDate)
+	return l, err
+}
+
 func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO lessons (course_id, scheduled_at, duration_minutes, notes, status, rule_id, occurrence_date)
+	return scanLesson(r.pool.QueryRow(ctx,
+		`INSERT INTO lessons AS l (course_id, scheduled_at, duration_minutes, notes, status, rule_id, occurrence_date)
 		 VALUES ($1, $2, $3, $4,
 		         CASE WHEN $2::timestamptz + $3::integer * interval '1 minute' < NOW() THEN 'completed' ELSE 'scheduled' END,
 		         NULLIF($5, '')::uuid, $6::date)
-		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
+		 RETURNING `+lessonColumns,
 		req.CourseID, req.ScheduledAt, req.DurationMinutes, req.Notes, req.RuleID, req.OccurrenceDate,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
-	return lesson, err
+	))
 }
 
 func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]models.Lesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
-		 FROM lessons WHERE course_id = $1 ORDER BY scheduled_at`, courseID)
+		`SELECT `+lessonColumns+` FROM lessons l
+		 WHERE l.course_id = $1 ORDER BY l.scheduled_at`, courseID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +77,8 @@ func (r *lessonRepository) GetByCourse(ctx context.Context, courseID string) ([]
 
 	lessons := []models.Lesson{}
 	for rows.Next() {
-		var lesson models.Lesson
-		if err := rows.Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes); err != nil {
+		lesson, err := scanLesson(rows)
+		if err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, lesson)
@@ -83,9 +95,8 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
-		 FROM lessons WHERE course_id = $1
-		 ORDER BY scheduled_at DESC
+		`SELECT `+lessonColumns+` FROM lessons l WHERE l.course_id = $1
+		 ORDER BY l.scheduled_at DESC
 		 LIMIT $2 OFFSET $3`,
 		courseID, p.Limit, p.Offset())
 	if err != nil {
@@ -95,8 +106,8 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 
 	lessons := []models.Lesson{}
 	for rows.Next() {
-		var l models.Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
+		l, err := scanLesson(rows)
+		if err != nil {
 			return nil, 0, err
 		}
 		lessons = append(lessons, l)
@@ -105,12 +116,8 @@ func (r *lessonRepository) GetByCoursePaged(ctx context.Context, courseID string
 }
 
 func (r *lessonRepository) GetByID(ctx context.Context, id string) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, course_id, scheduled_at, duration_minutes, status, notes
-		 FROM lessons WHERE id = $1`, id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
-	return lesson, err
+	return scanLesson(r.pool.QueryRow(ctx,
+		`SELECT `+lessonColumns+` FROM lessons l WHERE l.id = $1`, id))
 }
 
 // Cancel вместо Delete для вхождения серии: удали строку целиком — и ночная
@@ -124,55 +131,28 @@ func (r *lessonRepository) Cancel(ctx context.Context, id string) error {
 
 // MarkOverride помечает вхождение вручную правленным. Ставится при правке
 // «только это»: без метки ближайшее «это и все следующие» снесёт строку
-// (DeleteFutureByRule смотрит ровно на is_override), а материализация вернёт
-// урок на место по расписанию правила — перенос молча пропадёт.
+// (DeleteFutureByRule в recurrence-репозитории смотрит ровно на is_override), а
+// материализация вернёт урок на место по расписанию правила — перенос молча
+// пропадёт.
 func (r *lessonRepository) MarkOverride(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE lessons SET is_override = TRUE WHERE id = $1`, id)
 	return err
 }
 
-// ReassignToRule переводит вхождение в другое правило — используется при
-// «это и все следующие», где урок становится первым вхождением новой ветки.
-func (r *lessonRepository) ReassignToRule(ctx context.Context, lessonID, ruleID string, occurrenceDate time.Time) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE lessons SET rule_id = $2::uuid, occurrence_date = $3::date, is_override = FALSE
-		 WHERE id = $1`, lessonID, ruleID, occurrenceDate)
-	return err
-}
-
-// DeleteFutureByRule убирает будущие вхождения правила, кроме вручную
-// перенесённых: is_override — это то, что не даёт «изменить все следующие»
-// затереть урок, который репетитор уже подвинул руками.
-func (r *lessonRepository) DeleteFutureByRule(ctx context.Context, ruleID string, after time.Time) error {
-	_, err := r.pool.Exec(ctx,
-		`DELETE FROM lessons
-		 WHERE rule_id = $1::uuid AND occurrence_date > $2::date
-		   AND is_override = FALSE AND status = 'scheduled'`, ruleID, after)
-	return err
-}
-
 func (r *lessonRepository) GetByIDForTutor(ctx context.Context, id string, tutorID string) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
-		        l.rule_id, l.occurrence_date
-		 FROM lessons l
+	return scanLesson(r.pool.QueryRow(ctx,
+		`SELECT `+lessonColumns+` FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
-		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes,
-		&lesson.RuleID, &lesson.OccurrenceDate)
-	return lesson, err
+		 WHERE l.id = $1 AND c.tutor_id = $2`, id, tutorID))
 }
 
 func (r *lessonRepository) Update(ctx context.Context, id string, req models.UpdateLessonRequest) (models.Lesson, error) {
-	var lesson models.Lesson
-	err := r.pool.QueryRow(ctx,
-		`UPDATE lessons SET scheduled_at=$1, duration_minutes=$2, status=$3, notes=$4
-		 WHERE id=$5
-		 RETURNING id, course_id, scheduled_at, duration_minutes, status, notes`,
+	return scanLesson(r.pool.QueryRow(ctx,
+		`UPDATE lessons AS l SET scheduled_at=$1, duration_minutes=$2, status=$3, notes=$4
+		 WHERE l.id=$5
+		 RETURNING `+lessonColumns,
 		req.ScheduledAt, req.DurationMinutes, req.Status, req.Notes, id,
-	).Scan(&lesson.ID, &lesson.CourseID, &lesson.ScheduledAt, &lesson.DurationMinutes, &lesson.Status, &lesson.Notes)
-	return lesson, err
+	))
 }
 
 func (r *lessonRepository) Delete(ctx context.Context, id string) error {
@@ -247,7 +227,7 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 
 func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes
+		`SELECT `+lessonColumns+`
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
 		 WHERE l.course_id = $1
@@ -263,8 +243,8 @@ func (r *lessonRepository) GetByPeriod(ctx context.Context, courseID string, tut
 
 	lessons := []models.Lesson{}
 	for rows.Next() {
-		var l models.Lesson
-		if err := rows.Scan(&l.ID, &l.CourseID, &l.ScheduledAt, &l.DurationMinutes, &l.Status, &l.Notes); err != nil {
+		l, err := scanLesson(rows)
+		if err != nil {
 			return nil, err
 		}
 		lessons = append(lessons, l)
@@ -384,6 +364,44 @@ func (r *lessonRepository) GetAllLessonsForCycles(ctx context.Context, tutorID s
 		lessons = append(lessons, cl)
 	}
 	return lessons, rows.Err()
+}
+
+// GetRuleIDsByCourse — единственный путь от курса к его правилам: прямой связи
+// в схеме нет, только через lessons.rule_id. Поэтому читать надо ДО удаления
+// уроков, иначе связь потеряна безвозвратно.
+func (r *lessonRepository) GetRuleIDsByCourse(ctx context.Context, courseID string) ([]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT rule_id::text FROM lessons
+		 WHERE course_id = $1 AND rule_id IS NOT NULL`, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// DeleteFutureByCourse убирает то, что ещё не состоялось. Завершённые,
+// отменённые и пропущенные остаются: диалог архивации обещает именно это.
+func (r *lessonRepository) DeleteFutureByCourse(ctx context.Context, courseID, tutorID string) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM lessons
+		 USING courses
+		 WHERE lessons.course_id = $1
+		   AND lessons.course_id = courses.id
+		   AND courses.tutor_id = $2
+		   AND lessons.status = 'scheduled'
+		   AND lessons.scheduled_at > NOW()`,
+		courseID, tutorID)
+	return err
 }
 
 func (r *lessonRepository) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {

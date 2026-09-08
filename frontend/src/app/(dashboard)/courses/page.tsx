@@ -137,7 +137,7 @@ function CoursesPageInner() {
   }
 
   async function handleDelete(course: Course) {
-    if (!confirm(`Архивировать курс "${course.subject}"? Завершённые уроки останутся в календаре.`)) return
+    if (!confirm(`Архивировать курс "${course.subject}"? Завершённые уроки останутся в календаре, будущие будут удалены.`)) return
     try {
       await deleteCourse.mutateAsync(course.id)
       toast.success('Курс архивирован')
