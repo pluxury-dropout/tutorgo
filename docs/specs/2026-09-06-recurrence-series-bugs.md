@@ -1,7 +1,7 @@
 # Баги вокруг серий уроков (recurrence_rules)
 
 **Дата:** 2026-09-06
-**Статус:** к исправлению
+**Статус:** баги 1–4 исправлены и смержены (2026-09-07/08), баг 5 откачен — см. «Статус исполнения» ниже
 **Область:** `repository/lesson.go`, `repository/recurrence.go`, `service/lesson.go`, `service/event.go`, `service/recurrence.go`, `service/course.go`, `router/router.go`, `frontend/src/app/(dashboard)/{calendar,courses}`, `frontend/src/components/lessons/LessonQuickPopover.tsx`
 
 **Контекст.** После переезда с `lessons.series_id` на `recurrence_rules` (миграции 033, 036, 037 — см. `docs/specs/2026-08-31-calendar-events-and-scheduling-flow.md`, фаза 3) серверная механика серий реализована полностью: `PUT /lessons/:id?scope=one|following|all` и `DELETE /lessons/:id?scope=...` работают, `SplitRule`, `CloseRule`, `DeleteFutureByRule` и материализация на месте. Но до этой механики нельзя добраться из интерфейса, а одна из трёх областей разрушает данные.
@@ -132,7 +132,21 @@ WHERE NOT EXISTS (SELECT 1 FROM lessons l WHERE l.rule_id = r.id)
 
 ---
 
+## Статус исполнения (сверено с кодом 2026-09-09)
+
+| Баг | Статус | Где смотреть |
+|---|---|---|
+| 1. `rule_id` не селектится | закрыт | общая константа колонок `repository/lesson.go:49` содержит `rule_id, occurrence_date` |
+| 2. `scope=all` уничтожает будущее | закрыт | `Retime` (`service/recurrence.go:117`) откатывает `materialized_until`, удаляет будущее и тут же вызывает `Materialize` |
+| 3. Правило переживает удаление уроков | закрыт | `c884198` — правила курса удаляются до уроков, покрыто тестами |
+| 4. Архивация не убирает будущие уроки | закрыт | `3a5a2de`, `c22130b` — архивация закрывает серии, есть интеграционные тесты |
+| 5. Попап урока в календаре | **откачен** | реализован и отменён коммитом `57f8e2c` («revert calendar lesson popup») |
+
+Ветка `feat/recurrence-retime` смержена (`9a180ec`). Баг 5 остаётся открытым вопросом продукта, а не забытой работой: его откатили сознательно.
+
 ## Порядок работ
+
+> Исторический — работа выполнена, порядок сохранён как запись о принятом решении.
 
 1. **Баг 2** — иначе всё остальное опасно.
 2. **Баг 1** — три `SELECT`, после них серийный UI на странице курса работает.
