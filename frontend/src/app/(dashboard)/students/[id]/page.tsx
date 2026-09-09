@@ -117,14 +117,20 @@ function CoursePrice({ course }: { course: Course }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState('')
 
+  // Курс хранит цену за цикл, но строка подписана «за урок» — делим на
+  // размер цикла, иначе на курсе с циклом > 1 число завышено в N раз.
+  const perLesson = Math.round(course.price_per_cycle / (course.lessons_per_cycle || 1))
+
   async function save() {
     setEditing(false)
-    const price = Number(draft)
-    if (!Number.isFinite(price) || price < 0 || price === course.price_per_cycle) return
+    const next = Number(draft)
+    if (!Number.isFinite(next) || next < 0) return
+    const nextCycle = next * (course.lessons_per_cycle || 1)
+    if (nextCycle === course.price_per_cycle) return
     try {
       await update.mutateAsync({
         subject:           course.subject,
-        price_per_cycle:   price,
+        price_per_cycle:   nextCycle,
         lessons_per_cycle: course.lessons_per_cycle,
         started_at:        course.started_at,
         ended_at:          course.ended_at ?? undefined,
@@ -157,10 +163,10 @@ function CoursePrice({ course }: { course: Course }) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); setDraft(String(course.price_per_cycle)); setEditing(true) }}
+      onClick={(e) => { e.stopPropagation(); setDraft(String(perLesson)); setEditing(true) }}
       className="hover:text-foreground hover:underline"
     >
-      {course.price_per_cycle.toLocaleString()} ₸ за цикл
+      {perLesson.toLocaleString()} ₸ / урок
     </button>
   )
 }

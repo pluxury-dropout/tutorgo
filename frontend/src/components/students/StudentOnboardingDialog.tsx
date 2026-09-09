@@ -58,6 +58,8 @@ function OnboardingForm({ onClose }: { onClose: () => void }) {
   const [duration, setDuration]   = useState(60)
   // Поле спрашивает цену за урок, а курс хранит цену за цикл — делим, иначе у
   // тьютора с циклом в 8 уроков в поле подставится восьмикратная цена.
+  // Обратное умножение при сабмите не нужно: цикл этого поля всегда равен
+  // одному уроку (lessons_per_cycle: 1 ниже), а не lessons_per_cycle курса-донора.
   const [price, setPrice]         = useState<number | ''>(
     courses[0] ? Math.round(courses[0].price_per_cycle / (courses[0].lessons_per_cycle || 1)) : '',
   )
@@ -81,7 +83,12 @@ function OnboardingForm({ onClose }: { onClose: () => void }) {
 
     if (subject.trim()) {
       data.subject = subject.trim()
-      if (price !== '') data.price_per_cycle = price
+      // Поле выше в единицах «за урок» — цикл равен одному уроку явно,
+      // а не молчаливым дефолтом service/onboarding.go.
+      if (price !== '') {
+        data.price_per_cycle   = price
+        data.lessons_per_cycle = 1
+      }
       if (days.length > 0) {
         const now     = new Date()
         const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`

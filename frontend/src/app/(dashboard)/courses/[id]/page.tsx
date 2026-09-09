@@ -573,6 +573,7 @@ export default function CourseDetailPage() {
         onClose={() => { setPaymentFormOpen(false); setEditingPayment(null) }}
         onSubmit={handlePaymentSubmit}
         pricePerLesson={course ? course.price_per_cycle / course.lessons_per_cycle : 0}
+        lessonsPerCycle={course?.lessons_per_cycle ?? 0}
         initialValues={
           editingPayment
             ? {

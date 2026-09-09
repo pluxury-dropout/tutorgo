@@ -14,12 +14,13 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface PaymentFormProps {
-  open:           boolean
-  onClose:        () => void
-  onSubmit:       (data: PaymentFormValues) => Promise<void>
-  pricePerLesson: number
-  initialValues?: PaymentFormValues
-  paymentId?:     string
+  open:             boolean
+  onClose:          () => void
+  onSubmit:         (data: PaymentFormValues) => Promise<void>
+  pricePerLesson:   number
+  lessonsPerCycle?: number
+  initialValues?:   PaymentFormValues
+  paymentId?:       string
 }
 
 export function PaymentForm({
@@ -27,6 +28,7 @@ export function PaymentForm({
   onClose,
   onSubmit,
   pricePerLesson,
+  lessonsPerCycle = 0,
   initialValues,
   paymentId,
 }: PaymentFormProps) {
@@ -38,29 +40,42 @@ export function PaymentForm({
     reset,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, dirtyFields },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     defaultValues: { paid_at: '' },
   })
 
-  const amount = watch('amount')
+  const amount       = watch('amount')
+  const lessonsCount = watch('lessons_count')
 
   useEffect(() => {
     if (open) {
       if (initialValues) {
         reset(initialValues)
       } else {
-        reset({ paid_at: new Date().toISOString().slice(0, 10) })
+        // Пачка курса — типичное «оплатил как всегда», форма готова к сохранению сразу
+        reset({
+          paid_at:       new Date().toISOString().slice(0, 10),
+          lessons_count: lessonsPerCycle > 0 ? lessonsPerCycle : undefined,
+        })
       }
     }
-  }, [open, reset, initialValues])
+  }, [open, reset, initialValues, lessonsPerCycle])
 
+  // Односторонняя подстановка: уроки → сумма, пока сумму не тронули руками.
+  // dirtyFields.amount — родной флаг RHF, взводится только ручным вводом в
+  // поле (наши setValue ниже не помечают dirty), двусторонней связи нет.
   useEffect(() => {
-    if (!isEdit && pricePerLesson > 0 && amount > 0) {
-      setValue('lessons_count', Math.floor(amount / pricePerLesson))
+    if (!isEdit && !dirtyFields.amount && pricePerLesson > 0 && lessonsCount > 0) {
+      setValue('amount', lessonsCount * pricePerLesson, { shouldValidate: true })
     }
-  }, [amount, pricePerLesson, setValue, isEdit])
+  }, [lessonsCount, pricePerLesson, setValue, isEdit, dirtyFields.amount])
+
+  // Расхождение показываем, но не блокируем сохранение — скидки и округления законны
+  const impliedPrice   = lessonsCount > 0 ? amount / lessonsCount : 0
+  const priceMismatch  =
+    pricePerLesson > 0 && lessonsCount > 0 && amount > 0 && Math.round(impliedPrice) !== pricePerLesson
 
   async function submit(values: PaymentFormValues) {
     try {
@@ -81,20 +96,6 @@ export function PaymentForm({
 
         <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
           <div className="space-y-1.5">
-            <Label htmlFor="amount">Сумма (₸)</Label>
-            <Input
-              id="amount"
-              type="number"
-              min={1}
-              step="any"
-              {...register('amount', { valueAsNumber: true })}
-            />
-            {errors.amount && (
-              <p className="text-xs text-destructive">{errors.amount.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
             <Label htmlFor="lessons_count">
               Уроков оплачено{' '}
               <span className="text-muted-foreground font-normal">
@@ -110,6 +111,25 @@ export function PaymentForm({
             {errors.lessons_count && (
               <p className="text-xs text-destructive">{errors.lessons_count.message}</p>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="amount">Сумма (₸)</Label>
+            <Input
+              id="amount"
+              type="number"
+              min={1}
+              step="any"
+              {...register('amount', { valueAsNumber: true })}
+            />
+            {errors.amount ? (
+              <p className="text-xs text-destructive">{errors.amount.message}</p>
+            ) : priceMismatch ? (
+              <p className="text-xs text-muted-foreground">
+                выходит {Math.round(impliedPrice).toLocaleString()} ₸ за урок вместо{' '}
+                {pricePerLesson.toLocaleString()}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">

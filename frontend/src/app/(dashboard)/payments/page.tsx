@@ -58,8 +58,9 @@ function PaymentsPageInner() {
 
   // Название курса приходит с платежом: useCourses отдаёт только активные курсы
   // и только первую страницу, поэтому маппингом по нему платежи по архивным
-  // курсам показывались как «—». Курсы остались нужны лишь ради цены урока.
-  const coursePriceMap = Object.fromEntries(courses.map((c) => [c.id, c.price_per_cycle / c.lessons_per_cycle]))
+  // курсам показывались как «—». Курсы остались нужны ради цены урока и пачки.
+  const coursePriceMap   = Object.fromEntries(courses.map((c) => [c.id, c.price_per_cycle / c.lessons_per_cycle]))
+  const courseLessonsMap = Object.fromEntries(courses.map((c) => [c.id, c.lessons_per_cycle]))
 
   function openEdit(p: Payment) {
     setEditingPayment(p)
@@ -223,6 +224,7 @@ function PaymentsPageInner() {
         onClose={() => { setFormOpen(false); setEditingPayment(null) }}
         onSubmit={handleEdit}
         pricePerLesson={editingPayment ? (coursePriceMap[editingPayment.course_id] ?? 0) : 0}
+        lessonsPerCycle={editingPayment ? (courseLessonsMap[editingPayment.course_id] ?? 0) : 0}
         initialValues={
           editingPayment
             ? {

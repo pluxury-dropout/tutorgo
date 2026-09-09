@@ -50,9 +50,14 @@ type CreateCourseRequest struct {
 	EndedAt         *time.Time `json:"ended_at"`
 }
 
+// Правка курса допускает те же значения, что и создание: `required` на числовом
+// поле в go-playground/validator означает «не ноль», и из-за него нулевую цену
+// нельзя было сохранить через форму, хотя неявный курс из календаря именно с
+// нулём и создаётся (спека 2026-09-06, п. 1.3). Отрицательную по-прежнему ловит
+// gte=0.
 type UpdateCourseRequest struct {
 	Subject         string     `json:"subject"           validate:"required,min=2"`
-	PricePerCycle   float64    `json:"price_per_cycle"   validate:"required,gt=0"`
+	PricePerCycle   float64    `json:"price_per_cycle"   validate:"gte=0"`
 	LessonsPerCycle int        `json:"lessons_per_cycle" validate:"required,min=1"`
 	StartedAt       time.Time  `json:"started_at"        validate:"required"`
 	EndedAt         *time.Time `json:"ended_at"`
