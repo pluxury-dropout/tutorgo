@@ -54,14 +54,19 @@ export function PaymentForm({
       if (initialValues) {
         reset(initialValues)
       } else {
-        // Пачка курса — типичное «оплатил как всегда», форма готова к сохранению сразу
+        // Пачка курса — типичное «оплатил как всегда», форма готова к сохранению
+        // сразу. Сумму подставляем здесь же, а не эффектом ниже: тот срабатывает
+        // на изменение количества уроков, а при повторном открытии оно то же
+        // самое (8 → 8), и сумма осталась бы пустой после reset.
+        const lessons = lessonsPerCycle > 0 ? lessonsPerCycle : undefined
         reset({
           paid_at:       new Date().toISOString().slice(0, 10),
-          lessons_count: lessonsPerCycle > 0 ? lessonsPerCycle : undefined,
+          lessons_count: lessons,
+          amount:        lessons && pricePerLesson > 0 ? lessons * pricePerLesson : undefined,
         })
       }
     }
-  }, [open, reset, initialValues, lessonsPerCycle])
+  }, [open, reset, initialValues, lessonsPerCycle, pricePerLesson])
 
   // Односторонняя подстановка: уроки → сумма, пока сумму не тронули руками.
   // dirtyFields.amount — родной флаг RHF, взводится только ручным вводом в
