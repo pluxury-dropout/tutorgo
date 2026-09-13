@@ -45,8 +45,12 @@ export default function StudentDetailPage() {
   }
 
   async function handleRestore() {
-    await restoreStudent.mutateAsync(id)
-    toast.success('Ученик восстановлен')
+    try {
+      await restoreStudent.mutateAsync(id)
+      toast.success('Ученик восстановлен')
+    } catch {
+      toast.error('Не удалось восстановить ученика')
+    }
   }
 
   if (isLoading) {

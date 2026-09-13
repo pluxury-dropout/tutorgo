@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { studentsApi, StudentInput, StudentListParams } from '@/lib/api/students'
 import { courseKeys } from '@/lib/hooks/useCourses'
 import { ApiError, OnboardingStudentInput, Student } from '@/types/api'
@@ -94,7 +95,8 @@ export function useRestoreStudent() {
 /** «Удалить» из интерфейса. Ученик без истории удаляется; с платежами или
  *  проведёнными уроками сервер отвечает 409, и тогда предлагаем архив — удаление
  *  стёрло бы их из истории (спека, п. 5a.2). Одна функция на список и карточку,
- *  чтобы тексты диалогов не разъехались. */
+ *  чтобы тексты диалогов не разъехались. Любая другая ошибка — toast, возврат null.
+ */
 export function useRemoveStudent() {
   const del     = useDeleteStudent()
   const archive = useArchiveStudent()
@@ -106,13 +108,21 @@ export function useRemoveStudent() {
       await del.mutateAsync(s.id)
       return 'deleted'
     } catch (e) {
-      if ((e as ApiError).status !== 409) throw e
+      if ((e as ApiError).status !== 409) {
+        toast.error('Не удалось удалить ученика')
+        return null
+      }
     }
     if (!confirm(`${name}: есть платежи или проведённые уроки — удаление стёрло бы их из истории. Перенести в архив?`)) {
       return null
     }
-    await archive.mutateAsync(s.id)
-    return 'archived'
+    try {
+      await archive.mutateAsync(s.id)
+      return 'archived'
+    } catch {
+      toast.error('Не удалось перенести ученика в архив')
+      return null
+    }
   }
 }
 
