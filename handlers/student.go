@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -108,7 +109,13 @@ func (h *StudentHandler) Delete(c *gin.Context) {
 	}
 	id := c.Param("id")
 	if err := h.service.Delete(c.Request.Context(), id, tutorID); err != nil {
-		h.log.Error("Failed to delete student", slog.String("id", id), slog.String("error", err.Error()))
+		// 409 — ученик с историей, обычный исход, фронт сам предложит архив
+		// (спека, п. 5a.2): не Error, иначе каждый такой клик засоряет логи.
+		if errors.Is(err, service.ErrConflict) {
+			h.log.Info("Student has history, delete refused", slog.String("id", id))
+		} else {
+			h.log.Error("Failed to delete student", slog.String("id", id), slog.String("error", err.Error()))
+		}
 		handleServiceError(c, err)
 		return
 	}

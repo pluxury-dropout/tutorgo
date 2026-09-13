@@ -389,6 +389,7 @@ func TestStudentArchive_NotFound(t *testing.T) {
 	w := makeRequest(t, r, http.MethodPost, "/students/"+testStudentID+"/archive", nil)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	svc.AssertExpectations(t)
 }
 
 func TestStudentRestore_Success(t *testing.T) {

@@ -109,7 +109,17 @@ func (s *studentService) Delete(ctx context.Context, id string, tutorID string) 
 //
 // ponytail: access-JWT ученика живёт 30 дней, а AuthStudent в базу не ходит —
 // открытая сессия до истечения видит в кабинете свою историю; отзываются только
-// refresh-токены. Проверка active в AuthStudent — если окно станет проблемой.
+// refresh-токены. Тот же зазор шире: логин между шагом 3 (DeleteByStudentID) и
+// шагом 4 (SetActive) успевает получить новый refresh-токен уже после отзыва
+// старых — Refresh (handlers/student_auth.go) поле active не проверяет, и такой
+// токен переживает архивацию целиком. Апгрейд общий — проверка active в
+// AuthStudent/Refresh, если окно станет проблемой.
+//
+// ponytail: сервер не запрещает заводить курсы и уроки архивному ученику
+// (GetOrCreateIndividual, courseService.Create, восстановление курса) — от
+// этого спасают только пикеры, которые архивных не показывают. Ceiling:
+// зависшая вкладка заводит активный курс архивному ученику. Апгрейд — AND
+// s.active там, где проверяется владение учеником.
 func (s *studentService) Archive(ctx context.Context, id string, tutorID string) error {
 	if _, err := s.repo.GetByID(ctx, id, tutorID); err != nil {
 		return fmt.Errorf("student: %w", ErrNotFound)

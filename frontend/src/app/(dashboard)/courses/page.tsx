@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { BookOpen, Plus, Pencil, Trash2, ChevronRight, ArchiveRestore, Users } from 'lucide-react'
 
 import { useCoursesPaged, useCreateCourse, useUpdateCourse, useDeleteCourse, useArchivedCoursesPaged, useRestoreCourse, useAddEnrollmentsBulk } from '@/lib/hooks/useCourses'
-import { useStudents } from '@/lib/hooks/useStudents'
+import { useStudents, useStudentsPaged } from '@/lib/hooks/useStudents'
 import { CourseForm } from '@/components/courses/CourseForm'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { SectionCard } from '@/components/common/SectionCard'
@@ -72,6 +72,12 @@ function CoursesPageInner() {
   }, [isLoading, total, page, totalPages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: students = [] } = useStudents()
+  // Архивные курсы (вкладка «Архив») держат ученика, которого useStudents()
+  // больше не отдаёт — он архивирован вместе с курсом. Без этого списка
+  // studentName() показывает «—» ровно там, откуда тьютора зовут восстановить
+  // ученика (спека, п. 5a.3).
+  const { data: archivedStudentsData } = useStudentsPaged({ page: 1, limit: 100, search: '', archived: true })
+  const archivedStudents = archivedStudentsData?.data ?? []
 
   const [formOpen, setFormOpen] = useState(false)
   const [formMode, setFormMode] = useState<'individual' | 'group'>('individual')
@@ -158,6 +164,7 @@ function CoursesPageInner() {
   function studentName(course: Course) {
     if (!course.student_id) return null
     const s = students.find((s) => s.id === course.student_id)
+      ?? archivedStudents.find((s) => s.id === course.student_id)
     return s ? `${s.first_name}${s.last_name ? ` ${s.last_name}` : ''}` : '—'
   }
 

@@ -37,7 +37,8 @@ func studentExists(t *testing.T, pool *pgxpool.Pool, studentID string) bool {
 	return ok
 }
 
-// Заведённый по ошибке: расписание вперёд и отменённый урок — не история,
+// Заведённый по ошибке: расписание вперёд, отменённый урок и запись в группу
+// без единой отметки посещаемости — всё это не история (спека, п. 5a.1),
 // ученик уходит целиком.
 func TestStudentDelete_WithoutHistoryRemovesStudent(t *testing.T) {
 	pool := testPool(t)
@@ -45,6 +46,12 @@ func TestStudentDelete_WithoutHistoryRemovesStudent(t *testing.T) {
 	courseID := addIndividualCourse(t, pool, tutorID, studentID)
 	addLessonAt(t, pool, courseID, "NOW() + interval '2 days'", "scheduled")
 	addLessonAt(t, pool, courseID, "NOW() - interval '2 days'", "cancelled")
+
+	groupID := addGroupCourse(t, pool, tutorID, "Группа")
+	_, err := pool.Exec(context.Background(),
+		`INSERT INTO course_enrollments (course_id, student_id) VALUES ($1, $2)`,
+		groupID, studentID)
+	require.NoError(t, err)
 
 	deleted, err := repository.NewStudentRepository(pool).Delete(context.Background(), studentID, tutorID)
 	require.NoError(t, err)
