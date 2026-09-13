@@ -268,18 +268,35 @@ useEffect(() => {
 
 То же правило действует в форме разбивки по предметам (п. 6.8) — одно правило на обе формы.
 
-**Проверить исторические данные.** Платежи до починки могли недосчитать уроки:
+**Проверить исторические данные.** Платежи до починки могли недосчитать уроки. Запрос ищет платежи, где сумма и число уроков не сходятся по текущей цене курса. Сравнение — в целых тенге: цена урока здесь частное (85 000 / 12 = 7 083,33…), и точное `<>` ловит погрешность деления вместо расхождений.
 
 ```sql
-SELECT p.id, p.paid_at, c.subject, p.amount, p.lessons_count,
-       p.amount / NULLIF(c.price_per_cycle / NULLIF(c.lessons_per_cycle, 0), 0) AS implied_lessons
-  FROM payments p
-  JOIN courses c ON c.id = p.course_id
- WHERE p.amount % NULLIF(c.price_per_cycle / NULLIF(c.lessons_per_cycle, 0), 0) <> 0
- ORDER BY p.paid_at DESC;
+WITH priced AS (
+  SELECT p.id, p.paid_at, p.amount, p.lessons_count, c.subject,
+         COALESCE(NULLIF(btrim(s.first_name || ' ' || s.last_name), ''), '— группа —') AS student,
+         c.price_per_cycle / NULLIF(c.lessons_per_cycle, 0) AS price_per_lesson
+    FROM payments p
+    JOIN courses  c ON c.id = p.course_id
+    LEFT JOIN students s ON s.id = c.student_id
+)
+SELECT paid_at::date, student, subject,
+       round(price_per_lesson)                          AS price_per_lesson,
+       amount, lessons_count,
+       round(amount / price_per_lesson, 2)              AS implied_lessons,
+       round(amount - lessons_count * price_per_lesson) AS unaccounted,
+       id
+  FROM priced
+ WHERE price_per_lesson > 0
+   AND abs(amount - lessons_count * price_per_lesson) >= 1
+ ORDER BY abs(amount - lessons_count * price_per_lesson) DESC;
 ```
 
-После фазы 1 то же самое читается короче — `c.price_per_lesson` вместо деления. Строки с ненулевым остатком — те, где у ученика в балансе тихо не хватает занятия. **Автоматически не править:** остаток мог быть законной скидкой. Показать фаундеру, решает он.
+После фазы 1 то же самое читается короче — `c.price_per_lesson` вместо деления. **Автоматически не править:** запрос сравнивает с *текущей* ценой курса, а истории цен нет (п. 9), поэтому строка может означать и недосчитанный урок, и законную скидку, и то, что цену сменили уже после платежа. Это список кандидатов, а не приговор; решает фаундер.
+
+**Результат на проде, 2026-09-13:** два кандидата, следов округления вниз нет ни одного.
+
+- `Жангир, SAT, 2026-07-15` — 65 000 за 8 уроков при нынешних 85 000 за 12. Похоже, пакет сменили после платежа: второй платёж (2026-08-11) уже ровно по новой цене. Для своего времени строка верна.
+- `Жанна, English, 2026-05-31` — 18 000 за 3 урока при цене 4 500. Округлять тут было нечего — 18 000 делится на 4 500 нацело, так что 3 введено руками; остальные четыре её платежа идут ровно по 4 500 за урок. Либо часть суммы закрывала прошлый долг, либо у ученицы в балансе не хватает урока. Решение — за фаундером.
 
 **Критерии приёмки**
 

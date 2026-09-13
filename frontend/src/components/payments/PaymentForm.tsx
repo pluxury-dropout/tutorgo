@@ -62,7 +62,7 @@ export function PaymentForm({
         reset({
           paid_at:       new Date().toISOString().slice(0, 10),
           lessons_count: lessons,
-          amount:        lessons && pricePerLesson > 0 ? lessons * pricePerLesson : undefined,
+          amount:        lessons && pricePerLesson > 0 ? Math.round(lessons * pricePerLesson) : undefined,
         })
       }
     }
@@ -71,16 +71,21 @@ export function PaymentForm({
   // Односторонняя подстановка: уроки → сумма, пока сумму не тронули руками.
   // dirtyFields.amount — родной флаг RHF, взводится только ручным вводом в
   // поле (наши setValue ниже не помечают dirty), двусторонней связи нет.
+  // Сумма в целых тенге: цена урока здесь — частное (85 000 / 12 = 7 083,33…),
+  // и 5 уроков дали бы в поле 35 416,666666666664.
   useEffect(() => {
     if (!isEdit && !dirtyFields.amount && pricePerLesson > 0 && lessonsCount > 0) {
-      setValue('amount', lessonsCount * pricePerLesson, { shouldValidate: true })
+      setValue('amount', Math.round(lessonsCount * pricePerLesson), { shouldValidate: true })
     }
   }, [lessonsCount, pricePerLesson, setValue, isEdit, dirtyFields.amount])
 
-  // Расхождение показываем, но не блокируем сохранение — скидки и округления законны
+  // Расхождение показываем, но не блокируем сохранение — скидки и округления законны.
+  // Сравниваем в целых тенге с обеих сторон: при точном сравнении с дробной
+  // ценой урока подпись висела бы на каждом курсе, где пачка не делится нацело.
   const impliedPrice   = lessonsCount > 0 ? amount / lessonsCount : 0
   const priceMismatch  =
-    pricePerLesson > 0 && lessonsCount > 0 && amount > 0 && Math.round(impliedPrice) !== pricePerLesson
+    pricePerLesson > 0 && lessonsCount > 0 && amount > 0 &&
+    Math.round(impliedPrice) !== Math.round(pricePerLesson)
 
   async function submit(values: PaymentFormValues) {
     try {
@@ -132,7 +137,7 @@ export function PaymentForm({
             ) : priceMismatch ? (
               <p className="text-xs text-muted-foreground">
                 выходит {Math.round(impliedPrice).toLocaleString()} ₸ за урок вместо{' '}
-                {pricePerLesson.toLocaleString()}
+                {Math.round(pricePerLesson).toLocaleString()}
               </p>
             ) : null}
           </div>
