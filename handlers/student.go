@@ -31,7 +31,9 @@ func (h *StudentHandler) GetAll(c *gin.Context) {
 	_ = c.ShouldBindQuery(&p)
 	p.Normalize()
 
-	students, total, err := h.service.GetAll(c.Request.Context(), tutorID, p)
+	// archived=true — вкладка «Архив» на /students (спека, п. 5a.3).
+	archived := c.Query("archived") == "true"
+	students, total, err := h.service.GetAll(c.Request.Context(), tutorID, p, archived)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -111,6 +113,38 @@ func (h *StudentHandler) Delete(c *gin.Context) {
 		return
 	}
 	h.log.Info("Student deleted", slog.String("id", id))
+	c.Status(http.StatusNoContent)
+}
+
+func (h *StudentHandler) Archive(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
+	if err := h.service.Archive(c.Request.Context(), id, tutorID); err != nil {
+		h.log.Error("Failed to archive student", slog.String("id", id), slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	h.log.Info("Student archived", slog.String("id", id))
+	c.Status(http.StatusNoContent)
+}
+
+func (h *StudentHandler) Restore(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	id := c.Param("id")
+	if err := h.service.Restore(c.Request.Context(), id, tutorID); err != nil {
+		h.log.Error("Failed to restore student", slog.String("id", id), slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	h.log.Info("Student restored", slog.String("id", id))
 	c.Status(http.StatusNoContent)
 }
 

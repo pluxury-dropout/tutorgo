@@ -50,7 +50,6 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	emailSender := email.NewSender(cfg.ResendAPIKey, cfg.EmailFrom, log)
 	registrationService := service.NewRegistrationService(pendingRepo, tutorService, emailSender, cfg.AppURL, log)
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
-	studentService := service.NewStudentService(studentRepo, paymentRepo)
 	studentRefreshService := service.NewStudentRefreshTokenService(studentRefreshRepo)
 	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
 	recurrenceService := service.NewRecurrenceService(repository.NewRecurrenceRepository(pool))
@@ -58,6 +57,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	// Ниже lessonService: архивация курса ходит к нему за закрытием серий.
 	// Цикла нет — lessonService зависит от courseRepo, а не от courseService.
 	courseService := service.NewCourseService(courseRepo, studentRepo, lessonService)
+	// Ниже courseService: архивация ученика архивирует его курсы именно сервисом —
+	// у courseRepo тот же Delete, но без закрытия правил и будущих уроков.
+	studentService := service.NewStudentService(studentRepo, paymentRepo, courseService, enrollmentRepo, studentRefreshRepo)
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
@@ -212,6 +214,8 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.GET("/students/:id", studentHandler.GetByID)
 		auth.PUT("/students/:id", studentHandler.Update)
 		auth.DELETE("/students/:id", studentHandler.Delete)
+		auth.POST("/students/:id/archive", studentHandler.Archive)
+		auth.POST("/students/:id/restore", studentHandler.Restore)
 		auth.GET("/students/:id/courses", courseHandler.GetByStudent)
 		auth.POST("/students/:id/invite", studentHandler.Invite)
 

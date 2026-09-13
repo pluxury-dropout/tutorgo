@@ -26,6 +26,8 @@ func newStudentRouter(svc *mockStudentService, tutorID string) *gin.Engine {
 	r.GET("/students/:id", h.GetByID)
 	r.PUT("/students/:id", h.Update)
 	r.DELETE("/students/:id", h.Delete)
+	r.POST("/students/:id/archive", h.Archive)
+	r.POST("/students/:id/restore", h.Restore)
 	r.POST("/students/:id/invite", h.Invite)
 	return r
 }
@@ -38,7 +40,7 @@ func TestStudentGetAll_Success(t *testing.T) {
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Student{testStudent}
-	svc.On("GetAll", mock.Anything, testTutorID, p).Return(expected, 1, nil)
+	svc.On("GetAll", mock.Anything, testTutorID, p, false).Return(expected, 1, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/students?page=1&limit=20", nil)
 
@@ -65,7 +67,7 @@ func TestStudentGetAll_ServiceError(t *testing.T) {
 	r := newStudentRouter(svc, testTutorID)
 
 	p := models.Pagination{Page: 1, Limit: 20}
-	svc.On("GetAll", mock.Anything, testTutorID, p).Return([]models.Student{}, 0, errors.New("db error"))
+	svc.On("GetAll", mock.Anything, testTutorID, p, false).Return([]models.Student{}, 0, errors.New("db error"))
 
 	w := makeRequest(t, r, http.MethodGet, "/students?page=1&limit=20", nil)
 
@@ -79,7 +81,7 @@ func TestStudentGetAll_WithSearch(t *testing.T) {
 
 	p := models.Pagination{Page: 1, Limit: 20, Search: "Aiya"}
 	expected := []models.Student{testStudent}
-	svc.On("GetAll", mock.Anything, testTutorID, p).Return(expected, 1, nil)
+	svc.On("GetAll", mock.Anything, testTutorID, p, false).Return(expected, 1, nil)
 
 	w := makeRequest(t, r, http.MethodGet, "/students?page=1&limit=20&search=Aiya", nil)
 
@@ -351,4 +353,52 @@ func TestStudentListLessons_PastFilter(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	svc.AssertExpectations(t) // проверяет, что вызван именно с true
+}
+
+func TestStudentGetAll_Archived(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	p := models.Pagination{Page: 1, Limit: 20}
+	svc.On("GetAll", mock.Anything, testTutorID, p, true).Return([]models.Student{testStudent}, 1, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/students?page=1&limit=20&archived=true", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	svc.AssertExpectations(t)
+}
+
+func TestStudentArchive_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("Archive", mock.Anything, testStudentID, testTutorID).Return(nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/students/"+testStudentID+"/archive", nil)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	svc.AssertExpectations(t)
+}
+
+func TestStudentArchive_NotFound(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("Archive", mock.Anything, testStudentID, testTutorID).Return(fmt.Errorf("student: %w", service.ErrNotFound))
+
+	w := makeRequest(t, r, http.MethodPost, "/students/"+testStudentID+"/archive", nil)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStudentRestore_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("Restore", mock.Anything, testStudentID, testTutorID).Return(nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/students/"+testStudentID+"/restore", nil)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	svc.AssertExpectations(t)
 }

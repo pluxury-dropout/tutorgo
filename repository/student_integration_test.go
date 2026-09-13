@@ -6,8 +6,11 @@ import (
 	"context"
 	"testing"
 
+	"tutorgo/models"
 	"tutorgo/repository"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -89,4 +92,41 @@ func TestStudentDelete_HistoryBlocksDeletion(t *testing.T) {
 			assert.True(t, studentExists(t, pool, studentID))
 		})
 	}
+}
+
+// Архивный ученик пропадает из обычного списка и появляется в архиве; войти в
+// кабинет и принять приглашение не может (спека, п. 5a.3).
+func TestStudentArchived_HiddenFromListAndLogin(t *testing.T) {
+	pool := testPool(t)
+	tutorID, studentID := seedTutorStudent(t, pool)
+	ctx := context.Background()
+	login := "archived-" + studentID
+	// invite_token — колонка UUID (миграция 020), отдельное значение от login.
+	inviteToken := uuid.NewString()
+
+	_, err := pool.Exec(ctx,
+		`UPDATE students SET username = $2, password_hash = 'hash', invite_token = $3,
+		        invite_expires_at = NOW() + interval '1 day'
+		 WHERE id = $1`, studentID, login, inviteToken)
+	require.NoError(t, err)
+
+	students := repository.NewStudentRepository(pool)
+	require.NoError(t, students.SetActive(ctx, studentID, tutorID, false))
+
+	p := models.Pagination{Page: 1, Limit: 20}
+	current, total, err := students.GetAll(ctx, tutorID, p, false)
+	require.NoError(t, err)
+	assert.Empty(t, current)
+	assert.Equal(t, 0, total)
+
+	archived, total, err := students.GetAll(ctx, tutorID, p, true)
+	require.NoError(t, err)
+	require.Len(t, archived, 1)
+	assert.Equal(t, 1, total)
+	assert.False(t, archived[0].Active)
+
+	_, _, err = students.GetCredentialsByLogin(ctx, login)
+	assert.ErrorIs(t, err, pgx.ErrNoRows)
+	_, _, err = students.GetByInviteToken(ctx, inviteToken)
+	assert.ErrorIs(t, err, pgx.ErrNoRows)
 }

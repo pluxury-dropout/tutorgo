@@ -32,8 +32,13 @@ func (s *enrollmentService) Add(ctx context.Context, courseID string, req models
 	if course.StudentID != nil {
 		return models.CourseEnrollment{}, fmt.Errorf("individual course: %w", ErrForbidden)
 	}
-	if _, err := s.studentRepo.GetByID(ctx, req.StudentID, tutorID); err != nil {
+	student, err := s.studentRepo.GetByID(ctx, req.StudentID, tutorID)
+	if err != nil {
 		return models.CourseEnrollment{}, fmt.Errorf("student: %w", ErrNotFound)
+	}
+	// Пикеры архивных не показывают — это на случай вкладки, открытой до архивации.
+	if !student.Active {
+		return models.CourseEnrollment{}, fmt.Errorf("student archived: %w", ErrBadRequest)
 	}
 	return s.repo.Add(ctx, courseID, req.StudentID)
 }

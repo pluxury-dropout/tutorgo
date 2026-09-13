@@ -8,12 +8,33 @@ import (
 	"tutorgo/repository"
 )
 
+// Архивация складывает уже существующие действия — зависимости узкими
+// интерфейсами, как в onboarding.go.
+
+// studentCourses — курсы ученика и их архивация. В проде это courseService, а
+// не courseRepo: у репозитория тот же Delete, но без закрытия правил и удаления
+// будущих уроков — архивный курс продолжал бы материализовать расписание.
+type studentCourses interface {
+	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
+	Delete(ctx context.Context, id string, tutorID string) error
+}
+
+type enrollmentLeaver interface {
+	LeaveAllByStudent(ctx context.Context, studentID string) error
+}
+
+type studentSessions interface {
+	DeleteByStudentID(ctx context.Context, studentID string) error
+}
+
 type StudentService interface {
 	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	Archive(ctx context.Context, id string, tutorID string) error
+	Restore(ctx context.Context, id string, tutorID string) error
 	SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error
 	GetByInviteToken(ctx context.Context, token string) (string, time.Time, error)
 	ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error
@@ -31,18 +52,22 @@ type StudentService interface {
 type studentService struct {
 	repo        repository.StudentRepository
 	paymentRepo repository.PaymentRepository
+	courses     studentCourses
+	enrollments enrollmentLeaver
+	sessions    studentSessions
 }
 
-func NewStudentService(repo repository.StudentRepository, paymentRepo repository.PaymentRepository) StudentService {
-	return &studentService{repo: repo, paymentRepo: paymentRepo}
+func NewStudentService(repo repository.StudentRepository, paymentRepo repository.PaymentRepository,
+	courses studentCourses, enrollments enrollmentLeaver, sessions studentSessions) StudentService {
+	return &studentService{repo: repo, paymentRepo: paymentRepo, courses: courses, enrollments: enrollments, sessions: sessions}
 }
 
 func (s *studentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
 	return s.repo.Create(ctx, req, tutorID)
 }
 
-func (s *studentService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
-	return s.repo.GetAll(ctx, tutorID, p)
+func (s *studentService) GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error) {
+	return s.repo.GetAll(ctx, tutorID, p, archived)
 }
 
 func (s *studentService) GetByID(ctx context.Context, id string, tutorID string) (models.Student, error) {
@@ -74,6 +99,50 @@ func (s *studentService) Delete(ctx context.Context, id string, tutorID string) 
 		return fmt.Errorf("student has history: %w", ErrConflict)
 	}
 	return nil
+}
+
+// Archive убирает ученика с историей из работы, ничего не стирая (спека, п. 5a.3).
+//
+// Транзакции нет: каждый шаг идемпотентен, а active = false стоит последним и
+// служит признаком «архивация завершена». Сбой посередине оставляет ученика в
+// списке — повторный вызов доделает, уже архивные курсы в GetByStudent не попадут.
+//
+// ponytail: access-JWT ученика живёт 30 дней, а AuthStudent в базу не ходит —
+// открытая сессия до истечения видит в кабинете свою историю; отзываются только
+// refresh-токены. Проверка active в AuthStudent — если окно станет проблемой.
+func (s *studentService) Archive(ctx context.Context, id string, tutorID string) error {
+	if _, err := s.repo.GetByID(ctx, id, tutorID); err != nil {
+		return fmt.Errorf("student: %w", ErrNotFound)
+	}
+	courses, err := s.courses.GetByStudent(ctx, id, tutorID)
+	if err != nil {
+		return err
+	}
+	for _, c := range courses {
+		// Группа идёт для остальных — из неё ученик уходит через left_at ниже.
+		if c.StudentID == nil {
+			continue
+		}
+		if err := s.courses.Delete(ctx, c.ID, tutorID); err != nil {
+			return err
+		}
+	}
+	if err := s.enrollments.LeaveAllByStudent(ctx, id); err != nil {
+		return err
+	}
+	if err := s.sessions.DeleteByStudentID(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.SetActive(ctx, id, tutorID, false)
+}
+
+// Restore возвращает ученика в список — и только: курсы восстанавливаются из
+// архива курсов, в группу добавляют заново (спека, п. 5a.3).
+func (s *studentService) Restore(ctx context.Context, id string, tutorID string) error {
+	if _, err := s.repo.GetByID(ctx, id, tutorID); err != nil {
+		return fmt.Errorf("student: %w", ErrNotFound)
+	}
+	return s.repo.SetActive(ctx, id, tutorID, true)
 }
 
 func (s *studentService) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {

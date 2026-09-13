@@ -10,10 +10,11 @@ import (
 
 type StudentRepository interface {
 	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
 	Delete(ctx context.Context, id string, tutorID string) (bool, error)
+	SetActive(ctx context.Context, id string, tutorID string, active bool) error
 	SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error
 	GetByInviteToken(ctx context.Context, token string) (string, time.Time, error)
 	ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error
@@ -47,15 +48,19 @@ func (r *studentRepository) Create(ctx context.Context, req models.CreateStudent
 	return student, err
 }
 
-func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
+// GetAll — ученики репетитора: активные или, с archived, только архивные
+// (спека, п. 5a.3). Выбор ученика в календаре, состав группы и счётчик дашборда
+// ходят сюда же — архивный пропадает из них всех одним условием.
+func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error) {
 	var total int
 	if err := r.conn.QueryRow(ctx,
 		`SELECT COUNT(*) FROM students
 		 WHERE tutor_id = $1
+		   AND active = NOT $3::boolean
 		   AND ($2 = '' OR first_name ILIKE '%' || $2 || '%'
 		                 OR last_name  ILIKE '%' || $2 || '%'
 		                 OR email      ILIKE '%' || $2 || '%')`,
-		tutorID, p.Search,
+		tutorID, p.Search, archived,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -64,12 +69,13 @@ func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models
 		`SELECT id, tutor_id, first_name, last_name, phone, email, notes, active
 		 FROM students
 		 WHERE tutor_id = $1
+		   AND active = NOT $5::boolean
 		   AND ($2 = '' OR first_name ILIKE '%' || $2 || '%'
 		                 OR last_name  ILIKE '%' || $2 || '%'
 		                 OR email      ILIKE '%' || $2 || '%')
 		 ORDER BY first_name, last_name
 		 LIMIT $3 OFFSET $4`,
-		tutorID, p.Search, p.Limit, p.Offset())
+		tutorID, p.Search, p.Limit, p.Offset(), archived)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -127,6 +133,14 @@ func (r *studentRepository) Delete(ctx context.Context, id string, tutorID strin
 	return tag.RowsAffected() > 0, nil
 }
 
+// SetActive — архивация и восстановление ученика. Курсы и записи в группы не
+// трогает: их закрывает studentService.Archive отдельными шагами.
+func (r *studentRepository) SetActive(ctx context.Context, id string, tutorID string, active bool) error {
+	_, err := r.conn.Exec(ctx,
+		`UPDATE students SET active = $3 WHERE id = $1 AND tutor_id = $2`, id, tutorID, active)
+	return err
+}
+
 func (r *studentRepository) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {
 	_, err := r.conn.Exec(ctx,
 		`UPDATE students SET invite_token=$2, invite_expires_at=$3 WHERE id=$1`,
@@ -138,7 +152,7 @@ func (r *studentRepository) GetByInviteToken(ctx context.Context, token string) 
 	var id string
 	var exp time.Time
 	err := r.conn.QueryRow(ctx,
-		`SELECT id, invite_expires_at FROM students WHERE invite_token=$1`, token,
+		`SELECT id, invite_expires_at FROM students WHERE invite_token=$1 AND active`, token,
 	).Scan(&id, &exp)
 	return id, exp, err
 }
@@ -154,7 +168,7 @@ func (r *studentRepository) GetCredentialsByLogin(ctx context.Context, identifie
 	var id, hash string
 	err := r.conn.QueryRow(ctx,
 		`SELECT id, password_hash FROM students
-		 WHERE password_hash IS NOT NULL AND (username=$1 OR phone=$1) LIMIT 1`, identifier,
+		 WHERE password_hash IS NOT NULL AND active AND (username=$1 OR phone=$1) LIMIT 1`, identifier,
 	).Scan(&id, &hash)
 	return id, hash, err
 }

@@ -114,8 +114,8 @@ func withStudentID(studentID string) gin.HandlerFunc {
 
 type mockStudentService struct{ mock.Mock }
 
-func (m *mockStudentService) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
-	args := m.Called(ctx, tutorID, p)
+func (m *mockStudentService) GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error) {
+	args := m.Called(ctx, tutorID, p, archived)
 	return args.Get(0).([]models.Student), args.Int(1), args.Error(2)
 }
 func (m *mockStudentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
@@ -131,6 +131,12 @@ func (m *mockStudentService) Update(ctx context.Context, id string, tutorID stri
 	return args.Get(0).(models.Student), args.Error(1)
 }
 func (m *mockStudentService) Delete(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
+}
+func (m *mockStudentService) Archive(ctx context.Context, id string, tutorID string) error {
+	return m.Called(ctx, id, tutorID).Error(0)
+}
+func (m *mockStudentService) Restore(ctx context.Context, id string, tutorID string) error {
 	return m.Called(ctx, id, tutorID).Error(0)
 }
 func (m *mockStudentService) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {

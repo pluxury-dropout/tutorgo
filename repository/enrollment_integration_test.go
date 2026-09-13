@@ -203,3 +203,19 @@ func TestLeaveAllByStudent_KeepsEarlierLeaveDate(t *testing.T) {
 	_, leftSecond := leftAt(t, pool, second, studentID)
 	assert.NotNil(t, leftSecond)
 }
+
+// Пикеры архивных не показывают, но вкладка, открытая до архивации, может
+// прислать его id — запись должна молча отсеяться (спека, п. 5a.3).
+func TestEnrollmentAddBulk_SkipsArchivedStudent(t *testing.T) {
+	pool := testPool(t)
+	tutorID, studentID := seedTutorStudent(t, pool)
+	courseID := addGroupCourse(t, pool, tutorID, "Группа")
+	ctx := context.Background()
+
+	_, err := pool.Exec(ctx, `UPDATE students SET active = FALSE WHERE id = $1`, studentID)
+	require.NoError(t, err)
+
+	added, err := repository.NewEnrollmentRepository(pool).AddBulk(ctx, courseID, []string{studentID}, tutorID)
+	require.NoError(t, err)
+	assert.Empty(t, added)
+}

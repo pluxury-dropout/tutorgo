@@ -53,7 +53,7 @@ func (r *enrollmentRepository) AddBulk(ctx context.Context, courseID string, stu
 		`INSERT INTO course_enrollments (course_id, student_id)
 		 SELECT $1::uuid, s.id
 		 FROM students s
-		 WHERE s.tutor_id = $2::uuid AND s.id = ANY($3::uuid[])
+		 WHERE s.tutor_id = $2::uuid AND s.id = ANY($3::uuid[]) AND s.active
 		 ON CONFLICT (course_id, student_id) DO UPDATE SET left_at = NULL
 		 WHERE course_enrollments.left_at IS NOT NULL
 		 RETURNING id, course_id, student_id`,

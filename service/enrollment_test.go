@@ -82,3 +82,19 @@ func TestEnrollmentAddBulk_CourseNotFound(t *testing.T) {
 	assert.Empty(t, result)
 	repo.AssertNotCalled(t, "AddBulk")
 }
+
+func TestEnrollmentAdd_ArchivedStudentRejected(t *testing.T) {
+	repo := new(mockEnrollmentRepo)
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	svc := service.NewEnrollmentService(repo, courseRepo, studentRepo)
+
+	group := models.Course{ID: "course-1", TutorID: "tutor-1", IsActive: true}
+	courseRepo.On("GetByID", mock.Anything, "course-1", "tutor-1").Return(group, nil)
+	studentRepo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1", Active: false}, nil)
+
+	_, err := svc.Add(context.Background(), "course-1", models.EnrollStudentRequest{StudentID: "student-1"}, "tutor-1")
+
+	assert.ErrorIs(t, err, service.ErrBadRequest)
+	repo.AssertNotCalled(t, "Add", mock.Anything, mock.Anything, mock.Anything)
+}
