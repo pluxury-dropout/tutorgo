@@ -60,11 +60,20 @@ func (s *studentService) Update(ctx context.Context, id string, tutorID string, 
 	return s.repo.Update(ctx, id, tutorID, req)
 }
 
+// Delete удаляет ученика без истории. С историей — ErrConflict: удаление стёрло
+// бы платежи и уроки, фронт предлагает архив (спека, п. 5a.2).
 func (s *studentService) Delete(ctx context.Context, id string, tutorID string) error {
 	if _, err := s.repo.GetByID(ctx, id, tutorID); err != nil {
 		return fmt.Errorf("student: %w", ErrNotFound)
 	}
-	return s.repo.Delete(ctx, id, tutorID)
+	deleted, err := s.repo.Delete(ctx, id, tutorID)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return fmt.Errorf("student has history: %w", ErrConflict)
+	}
+	return nil
 }
 
 func (s *studentService) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {

@@ -227,6 +227,19 @@ func TestStudentDelete_ServiceError(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
+func TestStudentDelete_HistoryConflict(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("Delete", mock.Anything, testStudentID, testTutorID).
+		Return(fmt.Errorf("student has history: %w", service.ErrConflict))
+
+	w := makeRequest(t, r, http.MethodDelete, "/students/"+testStudentID, nil)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	svc.AssertExpectations(t)
+}
+
 // Invite
 
 func TestStudentInvite_Success(t *testing.T) {

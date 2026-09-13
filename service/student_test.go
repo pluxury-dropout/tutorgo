@@ -37,9 +37,9 @@ func (m *mockStudentRepo) Update(ctx context.Context, id string, tutorID string,
 	return args.Get(0).(models.Student), args.Error(1)
 }
 
-func (m *mockStudentRepo) Delete(ctx context.Context, id string, tutorID string) error {
+func (m *mockStudentRepo) Delete(ctx context.Context, id string, tutorID string) (bool, error) {
 	args := m.Called(ctx, id, tutorID)
-	return args.Error(0)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *mockStudentRepo) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {
@@ -178,7 +178,7 @@ func TestDeleteStudent_Success(t *testing.T) {
 	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
-	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(nil)
+	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(true, nil)
 
 	err := svc.Delete(context.Background(), "student-1", "tutor-1")
 
@@ -264,12 +264,27 @@ func TestStudentDelete_NotFound(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+// Ученик существует, а репозиторий ничего не удалил — мешает история. Это 409,
+// а не 404: фронт предложит архив (спека, п. 5a.2).
+func TestStudentDelete_WithHistoryIsConflict(t *testing.T) {
+	repo := new(mockStudentRepo)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo))
+
+	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
+	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(false, nil)
+
+	err := svc.Delete(context.Background(), "student-1", "tutor-1")
+
+	assert.ErrorIs(t, err, service.ErrConflict)
+	repo.AssertExpectations(t)
+}
+
 func TestStudentDelete_RepoError(t *testing.T) {
 	repo := new(mockStudentRepo)
 	svc := service.NewStudentService(repo, new(mockPaymentRepo))
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
-	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(errors.New("db error"))
+	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(false, errors.New("db error"))
 
 	err := svc.Delete(context.Background(), "student-1", "tutor-1")
 

@@ -13,7 +13,7 @@ type StudentRepository interface {
 	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
-	Delete(ctx context.Context, id string, tutorID string) error
+	Delete(ctx context.Context, id string, tutorID string) (bool, error)
 	SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error
 	GetByInviteToken(ctx context.Context, token string) (string, time.Time, error)
 	ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error
@@ -106,10 +106,25 @@ func (r *studentRepository) Update(ctx context.Context, id string, tutorID strin
 	return student, err
 }
 
-func (r *studentRepository) Delete(ctx context.Context, id string, tutorID string) error {
-	_, err := r.conn.Exec(ctx,
-		`DELETE FROM students WHERE id = $1 AND tutor_id = $2`, id, tutorID)
-	return err
+// Delete удаляет ученика, только если у него нет истории — платежей, проведённых
+// уроков, отметок посещаемости (спека, п. 5a.1). Проверка внутри DELETE, а не
+// отдельным SELECT: платёж, записанный между проверкой и удалением, иначе уехал
+// бы в каскад students → courses → payments. false — ничего не удалено: ученика
+// нет или у него есть история; различает сервис.
+func (r *studentRepository) Delete(ctx context.Context, id string, tutorID string) (bool, error) {
+	tag, err := r.conn.Exec(ctx,
+		`DELETE FROM students s
+		 WHERE s.id = $1 AND s.tutor_id = $2
+		   AND NOT EXISTS (SELECT 1 FROM payments p JOIN courses c ON c.id = p.course_id
+		                    WHERE c.student_id = s.id)
+		   AND NOT EXISTS (SELECT 1 FROM lessons l JOIN courses c ON c.id = l.course_id
+		                    WHERE c.student_id = s.id AND l.status IN ('completed', 'missed'))
+		   AND NOT EXISTS (SELECT 1 FROM lesson_attendances la WHERE la.student_id = s.id)`,
+		id, tutorID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 func (r *studentRepository) SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error {
