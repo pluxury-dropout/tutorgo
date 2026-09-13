@@ -151,7 +151,8 @@ func (r *studentRepository) EnrolledInLesson(ctx context.Context, studentID, les
 		   SELECT 1 FROM lessons l JOIN courses c ON c.id=l.course_id
 		   WHERE l.id=$2 AND (
 		     c.student_id=$1
-		     OR EXISTS (SELECT 1 FROM course_enrollments ce WHERE ce.course_id=c.id AND ce.student_id=$1)
+		     OR EXISTS (SELECT 1 FROM course_enrollments ce
+		                WHERE ce.course_id=c.id AND ce.student_id=$1 AND ce.left_at IS NULL)
 		   ))`, studentID, lessonID,
 	).Scan(&ok)
 	return ok, err
@@ -231,6 +232,8 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	// опущен — ученик видит все свои уроки, включая архивные (история).
 	// rank считается по ВСЕМ неотменённым урокам курса (без date-фильтра),
 	// иначе позиция в цикле зависела бы от выбранной вкладки.
+	// Уроки группы после ухода (left_at) не показываются — та же граница, что
+	// в burned фазы 2; прошлые остаются историей (спека, п. 5a.4).
 	base := `WITH stu_courses AS MATERIALIZED (
 	           SELECT c.id FROM courses c
 	           WHERE c.student_id = $1
@@ -251,7 +254,9 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	         JOIN courses c ON c.id = l.course_id
 	         LEFT JOIN students s ON s.id = c.student_id
 	         LEFT JOIN ranked r ON r.id = l.id
-	         WHERE l.course_id IN (SELECT id FROM stu_courses)`
+	         LEFT JOIN course_enrollments ce ON ce.course_id = l.course_id AND ce.student_id = $1
+	         WHERE l.course_id IN (SELECT id FROM stu_courses)
+	           AND l.scheduled_at < COALESCE(ce.left_at, 'infinity'::timestamptz)`
 	var q string
 	if past {
 		q = base + ` AND l.scheduled_at + l.duration_minutes * interval '1 minute' < now() ORDER BY l.scheduled_at DESC`
