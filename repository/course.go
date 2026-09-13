@@ -73,16 +73,27 @@ func (r *courseRepository) GetOrCreateIndividual(ctx context.Context, tutorID st
 		return course, err
 	}
 
-	// Дефолты — самые частые значения тьютора: у репетитора почти всегда один
-	// прайс, спрашивать его посреди постановки урока незачем.
+	// Дефолт — самый частый пакет тьютора: спрашивать прайс посреди постановки
+	// урока незачем. Сумма и число уроков берутся ПАРОЙ из одной группы: цена
+	// бывает пакетом, который на уроки не делится (85 000 за 12), и независимые
+	// «самая частая сумма» + «самое частое число» склеивали сумму одного пакета с
+	// количеством другого. Ничья — самый поздний курс, то есть текущий прайс, а
+	// не минимальная цена: у тьютора со всеми уникальными пакетами прежний
+	// tie-break выбирал 1 ₸ за 12 уроков.
+	// Правило зеркалит выбор дефолта в StudentOnboardingDialog — менять вместе.
 	const create = `INSERT INTO courses (student_id, tutor_id, subject, price_per_cycle, lessons_per_cycle, started_at)
 	                SELECT s.id, $1::uuid, $3::text,
-	                       COALESCE((SELECT price_per_cycle FROM courses WHERE tutor_id = $1::uuid AND is_active
-	                                 GROUP BY price_per_cycle ORDER BY count(*) DESC, price_per_cycle LIMIT 1), 0),
-	                       COALESCE((SELECT lessons_per_cycle FROM courses WHERE tutor_id = $1::uuid AND is_active
-	                                 GROUP BY lessons_per_cycle ORDER BY count(*) DESC, lessons_per_cycle LIMIT 1), 1),
+	                       COALESCE(d.price_per_cycle, 0), COALESCE(d.lessons_per_cycle, 1),
 	                       $4::timestamptz
 	                FROM students s
+	                LEFT JOIN LATERAL (
+	                    SELECT price_per_cycle, lessons_per_cycle
+	                      FROM courses
+	                     WHERE tutor_id = $1::uuid AND is_active
+	                     GROUP BY price_per_cycle, lessons_per_cycle
+	                     ORDER BY count(*) DESC, max(started_at) DESC, price_per_cycle, lessons_per_cycle
+	                     LIMIT 1
+	                ) d ON TRUE
 	                WHERE s.id = $2::uuid AND s.tutor_id = $1::uuid
 	                ON CONFLICT DO NOTHING
 	                RETURNING ` + courseCols

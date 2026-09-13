@@ -92,7 +92,12 @@ export default function StudentDetailPage() {
                 <div className="flex items-center gap-4 text-muted-foreground shrink-0">
                   <CourseTypeBadge isGroup={!course.student_id} />
                   <CoursePrice course={course} />
-                  <span>{course.lessons_per_cycle} в цикле</span>
+                  {/* Цена урока — только подсказка: канон — пакет, и у «85 000 за 12» она дробная */}
+                  <span>
+                    {course.lessons_per_cycle === 1
+                      ? 'за урок'
+                      : `за ${course.lessons_per_cycle} ур. · ≈ ${Math.round(course.price_per_cycle / course.lessons_per_cycle).toLocaleString()} / урок`}
+                  </span>
                 </div>
               </div>
             ))}
@@ -111,26 +116,25 @@ export default function StudentDetailPage() {
 }
 
 /** Цена курса правится прямо в строке: ради одного числа гонять пользователя
- *  на страницу курса и обратно незачем. */
+ *  на страницу курса и обратно незачем. Правится сумма пакета, а не цена урока:
+ *  пакет вроде «85 000 за 12» на уроки нацело не делится, и запись «цена урока
+ *  × N» превращала его в 84 996 от одного клика и потери фокуса. */
 function CoursePrice({ course }: { course: Course }) {
   const update = useUpdateCourse(course.id)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState('')
 
-  // Курс хранит цену за цикл, но строка подписана «за урок» — делим на
-  // размер цикла, иначе на курсе с циклом > 1 число завышено в N раз.
-  const perLesson = Math.round(course.price_per_cycle / (course.lessons_per_cycle || 1))
-
   async function save() {
     setEditing(false)
+    // Пустое поле — не «цена 0», а передумал: Number('') даёт 0 и молча
+    // обнулил бы прайс при потере фокуса.
+    if (draft.trim() === '') return
     const next = Number(draft)
-    if (!Number.isFinite(next) || next < 0) return
-    const nextCycle = next * (course.lessons_per_cycle || 1)
-    if (nextCycle === course.price_per_cycle) return
+    if (!Number.isFinite(next) || next < 0 || next === course.price_per_cycle) return
     try {
       await update.mutateAsync({
         subject:           course.subject,
-        price_per_cycle:   nextCycle,
+        price_per_cycle:   next,
         lessons_per_cycle: course.lessons_per_cycle,
         started_at:        course.started_at,
         ended_at:          course.ended_at ?? undefined,
@@ -163,10 +167,10 @@ function CoursePrice({ course }: { course: Course }) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); setDraft(String(perLesson)); setEditing(true) }}
+      onClick={(e) => { e.stopPropagation(); setDraft(String(course.price_per_cycle)); setEditing(true) }}
       className="hover:text-foreground hover:underline"
     >
-      {perLesson.toLocaleString()} ₸ / урок
+      {course.price_per_cycle.toLocaleString()} ₸
     </button>
   )
 }

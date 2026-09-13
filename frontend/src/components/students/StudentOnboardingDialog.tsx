@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useOnboardStudent } from '@/lib/hooks/useStudents'
 import { useCourses } from '@/lib/hooks/useCourses'
 import { WEEK_DAYS, isoWeekday } from '@/lib/recurrence'
-import type { ApiError, OnboardingStudentInput } from '@/types/api'
+import type { ApiError, Course, OnboardingStudentInput } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,12 +23,42 @@ interface Props {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
+/** Дефолт для полей оплаты — самый частый ПАКЕТ тьютора: пара
+ *  (price_per_cycle, lessons_per_cycle), а не частая цена и частое число
+ *  уроков по отдельности — иначе сумма одного пакета склеится с количеством
+ *  другого. Ничья по частоте — в пользу пакета с более поздним started_at,
+ *  дальше сортировка детерминирована (по цене, потом по числу уроков).
+ *  Правило зеркалит SQL в repository/course.go:GetOrCreateIndividual —
+ *  менять оба места нужно вместе. */
+function mostCommonPackage(courses: Course[]): { price: number | ''; lessons: number } {
+  if (courses.length === 0) return { price: '', lessons: 1 }
+
+  const groups = new Map<string, { price: number; lessons: number; count: number; latest: number }>()
+  for (const c of courses) {
+    const key       = `${c.price_per_cycle}:${c.lessons_per_cycle}`
+    const startedAt = new Date(c.started_at).getTime()
+    const group     = groups.get(key)
+    if (group) {
+      group.count++
+      if (startedAt > group.latest) group.latest = startedAt
+    } else {
+      groups.set(key, { price: c.price_per_cycle, lessons: c.lessons_per_cycle, count: 1, latest: startedAt })
+    }
+  }
+
+  const [best] = [...groups.values()].sort((a, b) =>
+    b.count - a.count || b.latest - a.latest || a.price - b.price || a.lessons - b.lessons,
+  )
+  return { price: best.price, lessons: best.lessons }
+}
+
 /** Быстрый онбординг (спека 8.2, п. 8.2): один сабмит заводит ученика, а при
  *  заполненном предмете — ещё и курс с серией уроков на дефолтных днях/времени.
  *  Условный рендер формы вместо reset-эффекта на `open`: компонент монтируется
- *  заново при каждом открытии, поэтому дефолты (предмет и цена — по первому
- *  курсу тьютора) читаются сразу в useState без гонки с уже открытой формой
- *  при фоновом рефетче курсов. */
+ *  заново при каждом открытии, поэтому дефолты (предмет — по первому курсу
+ *  тьютора, оплата — по самому частому пакету, см. mostCommonPackage) читаются
+ *  сразу в useState без гонки с уже открытой формой при фоновом рефетче
+ *  курсов. */
 export function StudentOnboardingDialog({ open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -43,11 +73,12 @@ export function StudentOnboardingDialog({ open, onClose }: Props) {
 }
 
 function OnboardingForm({ onClose }: { onClose: () => void }) {
-  // "Самый частый" курс в первом приближении — просто первый из списка:
-  // агрегирующей ручки на бэке для этого нет, а точная статистика для формы
-  // онбординга overkill — тьютор всё видит и может поправить перед сабмитом.
+  // useCourses отдаёт только активные курсы (первые 100 — см. coursesApi.list),
+  // агрегирующей ручки на бэке для статистики по пакетам нет; для формы
+  // онбординга это overkill — тьютор всё видит и может поправить перед сабмитом.
   const { data: courses = [] } = useCourses()
   const onboard = useOnboardStudent()
+  const defaultPkg = mostCommonPackage(courses)
 
   const [firstName, setFirstName] = useState('')
   const [phone, setPhone]         = useState('')
@@ -56,13 +87,10 @@ function OnboardingForm({ onClose }: { onClose: () => void }) {
   const [hour, setHour]           = useState('17')
   const [minute, setMinute]       = useState('0')
   const [duration, setDuration]   = useState(60)
-  // Поле спрашивает цену за урок, а курс хранит цену за цикл — делим, иначе у
-  // тьютора с циклом в 8 уроков в поле подставится восьмикратная цена.
-  // Обратное умножение при сабмите не нужно: цикл этого поля всегда равен
-  // одному уроку (lessons_per_cycle: 1 ниже), а не lessons_per_cycle курса-донора.
-  const [price, setPrice]         = useState<number | ''>(
-    courses[0] ? Math.round(courses[0].price_per_cycle / (courses[0].lessons_per_cycle || 1)) : '',
-  )
+  // Пара «сумма за пакет» + «уроков в пакете» — те же единицы, что хранит
+  // курс (price_per_cycle/lessons_per_cycle), без домножений и делений.
+  const [price, setPrice]         = useState<number | ''>(defaultPkg.price)
+  const [lessons, setLessons]     = useState<number>(defaultPkg.lessons)
   const [error, setError]         = useState('')
 
   function toggleDay(iso: number) {
@@ -74,6 +102,13 @@ function OnboardingForm({ onClose }: { onClose: () => void }) {
     const name = firstName.trim()
     if (name.length < 2) { setError('Минимум 2 символа'); return }
     if (phone.trim() && phone.trim().length < 10) { setError('Телефон — минимум 10 символов'); return }
+    // Очищенное поле даёт Number('') = 0, бэкенд пропускает 0 через omitempty,
+    // а сервис онбординга подставляет 1 — и пакет «80 000 за 12» молча стал бы
+    // «80 000 за 1 урок». Для денег лучше остановить форму, чем угадывать.
+    if (subject.trim() && price !== '' && (!Number.isInteger(lessons) || lessons < 1)) {
+      setError('Уроков в пакете — целое число от 1')
+      return
+    }
     setError('')
 
     // Без предмета — только ученик; предмет задан, но дни не выбраны —
@@ -83,11 +118,11 @@ function OnboardingForm({ onClose }: { onClose: () => void }) {
 
     if (subject.trim()) {
       data.subject = subject.trim()
-      // Поле выше в единицах «за урок» — цикл равен одному уроку явно,
-      // а не молчаливым дефолтом service/onboarding.go.
+      // Канон price_per_cycle/lessons_per_cycle как в CourseForm — сумма и
+      // число уроков уходят как есть, без домножений на стороне клиента.
       if (price !== '') {
         data.price_per_cycle   = price
-        data.lessons_per_cycle = 1
+        data.lessons_per_cycle = lessons
       }
       if (days.length > 0) {
         const now     = new Date()
@@ -198,8 +233,23 @@ function OnboardingForm({ onClose }: { onClose: () => void }) {
                 value={price}
                 onChange={(e) => setPrice(e.target.value === '' ? '' : Number(e.target.value))}
               />
-              <span className="text-xs text-muted-foreground">₸ за урок</span>
+              <span className="text-xs text-muted-foreground">₸ за</span>
+              <Input
+                id="onb_lessons"
+                type="number"
+                min={1}
+                step={1}
+                className="w-16"
+                value={lessons}
+                onChange={(e) => setLessons(Number(e.target.value))}
+              />
+              <span className="text-xs text-muted-foreground">уроков</span>
             </div>
+            {lessons > 1 && typeof price === 'number' && price > 0 && (
+              <p className="text-xs text-muted-foreground">
+                ≈ {Math.round(price / lessons).toLocaleString()} ₸ за урок
+              </p>
+            )}
           </div>
         </>
       )}
