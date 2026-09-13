@@ -9,9 +9,10 @@ export interface StudentInput {
 }
 
 export interface StudentListParams {
-  page:   number
-  limit:  number
-  search: string
+  page:      number
+  limit:     number
+  search:    string
+  archived?: boolean
 }
 
 export const studentsApi = {
@@ -26,6 +27,8 @@ export const studentsApi = {
   update: (id: string, data: StudentInput) =>
     api.put<Student>(`/students/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/students/${id}`).then(() => id),
+  archive: (id: string) => api.post(`/students/${id}/archive`).then(() => id),
+  restore: (id: string) => api.post(`/students/${id}/restore`).then(() => id),
   invite: (id: string) =>
     api.post<{ invite_token: string; expires_at: string }>(`/students/${id}/invite`)
       .then((r) => r.data),

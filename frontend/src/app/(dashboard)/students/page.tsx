@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Users } from 'lucide-react'
 
-import { useStudentsPaged, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
+import { useStudentsPaged, useUpdateStudent, useRemoveStudent, useRestoreStudent } from '@/lib/hooks/useStudents'
 import { StudentForm } from '@/components/students/StudentForm'
 import { StudentOnboardingDialog } from '@/components/students/StudentOnboardingDialog'
 import { StudentsList } from '@/components/students/StudentsList'
@@ -24,6 +24,7 @@ const LIMIT = 20
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [page, setPage]     = useState(1)
+  const [archived, setArchived] = useState(false)
 
   // Сброс страницы делаем в обработчике, а не эффектом на search: иначе после
   // каждой буквы идёт лишний рендер со старым номером страницы.
@@ -32,7 +33,12 @@ export default function StudentsPage() {
     setPage(1)
   }
 
-  const { data, isLoading, isError, refetch } = useStudentsPaged({ page, limit: LIMIT, search })
+  function switchArchived(value: boolean) {
+    setArchived(value)
+    setPage(1)
+  }
+
+  const { data, isLoading, isError, refetch } = useStudentsPaged({ page, limit: LIMIT, search, archived })
   const students   = data?.data ?? []
   const total      = data?.total ?? 0
   const totalPages = Math.ceil(total / LIMIT)
@@ -42,7 +48,8 @@ export default function StudentsPage() {
   const [editing, setEditing]         = useState<Student | undefined>()
 
   const updateStudent = useUpdateStudent(editing?.id ?? '')
-  const deleteStudent = useDeleteStudent()
+  const removeStudent  = useRemoveStudent()
+  const restoreStudent = useRestoreStudent()
 
   function openEdit(s: Student) { setEditing(s); setFormOpen(true) }
 
@@ -55,16 +62,21 @@ export default function StudentsPage() {
   }
 
   async function handleDelete(s: Student) {
-    if (!confirm(`Удалить ${s.first_name}${s.last_name ? ` ${s.last_name}` : ''}?`)) return
-    await deleteStudent.mutateAsync(s.id)
-    toast.success('Ученик удалён')
+    const result = await removeStudent(s)
+    if (result === 'deleted')  toast.success('Ученик удалён')
+    if (result === 'archived') toast.success('Ученик перенесён в архив')
+  }
+
+  async function handleRestore(s: Student) {
+    await restoreStudent.mutateAsync(s.id)
+    toast.success('Ученик восстановлен')
   }
 
   return (
     <div style={{ maxWidth: 900 }}>
       <PageHeader
         title="Ученики"
-        meta={<HeaderMetric color="var(--purple)">{total} учеников</HeaderMetric>}
+        meta={<HeaderMetric color="var(--purple)">{total} {archived ? 'в архиве' : 'учеников'}</HeaderMetric>}
         actions={
           <Button size="sm" onClick={() => setOnboardOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" /> Добавить
@@ -72,13 +84,19 @@ export default function StudentsPage() {
         }
       />
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           placeholder="Поиск по имени или email..."
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="max-w-sm"
         />
+        <Button size="sm" variant={archived ? 'outline' : 'secondary'} onClick={() => switchArchived(false)}>
+          Активные
+        </Button>
+        <Button size="sm" variant={archived ? 'secondary' : 'outline'} onClick={() => switchArchived(true)}>
+          Архив
+        </Button>
       </div>
 
       {isLoading ? (
@@ -92,15 +110,22 @@ export default function StudentsPage() {
       ) : students.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={search ? 'Ничего не найдено' : 'Учеников пока нет'}
+          title={search ? 'Ничего не найдено' : archived ? 'Архив пуст' : 'Учеников пока нет'}
           description={search
             ? 'Попробуй другой запрос — поиск идёт по имени и контактам'
-            : 'Ученик — карточка с контактами. К ней привязываются курсы, уроки и оплаты, а сам ученик может получить доступ в личный кабинет'}
-          action={!search ? { label: 'Добавить ученика', onClick: () => setOnboardOpen(true) } : undefined}
+            : archived
+              ? 'Сюда попадают ученики с платежами или проведёнными уроками, когда их удаляют: история оплат остаётся'
+              : 'Ученик — карточка с контактами. К ней привязываются курсы, уроки и оплаты, а сам ученик может получить доступ в личный кабинет'}
+          action={!search && !archived ? { label: 'Добавить ученика', onClick: () => setOnboardOpen(true) } : undefined}
         />
       ) : (
         <>
-          <StudentsList students={students} onEdit={openEdit} onDelete={handleDelete} />
+          <StudentsList
+            students={students}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+            onRestore={archived ? handleRestore : undefined}
+          />
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-3 px-1">
               <span className="text-xs text-muted-foreground">

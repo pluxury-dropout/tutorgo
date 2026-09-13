@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, Trash2, ChevronRight, UserPlus, Copy } from 'lucide-react'
+import { Pencil, Trash2, ChevronRight, UserPlus, Copy, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { SectionCard } from '@/components/common/SectionCard'
@@ -22,9 +22,11 @@ interface StudentsListProps {
   students: Student[]
   onEdit: (s: Student) => void
   onDelete: (s: Student) => void
+  /** Задан — список показывает архив: вместо правки и удаления одна кнопка «Восстановить». */
+  onRestore?: (s: Student) => void
 }
 
-export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) {
+export function StudentsList({ students, onEdit, onDelete, onRestore }: StudentsListProps) {
   const router = useRouter()
   const [inviteFor, setInviteFor] = useState<Student | null>(null)
   const [invite, setInvite] = useState<{ invite_token: string; expires_at: string } | null>(null)
@@ -105,19 +107,29 @@ export function StudentsList({ students, onEdit, onDelete }: StudentsListProps) 
             </span>
             <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <Button size="icon" variant="ghost" className="h-8 w-8"
-                title="Пригласить в кабинет ученика"
-                onClick={() => handleInvite(student)}>
-                <UserPlus className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(student)}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="icon" variant="ghost"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={() => onDelete(student)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {onRestore ? (
+                <Button size="icon" variant="ghost" className="h-8 w-8"
+                  title="Восстановить"
+                  onClick={() => onRestore(student)}>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              ) : (
+                <>
+                  <Button size="icon" variant="ghost" className="h-8 w-8"
+                    title="Пригласить в кабинет ученика"
+                    onClick={() => handleInvite(student)}>
+                    <UserPlus className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(student)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => onDelete(student)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

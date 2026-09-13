@@ -13,6 +13,7 @@ export interface Student {
   email: string
   phone: string
   tutor_id: string
+  active: boolean
 }
 
 export interface Course {

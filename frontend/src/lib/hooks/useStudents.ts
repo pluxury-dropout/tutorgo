@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { studentsApi, StudentInput, StudentListParams } from '@/lib/api/students'
 import { courseKeys } from '@/lib/hooks/useCourses'
-import { OnboardingStudentInput } from '@/types/api'
+import { ApiError, OnboardingStudentInput, Student } from '@/types/api'
 
 export const studentKeys = {
   all:    ['students'] as const,
@@ -59,14 +59,61 @@ export function useDeleteStudent() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: studentsApi.delete,
-    // Ученик уходит вместе с курсами и уроками (ON DELETE CASCADE) — без этих
-    // двух сбросов его уроки висели в календаре до протухания кэша.
+    // Удаляется только ученик без истории (иначе 409, см. useRemoveStudent) —
+    // вместе с курсами и будущими уроками; без этих сбросов они висели бы в
+    // календаре до протухания кэша.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: studentKeys.all })
       qc.invalidateQueries({ queryKey: courseKeys.all })
       qc.invalidateQueries({ queryKey: ['calendar'] })
     },
   })
+}
+
+export function useArchiveStudent() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: studentsApi.archive,
+    // Архивация уводит в архив курсы ученика и удаляет их будущие уроки.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: studentKeys.all })
+      qc.invalidateQueries({ queryKey: courseKeys.all })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
+  })
+}
+
+export function useRestoreStudent() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: studentsApi.restore,
+    onSuccess:  () => qc.invalidateQueries({ queryKey: studentKeys.all }),
+  })
+}
+
+/** «Удалить» из интерфейса. Ученик без истории удаляется; с платежами или
+ *  проведёнными уроками сервер отвечает 409, и тогда предлагаем архив — удаление
+ *  стёрло бы их из истории (спека, п. 5a.2). Одна функция на список и карточку,
+ *  чтобы тексты диалогов не разъехались. */
+export function useRemoveStudent() {
+  const del     = useDeleteStudent()
+  const archive = useArchiveStudent()
+
+  return async (s: Student): Promise<'deleted' | 'archived' | null> => {
+    const name = `${s.first_name}${s.last_name ? ` ${s.last_name}` : ''}`
+    if (!confirm(`Удалить ${name}?`)) return null
+    try {
+      await del.mutateAsync(s.id)
+      return 'deleted'
+    } catch (e) {
+      if ((e as ApiError).status !== 409) throw e
+    }
+    if (!confirm(`${name}: есть платежи или проведённые уроки — удаление стёрло бы их из истории. Перенести в архив?`)) {
+      return null
+    }
+    await archive.mutateAsync(s.id)
+    return 'archived'
+  }
 }
 
 export function useStudentsPaged(params: StudentListParams) {

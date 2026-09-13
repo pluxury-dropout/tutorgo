@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 
-import { useStudent, useUpdateStudent, useDeleteStudent } from '@/lib/hooks/useStudents'
+import { useStudent, useUpdateStudent, useRemoveStudent, useRestoreStudent } from '@/lib/hooks/useStudents'
 import { useStudentCourses, useUpdateCourse } from '@/lib/hooks/useCourses'
 import { StudentForm } from '@/components/students/StudentForm'
-import { PageHeader } from '@/components/common/PageHeader'
+import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { StudentFormValues } from '@/schemas/student'
 import { Course } from '@/types/api'
@@ -23,7 +23,8 @@ export default function StudentDetailPage() {
   const { data: student, isLoading }  = useStudent(id)
   const { data: courses = [] }        = useStudentCourses(id)
   const updateStudent = useUpdateStudent(id)
-  const deleteStudent = useDeleteStudent()
+  const removeStudent  = useRemoveStudent()
+  const restoreStudent = useRestoreStudent()
 
   const [formOpen, setFormOpen] = useState(false)
 
@@ -34,10 +35,18 @@ export default function StudentDetailPage() {
 
   async function handleDelete() {
     if (!student) return
-    if (!confirm(`Удалить ${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}?`)) return
-    await deleteStudent.mutateAsync(student.id)
-    toast.success('Ученик удалён')
-    router.push('/students')
+    const result = await removeStudent(student)
+    if (result === 'deleted') {
+      toast.success('Ученик удалён')
+      router.push('/students')
+    }
+    // Архивный остаётся на карточке — она покажет плашку «В архиве».
+    if (result === 'archived') toast.success('Ученик перенесён в архив')
+  }
+
+  async function handleRestore() {
+    await restoreStudent.mutateAsync(id)
+    toast.success('Ученик восстановлен')
   }
 
   if (isLoading) {
@@ -59,14 +68,21 @@ export default function StudentDetailPage() {
 
       <PageHeader
         title={`${student.first_name}${student.last_name ? ` ${student.last_name}` : ''}`}
+        meta={!student.active ? <HeaderMetric color="var(--muted-foreground)">В архиве</HeaderMetric> : undefined}
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-1.5" /> Редактировать
             </Button>
-            <Button size="sm" variant="destructive" onClick={handleDelete}>
-              <Trash2 className="h-4 w-4 mr-1.5" /> Удалить
-            </Button>
+            {student.active ? (
+              <Button size="sm" variant="destructive" onClick={handleDelete}>
+                <Trash2 className="h-4 w-4 mr-1.5" /> Удалить
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={handleRestore}>
+                <RotateCcw className="h-4 w-4 mr-1.5" /> Восстановить
+              </Button>
+            )}
           </div>
         }
       />
