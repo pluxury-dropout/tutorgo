@@ -87,12 +87,17 @@ func (s *courseService) Delete(ctx context.Context, id string, tutorID string) e
 	if err != nil {
 		return fmt.Errorf("course: %w", ErrNotFound)
 	}
-	if err := s.repo.Delete(ctx, id, tutorID); err != nil {
+	// Расписание закрываем ДО is_active = false: GetByStudent (и через него
+	// studentService.Archive) отдаёт только активные курсы, так что оборванный
+	// вызов между шагами обязан оставить курс активным — тогда повтор (в том
+	// числе из архивации ученика) увидит курс снова и доведёт закрытие
+	// расписания до конца. Перевернуть порядок — значит после сбоя закрытия
+	// расписания курс станет неактивным, выпадет из GetByStudent, и правило
+	// с будущими уроками останется висеть открытым навсегда.
+	if err := s.schedule.ArchiveCourseSchedule(ctx, id, tutorID); err != nil {
 		return err
 	}
-	// Архивация обещает: завершённые остаются, будущие уходят. Без этого
-	// правило курса живёт дальше и продолжает материализовать уроки.
-	return s.schedule.ArchiveCourseSchedule(ctx, id, tutorID)
+	return s.repo.Delete(ctx, id, tutorID)
 }
 
 func (s *courseService) GetArchived(ctx context.Context, tutorID string, p models.Pagination) ([]models.Course, int, error) {

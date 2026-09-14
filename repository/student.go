@@ -10,10 +10,11 @@ import (
 
 type StudentRepository interface {
 	Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error)
-	GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error)
+	GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error)
 	GetByID(ctx context.Context, id string, tutorID string) (models.Student, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdateStudentRequest) (models.Student, error)
-	Delete(ctx context.Context, id string, tutorID string) error
+	Delete(ctx context.Context, id string, tutorID string) (bool, error)
+	SetActive(ctx context.Context, id string, tutorID string, active bool) error
 	SetInvite(ctx context.Context, studentID, token string, expiresAt time.Time) error
 	GetByInviteToken(ctx context.Context, token string) (string, time.Time, error)
 	ActivateAccount(ctx context.Context, studentID, username, passwordHash string) error
@@ -47,15 +48,19 @@ func (r *studentRepository) Create(ctx context.Context, req models.CreateStudent
 	return student, err
 }
 
-func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination) ([]models.Student, int, error) {
+// GetAll — ученики репетитора: активные или, с archived, только архивные
+// (спека, п. 5a.3). Выбор ученика в календаре, состав группы и счётчик дашборда
+// ходят сюда же — архивный пропадает из них всех одним условием.
+func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models.Pagination, archived bool) ([]models.Student, int, error) {
 	var total int
 	if err := r.conn.QueryRow(ctx,
 		`SELECT COUNT(*) FROM students
 		 WHERE tutor_id = $1
+		   AND active = NOT $3::boolean
 		   AND ($2 = '' OR first_name ILIKE '%' || $2 || '%'
 		                 OR last_name  ILIKE '%' || $2 || '%'
 		                 OR email      ILIKE '%' || $2 || '%')`,
-		tutorID, p.Search,
+		tutorID, p.Search, archived,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -64,12 +69,13 @@ func (r *studentRepository) GetAll(ctx context.Context, tutorID string, p models
 		`SELECT id, tutor_id, first_name, last_name, phone, email, notes, active
 		 FROM students
 		 WHERE tutor_id = $1
+		   AND active = NOT $5::boolean
 		   AND ($2 = '' OR first_name ILIKE '%' || $2 || '%'
 		                 OR last_name  ILIKE '%' || $2 || '%'
 		                 OR email      ILIKE '%' || $2 || '%')
 		 ORDER BY first_name, last_name
 		 LIMIT $3 OFFSET $4`,
-		tutorID, p.Search, p.Limit, p.Offset())
+		tutorID, p.Search, p.Limit, p.Offset(), archived)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -106,9 +112,35 @@ func (r *studentRepository) Update(ctx context.Context, id string, tutorID strin
 	return student, err
 }
 
-func (r *studentRepository) Delete(ctx context.Context, id string, tutorID string) error {
+// Delete удаляет ученика, только если у него нет истории — платежей, проведённых
+// уроков, отметок посещаемости (спека, п. 5a.1). Проверка внутри DELETE, а не
+// отдельным SELECT: окно между проверкой и удалением сужается до длительности
+// одного оператора, а не отдельных SELECT + DELETE. Совсем без окна не бывает:
+// на READ COMMITTED каждый оператор берёт свой снепшот, и платёж, записанный
+// конкурентной транзакцией, закоммиченной уже после старта этого DELETE, всё
+// равно попадёт под каскад. false — ничего не удалено: ученика нет или у него
+// есть история; различает сервис.
+func (r *studentRepository) Delete(ctx context.Context, id string, tutorID string) (bool, error) {
+	tag, err := r.conn.Exec(ctx,
+		`DELETE FROM students s
+		 WHERE s.id = $1 AND s.tutor_id = $2
+		   AND NOT EXISTS (SELECT 1 FROM payments p JOIN courses c ON c.id = p.course_id
+		                    WHERE c.student_id = s.id)
+		   AND NOT EXISTS (SELECT 1 FROM lessons l JOIN courses c ON c.id = l.course_id
+		                    WHERE c.student_id = s.id AND l.status IN ('completed', 'missed'))
+		   AND NOT EXISTS (SELECT 1 FROM lesson_attendances la WHERE la.student_id = s.id)`,
+		id, tutorID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// SetActive — архивация и восстановление ученика. Курсы и записи в группы не
+// трогает: их закрывает studentService.Archive отдельными шагами.
+func (r *studentRepository) SetActive(ctx context.Context, id string, tutorID string, active bool) error {
 	_, err := r.conn.Exec(ctx,
-		`DELETE FROM students WHERE id = $1 AND tutor_id = $2`, id, tutorID)
+		`UPDATE students SET active = $3 WHERE id = $1 AND tutor_id = $2`, id, tutorID, active)
 	return err
 }
 
@@ -123,7 +155,7 @@ func (r *studentRepository) GetByInviteToken(ctx context.Context, token string) 
 	var id string
 	var exp time.Time
 	err := r.conn.QueryRow(ctx,
-		`SELECT id, invite_expires_at FROM students WHERE invite_token=$1`, token,
+		`SELECT id, invite_expires_at FROM students WHERE invite_token=$1 AND active`, token,
 	).Scan(&id, &exp)
 	return id, exp, err
 }
@@ -139,7 +171,7 @@ func (r *studentRepository) GetCredentialsByLogin(ctx context.Context, identifie
 	var id, hash string
 	err := r.conn.QueryRow(ctx,
 		`SELECT id, password_hash FROM students
-		 WHERE password_hash IS NOT NULL AND (username=$1 OR phone=$1) LIMIT 1`, identifier,
+		 WHERE password_hash IS NOT NULL AND active AND (username=$1 OR phone=$1) LIMIT 1`, identifier,
 	).Scan(&id, &hash)
 	return id, hash, err
 }
@@ -151,7 +183,8 @@ func (r *studentRepository) EnrolledInLesson(ctx context.Context, studentID, les
 		   SELECT 1 FROM lessons l JOIN courses c ON c.id=l.course_id
 		   WHERE l.id=$2 AND (
 		     c.student_id=$1
-		     OR EXISTS (SELECT 1 FROM course_enrollments ce WHERE ce.course_id=c.id AND ce.student_id=$1)
+		     OR EXISTS (SELECT 1 FROM course_enrollments ce
+		                WHERE ce.course_id=c.id AND ce.student_id=$1 AND ce.left_at IS NULL)
 		   ))`, studentID, lessonID,
 	).Scan(&ok)
 	return ok, err
@@ -231,6 +264,8 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	// опущен — ученик видит все свои уроки, включая архивные (история).
 	// rank считается по ВСЕМ неотменённым урокам курса (без date-фильтра),
 	// иначе позиция в цикле зависела бы от выбранной вкладки.
+	// Уроки группы после ухода (left_at) не показываются — та же граница, что
+	// в burned фазы 2; прошлые остаются историей (спека, п. 5a.4).
 	base := `WITH stu_courses AS MATERIALIZED (
 	           SELECT c.id FROM courses c
 	           WHERE c.student_id = $1
@@ -251,7 +286,9 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	         JOIN courses c ON c.id = l.course_id
 	         LEFT JOIN students s ON s.id = c.student_id
 	         LEFT JOIN ranked r ON r.id = l.id
-	         WHERE l.course_id IN (SELECT id FROM stu_courses)`
+	         LEFT JOIN course_enrollments ce ON ce.course_id = l.course_id AND ce.student_id = $1
+	         WHERE l.course_id IN (SELECT id FROM stu_courses)
+	           AND l.scheduled_at < COALESCE(ce.left_at, 'infinity'::timestamptz)`
 	var q string
 	if past {
 		q = base + ` AND l.scheduled_at + l.duration_minutes * interval '1 minute' < now() ORDER BY l.scheduled_at DESC`

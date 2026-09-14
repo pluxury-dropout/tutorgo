@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // mockCourseRepo is shared across service tests (payment_test.go, lesson_test.go)
@@ -308,6 +309,10 @@ func TestCourseDelete_Success(t *testing.T) {
 
 // Ошибка архивации не должна проглатываться: тихая порча здесь — самый
 // вероятный будущий регресс (строку легко «случайно» обернуть в игнор).
+// repo.Delete идёт после расписания (см. TestCourseDelete_ClosesScheduleBeforeDeactivating),
+// поэтому упавшее закрытие расписания обязано оставить курс активным — Delete
+// не вызывается вовсе, и повторный вызов (в том числе из studentService.Archive)
+// увидит курс снова и доведёт архивацию до конца.
 func TestCourseDelete_ScheduleError(t *testing.T) {
 	courseRepo := new(mockCourseRepo)
 	studentRepo := new(mockStudentRepo)
@@ -315,12 +320,36 @@ func TestCourseDelete_ScheduleError(t *testing.T) {
 	svc := service.NewCourseService(courseRepo, studentRepo, schedule)
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
-	courseRepo.On("Delete", mock.Anything, courseID, tutorID).Return(nil)
 	schedule.On("ArchiveCourseSchedule", mock.Anything, courseID, tutorID).Return(errors.New("archive failed"))
 
 	err := svc.Delete(context.Background(), courseID, tutorID)
 
 	assert.Error(t, err)
+	courseRepo.AssertNotCalled(t, "Delete")
+	schedule.AssertExpectations(t)
+}
+
+// Порядок обязателен: GetByStudent (и через него studentService.Archive)
+// отдаёт только активные курсы, поэтому расписание обязано закрыться раньше,
+// чем курс станет неактивным, — иначе обрыв между шагами навсегда прячет
+// курс с открытым правилом от повторной архивации.
+func TestCourseDelete_ClosesScheduleBeforeDeactivating(t *testing.T) {
+	courseRepo := new(mockCourseRepo)
+	studentRepo := new(mockStudentRepo)
+	schedule := new(mockSchedule)
+	svc := service.NewCourseService(courseRepo, studentRepo, schedule)
+
+	var order []string
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	schedule.On("ArchiveCourseSchedule", mock.Anything, courseID, tutorID).
+		Run(func(mock.Arguments) { order = append(order, "schedule") }).Return(nil)
+	courseRepo.On("Delete", mock.Anything, courseID, tutorID).
+		Run(func(mock.Arguments) { order = append(order, "deactivate") }).Return(nil)
+
+	require.NoError(t, svc.Delete(context.Background(), courseID, tutorID))
+
+	require.Equal(t, []string{"schedule", "deactivate"}, order)
+	courseRepo.AssertExpectations(t)
 	schedule.AssertExpectations(t)
 }
 
