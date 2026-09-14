@@ -1,7 +1,7 @@
 # Единицы цены и перенос денег с курса на ученика
 
 **Дата:** 2026-09-06
-**Статус:** фаза 0 в main; фаза 1 — PR из `fix/package-pricing`; фаза 1.5 — реализована в `feat/student-archive`, ждёт smoke; фазы 2–4 к реализации
+**Статус:** фазы 0, 1 и 1.5 в main (фаза 1.5 — 2026-09-14, миграция 038 накатана до деплоя); фазы 2–4 к реализации
 **Область:** `migrations/`, `models/`, `repository/`, `service/`, `handlers/`, `router/`, `frontend/src/app/(dashboard)/{students,courses,payments,dashboard}`, `frontend/src/components/{students,courses,payments,lessons}`, `frontend/src/lib/{api,hooks}`, `frontend/src/schemas`, `frontend/src/types/api.ts`
 
 **Предшествует:** `docs/specs/2026-08-31-calendar-events-and-scheduling-flow.md` (закрыта). Та спека сделала курс производной сущностью и завела раздел «Ученики». Эта — доводит начатое до денег: там, где навигация уже ученикоцентричная, модель данных всё ещё курсоцентричная.
