@@ -3,15 +3,20 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Pencil, RotateCcw, Snowflake, Trash2, Wallet } from 'lucide-react'
 
-import { useStudent, useUpdateStudent, useRemoveStudent, useRestoreStudent } from '@/lib/hooks/useStudents'
+import { useStudent, useUpdateStudent, useRemoveStudent, useRestoreStudent, usePauses, useDeletePause } from '@/lib/hooks/useStudents'
 import { useStudentCourses, useUpdateCourse } from '@/lib/hooks/useCourses'
+import { useCreatePayment } from '@/lib/hooks/usePayments'
 import { StudentForm } from '@/components/students/StudentForm'
+import { PauseDialog } from '@/components/students/PauseDialog'
+import { PaymentForm } from '@/components/payments/PaymentForm'
+import { BulkPaymentDialog } from '@/components/payments/BulkPaymentDialog'
 import { PageHeader, HeaderMetric } from '@/components/common/PageHeader'
 import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { StudentFormValues } from '@/schemas/student'
-import { Course } from '@/types/api'
+import { PaymentFormValues } from '@/schemas/payment'
+import { Course, StudentPause } from '@/types/api'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +30,15 @@ export default function StudentDetailPage() {
   const updateStudent = useUpdateStudent(id)
   const removeStudent  = useRemoveStudent()
   const restoreStudent = useRestoreStudent()
+
+  const { data: pauses = [] } = usePauses(id)
+  const deletePause = useDeletePause(id)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [pauseOpen, setPauseOpen]     = useState(false)
+  // Один курс — прежняя простая форма; разбивка по предметам — только с двух
+  // курсов: большинство учеников на одном предмете (спека 2026-09-06, п. 6.8).
+  const single        = courses.length === 1 ? courses[0] : undefined
+  const createPayment = useCreatePayment(single?.id ?? '')
 
   const [formOpen, setFormOpen] = useState(false)
 
@@ -53,6 +67,28 @@ export default function StudentDetailPage() {
     }
   }
 
+  async function handleSinglePayment(values: PaymentFormValues) {
+    if (!single) return
+    await createPayment.mutateAsync({
+      course_id:     single.id,
+      student_id:    id,
+      amount:        values.amount,
+      lessons_count: values.lessons_count,
+      paid_at:       values.paid_at,
+    })
+    toast.success('Оплата записана')
+  }
+
+  async function handleUnpause(p: StudentPause) {
+    if (!confirm('Разморозить? Уроки этого периода снова спишутся с оплаты. Отменённые уроки и продлённая серия останутся как есть.')) return
+    try {
+      await deletePause.mutateAsync(p.id)
+      toast.success('Заморозка снята')
+    } catch {
+      toast.error('Не удалось снять заморозку')
+    }
+  }
+
   if (isLoading) {
     return <div className="h-32 rounded-lg bg-muted animate-pulse" />
   }
@@ -75,6 +111,16 @@ export default function StudentDetailPage() {
         meta={!student.active ? <HeaderMetric color="var(--muted-foreground)">В архиве</HeaderMetric> : undefined}
         actions={
           <div className="flex gap-2">
+            {student.active && courses.length > 0 && (
+              <Button size="sm" onClick={() => setPaymentOpen(true)}>
+                <Wallet className="h-4 w-4 mr-1.5" /> Оплата
+              </Button>
+            )}
+            {student.active && (
+              <Button size="sm" variant="outline" onClick={() => setPauseOpen(true)}>
+                <Snowflake className="h-4 w-4 mr-1.5" /> Заморозить
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-1.5" /> Редактировать
             </Button>
@@ -125,15 +171,69 @@ export default function StudentDetailPage() {
         )}
       </div>
 
+      <div className="border rounded-xl bg-card p-4 mt-4">
+        <h2 className="text-sm font-semibold mb-3">Заморозки</h2>
+        {pauses.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Не замораживался</p>
+        ) : (
+          <div className="space-y-1">
+            {pauses.map((p) => (
+              <div key={p.id} className="flex items-center justify-between py-2 border-b last:border-0 text-sm group">
+                <span>
+                  {fmtDay(p.starts_on)} — {fmtDay(p.ends_on)}
+                  {p.reason && <span className="text-muted-foreground"> · {p.reason}</span>}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Разморозить"
+                  className="h-7 w-7 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  onClick={() => handleUnpause(p)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <StudentForm
         open={formOpen}
         onClose={() => setFormOpen(false)}
         onSubmit={handleUpdate}
         initial={student}
       />
+      {single && (
+        <PaymentForm
+          open={paymentOpen}
+          onClose={() => setPaymentOpen(false)}
+          onSubmit={handleSinglePayment}
+          pricePerLesson={single.price_per_cycle / single.lessons_per_cycle}
+          lessonsPerCycle={single.lessons_per_cycle}
+        />
+      )}
+      {courses.length >= 2 && (
+        <BulkPaymentDialog
+          open={paymentOpen}
+          onClose={() => setPaymentOpen(false)}
+          student={student}
+          courses={courses}
+        />
+      )}
+      <PauseDialog
+        open={pauseOpen}
+        onClose={() => setPauseOpen(false)}
+        studentId={id}
+        studentName={student.last_name ? `${student.first_name} ${student.last_name}` : student.first_name}
+      />
     </>
   )
 }
+
+/** Даты паузы приходят полночью UTC — показываем в UTC, иначе на западе от
+ *  Гринвича день уехал бы на вчера. */
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'UTC' })
 
 /** Цена курса правится прямо в строке: ради одного числа гонять пользователя
  *  на страницу курса и обратно незачем. Правится сумма пакета, а не цена урока:

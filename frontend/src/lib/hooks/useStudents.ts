@@ -1,12 +1,13 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { studentsApi, StudentInput, StudentListParams } from '@/lib/api/students'
+import { studentsApi, StudentInput, StudentListParams, PauseInput } from '@/lib/api/students'
 import { courseKeys } from '@/lib/hooks/useCourses'
 import { ApiError, OnboardingStudentInput, Student } from '@/types/api'
 
 export const studentKeys = {
   all:    ['students'] as const,
   detail: (id: string) => ['students', id] as const,
+  pauses: (id: string) => ['students', id, 'pauses'] as const,
 }
 
 export function useStudents() {
@@ -137,5 +138,40 @@ export function useStudentCount() {
   return useQuery({
     queryKey: [...studentKeys.all, 'count'],
     queryFn:  () => studentsApi.listPaged({ page: 1, limit: 1, search: '' }).then((r) => r.total),
+  })
+}
+
+// Заморозка отменяет уроки индивидуальных курсов, продлевает их серии и выводит
+// уроки периода из сгорания (спека 2026-09-06, п. 6.9): устаревают календарь,
+// уроки курсов, балансы, долги и прогноз.
+function invalidateAfterPause(qc: QueryClient, studentId: string) {
+  qc.invalidateQueries({ queryKey: studentKeys.pauses(studentId) })
+  qc.invalidateQueries({ queryKey: ['payments'] })
+  qc.invalidateQueries({ queryKey: ['courses'] })
+  qc.invalidateQueries({ queryKey: ['lessons'] })
+  qc.invalidateQueries({ queryKey: ['calendar'] })
+}
+
+export function usePauses(studentId: string) {
+  return useQuery({
+    queryKey: studentKeys.pauses(studentId),
+    queryFn:  () => studentsApi.pauses(studentId),
+    enabled:  !!studentId,
+  })
+}
+
+export function useCreatePause(studentId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: PauseInput) => studentsApi.createPause(studentId, data),
+    onSuccess:  () => invalidateAfterPause(qc, studentId),
+  })
+}
+
+export function useDeletePause(studentId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (pauseId: string) => studentsApi.deletePause(studentId, pauseId),
+    onSuccess:  () => invalidateAfterPause(qc, studentId),
   })
 }

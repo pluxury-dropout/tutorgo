@@ -1,11 +1,19 @@
 import { api } from './client'
-import { Student, PagedResponse, OnboardingStudentInput, OnboardingResult } from '@/types/api'
+import { Student, PagedResponse, OnboardingStudentInput, OnboardingResult, StudentPause } from '@/types/api'
 
 export interface StudentInput {
   first_name: string
   last_name?: string
   email?: string
   phone?: string
+}
+
+export interface PauseInput {
+  /** YYYY-MM-DD */
+  starts_on: string
+  /** YYYY-MM-DD, включительно */
+  ends_on:   string
+  reason?:   string
 }
 
 export interface StudentListParams {
@@ -34,4 +42,14 @@ export const studentsApi = {
       .then((r) => r.data),
   onboard: (data: OnboardingStudentInput) =>
     api.post<OnboardingResult>('/onboarding/student', data).then((r) => r.data),
+  pauses: (id: string) =>
+    api.get<StudentPause[]>(`/students/${id}/pauses`).then((r) => r.data ?? []),
+  createPause: (id: string, data: PauseInput) =>
+    api.post<StudentPause>(`/students/${id}/pauses`, {
+      starts_on: data.starts_on + 'T00:00:00Z',
+      ends_on:   data.ends_on + 'T00:00:00Z',
+      reason:    data.reason?.trim() || undefined,
+    }).then((r) => r.data),
+  deletePause: (id: string, pauseId: string) =>
+    api.delete(`/students/${id}/pauses/${pauseId}`).then(() => pauseId),
 }
