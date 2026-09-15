@@ -21,6 +21,11 @@ func (m *mockPaymentRepo) Create(ctx context.Context, req models.CreatePaymentRe
 	return args.Get(0).(models.Payment), args.Error(1)
 }
 
+func (m *mockPaymentRepo) GetByID(ctx context.Context, id string, tutorID string) (models.Payment, error) {
+	args := m.Called(ctx, id, tutorID)
+	return args.Get(0).(models.Payment), args.Error(1)
+}
+
 func (m *mockPaymentRepo) GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error) {
 	args := m.Called(ctx, courseID, p)
 	return args.Get(0).([]models.Payment), args.Int(1), args.Error(2)
@@ -75,8 +80,11 @@ var (
 	tutorID  = "tutor-uuid-1"
 	courseID = "course-uuid-1"
 
+	payStudentID = "student-uuid-1"
+
 	paymentReq = models.CreatePaymentRequest{
 		CourseID:     courseID,
+		StudentID:    payStudentID,
 		Amount:       5000,
 		LessonsCount: 12,
 		PaidAt:       time.Date(2001, time.September, 11, 0, 0, 0, 0, time.UTC),
@@ -85,6 +93,7 @@ var (
 	expectedPayment = models.Payment{
 		ID:           "payment-uuid-1",
 		CourseID:     courseID,
+		StudentID:    &payStudentID,
 		Amount:       5000,
 		LessonsCount: 12,
 		PaidAt:       time.Date(2001, time.September, 11, 0, 0, 0, 0, time.UTC),
@@ -95,10 +104,19 @@ var (
 		TutorID:  tutorID,
 		IsActive: true,
 	}
+
+	// individualCourse — курс ученика payStudentID: платёж ему проходит проверку
+	// связи без записи в группу.
+	individualCourse = models.Course{
+		ID:        courseID,
+		TutorID:   tutorID,
+		StudentID: &payStudentID,
+		IsActive:  true,
+	}
 )
 
-func newPaymentSvc(payRepo *mockPaymentRepo, courseRepo *mockCourseRepo) service.PaymentService {
-	return service.NewPaymentService(payRepo, courseRepo)
+func newPaymentSvc(payRepo *mockPaymentRepo, courseRepo *mockCourseRepo, enrollRepo *mockEnrollmentRepo) service.PaymentService {
+	return service.NewPaymentService(payRepo, courseRepo, enrollRepo)
 }
 
 // Create
@@ -106,9 +124,9 @@ func newPaymentSvc(payRepo *mockPaymentRepo, courseRepo *mockCourseRepo) service
 func TestPaymentCreate_Success(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
-	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(individualCourse, nil)
 	payRepo.On("Create", mock.Anything, paymentReq).Return(expectedPayment, nil)
 
 	payment, err := svc.Create(context.Background(), paymentReq, tutorID)
@@ -122,7 +140,7 @@ func TestPaymentCreate_Success(t *testing.T) {
 func TestPaymentCreate_CourseNotFound(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
@@ -137,9 +155,9 @@ func TestPaymentCreate_CourseNotFound(t *testing.T) {
 func TestPaymentCreate_RepoError(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
-	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(individualCourse, nil)
 	payRepo.On("Create", mock.Anything, paymentReq).Return(models.Payment{}, errors.New("db error"))
 
 	payment, err := svc.Create(context.Background(), paymentReq, tutorID)
@@ -150,12 +168,89 @@ func TestPaymentCreate_RepoError(t *testing.T) {
 	payRepo.AssertExpectations(t)
 }
 
+// Индивидуальный курс чужого ученика — 400, в базу ничего не пишется (спека, п. 6.3).
+func TestPaymentCreate_IndividualCourseOtherStudentRejected(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
+
+	other := "student-uuid-2"
+	course := individualCourse
+	course.StudentID = &other
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(course, nil)
+
+	_, err := svc.Create(context.Background(), paymentReq, tutorID)
+
+	assert.ErrorIs(t, err, service.ErrBadRequest)
+	payRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+}
+
+func TestPaymentCreate_GroupRequiresEnrollment(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		enrolled bool
+	}{{"enrolled", true}, {"stranger", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			payRepo := new(mockPaymentRepo)
+			courseRepo := new(mockCourseRepo)
+			enrollRepo := new(mockEnrollmentRepo)
+			svc := newPaymentSvc(payRepo, courseRepo, enrollRepo)
+
+			courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+			enrollRepo.On("IsEnrolled", mock.Anything, courseID, payStudentID).Return(tc.enrolled, nil)
+			if tc.enrolled {
+				payRepo.On("Create", mock.Anything, paymentReq).Return(expectedPayment, nil)
+			}
+
+			_, err := svc.Create(context.Background(), paymentReq, tutorID)
+
+			if tc.enrolled {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, service.ErrBadRequest)
+				payRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+			}
+			enrollRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// Правка адресата проверяется так же, как создание: иначе легаси-платёж группы
+// можно «починить» на ученика, которого в группе не было.
+func TestPaymentUpdate_ChecksStudentOnCourse(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	enrollRepo := new(mockEnrollmentRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, enrollRepo)
+
+	req := models.UpdatePaymentRequest{StudentID: payStudentID, Amount: 5000, LessonsCount: 4, PaidAt: paymentReq.PaidAt}
+	payRepo.On("GetByID", mock.Anything, "payment-uuid-1", tutorID).Return(models.Payment{ID: "payment-uuid-1", CourseID: courseID}, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
+	enrollRepo.On("IsEnrolled", mock.Anything, courseID, payStudentID).Return(false, nil)
+
+	_, err := svc.Update(context.Background(), "payment-uuid-1", tutorID, req)
+
+	assert.ErrorIs(t, err, service.ErrBadRequest)
+	payRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestPaymentUpdate_PaymentNotFound(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	svc := newPaymentSvc(payRepo, new(mockCourseRepo), new(mockEnrollmentRepo))
+
+	payRepo.On("GetByID", mock.Anything, "missing", tutorID).Return(models.Payment{}, errors.New("no rows"))
+
+	_, err := svc.Update(context.Background(), "missing", tutorID, models.UpdatePaymentRequest{StudentID: payStudentID})
+
+	assert.ErrorIs(t, err, service.ErrNotFound)
+}
+
 // GetByCourse
 
 func TestPaymentGetByCourse_Success(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Payment{expectedPayment}
@@ -174,7 +269,7 @@ func TestPaymentGetByCourse_Success(t *testing.T) {
 func TestPaymentGetByCourse_CourseNotFound(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
@@ -193,7 +288,7 @@ func TestPaymentGetByCourse_CourseNotFound(t *testing.T) {
 func TestPaymentGetBalance_Success(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	expected := models.CourseBalance{
 		LessonsPaid:      10,
@@ -214,7 +309,7 @@ func TestPaymentGetBalance_Success(t *testing.T) {
 func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
@@ -231,7 +326,7 @@ func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
 func TestPaymentGetMonthlyExpected_Success(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	payRepo.On("GetMonthlyExpected", mock.Anything, tutorID).Return(75000.0, nil)
 
@@ -245,7 +340,7 @@ func TestPaymentGetMonthlyExpected_Success(t *testing.T) {
 func TestPaymentGetMonthlyExpected_RepoError(t *testing.T) {
 	payRepo := new(mockPaymentRepo)
 	courseRepo := new(mockCourseRepo)
-	svc := newPaymentSvc(payRepo, courseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
 
 	payRepo.On("GetMonthlyExpected", mock.Anything, tutorID).Return(0.0, errors.New("db error"))
 

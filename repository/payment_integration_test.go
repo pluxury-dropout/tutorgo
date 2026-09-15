@@ -62,10 +62,12 @@ func addLessons(t *testing.T, pool *pgxpool.Pool, courseID, baseExpr string, n i
 	}
 }
 
+// addPayment — платёж по курсу; адресат берётся из курса, как в бэкфилле
+// миграции 039: у индивидуального — его ученик, у группы — NULL (легаси).
 func addPayment(t *testing.T, pool *pgxpool.Pool, courseID string, amount float64, lessonsCount int, paidAtExpr string) {
 	_, err := pool.Exec(context.Background(),
-		fmt.Sprintf(`INSERT INTO payments (course_id, amount, lessons_count, paid_at)
-		             VALUES ($1, $2, $3, %s)`, paidAtExpr),
+		fmt.Sprintf(`INSERT INTO payments (course_id, student_id, amount, lessons_count, paid_at)
+		             SELECT c.id, c.student_id, $2, $3, %s FROM courses c WHERE c.id = $1`, paidAtExpr),
 		courseID, amount, lessonsCount)
 	require.NoError(t, err)
 }

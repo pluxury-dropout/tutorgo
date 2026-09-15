@@ -112,8 +112,9 @@ func (r *studentRepository) Update(ctx context.Context, id string, tutorID strin
 	return student, err
 }
 
-// Delete удаляет ученика, только если у него нет истории — платежей, проведённых
-// уроков, отметок посещаемости (спека, п. 5a.1). Проверка внутри DELETE, а не
+// Delete удаляет ученика, только если у него нет истории — платежей (по его
+// курсам и адресованных ему — фаза 2, спека п. 6.3), проведённых уроков,
+// отметок посещаемости (спека, п. 5a.1). Проверка внутри DELETE, а не
 // отдельным SELECT: окно между проверкой и удалением сужается до длительности
 // одного оператора, а не отдельных SELECT + DELETE. Совсем без окна не бывает:
 // на READ COMMITTED каждый оператор берёт свой снепшот, и платёж, записанный
@@ -128,7 +129,8 @@ func (r *studentRepository) Delete(ctx context.Context, id string, tutorID strin
 		                    WHERE c.student_id = s.id)
 		   AND NOT EXISTS (SELECT 1 FROM lessons l JOIN courses c ON c.id = l.course_id
 		                    WHERE c.student_id = s.id AND l.status IN ('completed', 'missed'))
-		   AND NOT EXISTS (SELECT 1 FROM lesson_attendances la WHERE la.student_id = s.id)`,
+		   AND NOT EXISTS (SELECT 1 FROM lesson_attendances la WHERE la.student_id = s.id)
+		   AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.student_id = s.id)`,
 		id, tutorID)
 	if err != nil {
 		return false, err

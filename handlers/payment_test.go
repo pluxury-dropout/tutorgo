@@ -29,6 +29,7 @@ func newPaymentRouter(svc *mockPaymentService, tutorID string) *gin.Engine {
 
 var testCreatePaymentReq = models.CreatePaymentRequest{
 	CourseID:     testCourseID,
+	StudentID:    testStudentID,
 	Amount:       5000,
 	LessonsCount: 10,
 	PaidAt:       time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),

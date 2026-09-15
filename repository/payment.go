@@ -11,6 +11,7 @@ import (
 
 type PaymentRepository interface {
 	Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error)
+	GetByID(ctx context.Context, id string, tutorID string) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error)
 	GetByCoursesBatch(ctx context.Context, courseIDs []string) (map[string][]models.Payment, error)
 	GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error)
@@ -31,14 +32,37 @@ func NewPaymentRepository(conn *pgxpool.Pool) PaymentRepository {
 	return &paymentRepository{conn: conn}
 }
 
+// Одна константа на все выборки платежа — тот же приём, что lessonColumns в
+// lesson.go: колонку, добавленную руками в семь запросов, где-нибудь забудут.
+// Алиас `p` обязателен и там, где джойна нет.
+const paymentColumns = `p.id, p.course_id, p.student_id, p.amount, p.lessons_count, p.paid_at`
+
+// paymentDest — приёмники Scan в порядке paymentColumns; списки дописывают свои
+// поля через append.
+func paymentDest(p *models.Payment) []any {
+	return []any{&p.ID, &p.CourseID, &p.StudentID, &p.Amount, &p.LessonsCount, &p.PaidAt}
+}
+
 func (r *paymentRepository) Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error) {
 	var payment models.Payment
 	err := r.conn.QueryRow(ctx,
-		`INSERT INTO payments (course_id, amount, lessons_count, paid_at)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, course_id, amount, lessons_count, paid_at`,
-		req.CourseID, req.Amount, req.LessonsCount, req.PaidAt,
-	).Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt)
+		`INSERT INTO payments AS p (course_id, student_id, amount, lessons_count, paid_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING `+paymentColumns,
+		req.CourseID, req.StudentID, req.Amount, req.LessonsCount, req.PaidAt,
+	).Scan(paymentDest(&payment)...)
+	return payment, err
+}
+
+// GetByID — платёж репетитора; чужой неотличим от несуществующего.
+func (r *paymentRepository) GetByID(ctx context.Context, id string, tutorID string) (models.Payment, error) {
+	var payment models.Payment
+	err := r.conn.QueryRow(ctx,
+		`SELECT `+paymentColumns+`
+		 FROM payments p
+		 JOIN courses c ON c.id = p.course_id
+		 WHERE p.id = $1 AND c.tutor_id = $2`, id, tutorID,
+	).Scan(paymentDest(&payment)...)
 	return payment, err
 }
 
@@ -51,9 +75,11 @@ func (r *paymentRepository) GetByCourse(ctx context.Context, courseID string, p 
 	}
 
 	rows, err := r.conn.Query(ctx,
-		`SELECT id, course_id, amount, lessons_count, paid_at
-		 FROM payments WHERE course_id = $1
-		 ORDER BY paid_at DESC
+		`SELECT `+paymentColumns+`, `+studentNameExpr+`
+		 FROM payments p
+		 LEFT JOIN students s ON s.id = p.student_id
+		 WHERE p.course_id = $1
+		 ORDER BY p.paid_at DESC
 		 LIMIT $2 OFFSET $3`,
 		courseID, p.Limit, p.Offset())
 	if err != nil {
@@ -64,7 +90,7 @@ func (r *paymentRepository) GetByCourse(ctx context.Context, courseID string, p 
 	payments := []models.Payment{}
 	for rows.Next() {
 		var payment models.Payment
-		if err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt); err != nil {
+		if err := rows.Scan(append(paymentDest(&payment), &payment.StudentName)...); err != nil {
 			return nil, 0, err
 		}
 		payments = append(payments, payment)
@@ -77,10 +103,7 @@ func (r *paymentRepository) GetByCoursesBatch(ctx context.Context, courseIDs []s
 		return map[string][]models.Payment{}, nil
 	}
 	rows, err := r.conn.Query(ctx,
-		`SELECT id, course_id, amount, lessons_count, paid_at
-		 FROM payments
-		 WHERE course_id = ANY($1)
-		 ORDER BY course_id, paid_at ASC`,
+		`SELECT `+paymentColumns+` FROM payments p WHERE p.course_id = ANY($1) ORDER BY p.course_id, p.paid_at ASC`,
 		courseIDs)
 	if err != nil {
 		return nil, err
@@ -90,7 +113,7 @@ func (r *paymentRepository) GetByCoursesBatch(ctx context.Context, courseIDs []s
 	result := map[string][]models.Payment{}
 	for rows.Next() {
 		var p models.Payment
-		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt); err != nil {
+		if err := rows.Scan(paymentDest(&p)...); err != nil {
 			return nil, err
 		}
 		result[p.CourseID] = append(result[p.CourseID], p)
@@ -100,7 +123,7 @@ func (r *paymentRepository) GetByCoursesBatch(ctx context.Context, courseIDs []s
 
 func (r *paymentRepository) GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error) {
 	rows, err := r.conn.Query(ctx,
-		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at
+		`SELECT `+paymentColumns+`
 		 FROM payments p
 		 WHERE p.course_id IN (
 		   SELECT DISTINCT l.course_id
@@ -120,7 +143,7 @@ func (r *paymentRepository) GetPaymentsForCalendar(ctx context.Context, tutorID 
 	result := map[string][]models.Payment{}
 	for rows.Next() {
 		var p models.Payment
-		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt); err != nil {
+		if err := rows.Scan(paymentDest(&p)...); err != nil {
 			return nil, err
 		}
 		result[p.CourseID] = append(result[p.CourseID], p)
@@ -128,20 +151,20 @@ func (r *paymentRepository) GetPaymentsForCalendar(ctx context.Context, tutorID 
 	return result, rows.Err()
 }
 
-// studentNameExpr — имя ученика курса для списков платежей; NULL у групповых
-// курсов (student_id IS NULL). TRIM с COALESCE, а не конкатенация напрямую:
-// last_name в схеме nullable, и `first_name || ' ' || NULL` даёт NULL — имя
-// пропало бы целиком.
-const studentNameExpr = `CASE WHEN c.student_id IS NULL THEN NULL
+// studentNameExpr — имя адресата платежа; NULL у легаси-платежа группы без
+// адресата (спека, п. 3.4). Ожидает LEFT JOIN students s ON s.id = p.student_id.
+// TRIM с COALESCE, а не конкатенация напрямую: last_name в схеме nullable, и
+// `first_name || ' ' || NULL` даёт NULL — имя пропало бы целиком.
+const studentNameExpr = `CASE WHEN p.student_id IS NULL THEN NULL
                               ELSE TRIM(s.first_name || ' ' || COALESCE(s.last_name, ''))
                          END`
 
 func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
 	rows, err := r.conn.Query(ctx,
-		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at, c.subject, `+studentNameExpr+`
+		`SELECT `+paymentColumns+`, c.subject, `+studentNameExpr+`
 		 FROM payments p
 		 JOIN courses c ON c.id = p.course_id
-		 LEFT JOIN students s ON s.id = c.student_id
+		 LEFT JOIN students s ON s.id = p.student_id
 		 WHERE c.tutor_id = $1
 		 ORDER BY p.paid_at DESC
 		 LIMIT $2`, tutorID, limit)
@@ -153,7 +176,7 @@ func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, l
 	var payments []models.Payment
 	for rows.Next() {
 		var p models.Payment
-		if err := rows.Scan(&p.ID, &p.CourseID, &p.Amount, &p.LessonsCount, &p.PaidAt, &p.Subject, &p.StudentName); err != nil {
+		if err := rows.Scan(append(paymentDest(&p), &p.Subject, &p.StudentName)...); err != nil {
 			return nil, err
 		}
 		payments = append(payments, p)
@@ -172,10 +195,10 @@ func (r *paymentRepository) GetAllByTutorPaged(ctx context.Context, tutorID stri
 	}
 
 	rows, err := r.conn.Query(ctx,
-		`SELECT p.id, p.course_id, p.amount, p.lessons_count, p.paid_at, c.subject, `+studentNameExpr+`
+		`SELECT `+paymentColumns+`, c.subject, `+studentNameExpr+`
 		 FROM payments p
 		 JOIN courses c ON c.id = p.course_id
-		 LEFT JOIN students s ON s.id = c.student_id
+		 LEFT JOIN students s ON s.id = p.student_id
 		 WHERE c.tutor_id = $1
 		 ORDER BY p.paid_at DESC
 		 LIMIT $2 OFFSET $3`,
@@ -188,7 +211,7 @@ func (r *paymentRepository) GetAllByTutorPaged(ctx context.Context, tutorID stri
 	payments := []models.Payment{}
 	for rows.Next() {
 		var payment models.Payment
-		if err := rows.Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt, &payment.Subject, &payment.StudentName); err != nil {
+		if err := rows.Scan(append(paymentDest(&payment), &payment.Subject, &payment.StudentName)...); err != nil {
 			return nil, 0, err
 		}
 		payments = append(payments, payment)
@@ -233,11 +256,11 @@ func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (mo
 func (r *paymentRepository) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {
 	var payment models.Payment
 	err := r.conn.QueryRow(ctx,
-		`UPDATE payments SET amount=$1, lessons_count=$2, paid_at=$3
-		 WHERE id=$4 AND course_id IN (SELECT id FROM courses WHERE tutor_id=$5)
-		 RETURNING id, course_id, amount, lessons_count, paid_at`,
-		req.Amount, req.LessonsCount, req.PaidAt, id, tutorID,
-	).Scan(&payment.ID, &payment.CourseID, &payment.Amount, &payment.LessonsCount, &payment.PaidAt)
+		`UPDATE payments AS p SET student_id=$1, amount=$2, lessons_count=$3, paid_at=$4
+		 WHERE p.id=$5 AND p.course_id IN (SELECT id FROM courses WHERE tutor_id=$6)
+		 RETURNING `+paymentColumns,
+		req.StudentID, req.Amount, req.LessonsCount, req.PaidAt, id, tutorID,
+	).Scan(paymentDest(&payment)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Payment{}, errors.New("payment not found")
 	}

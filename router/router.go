@@ -51,7 +51,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	registrationService := service.NewRegistrationService(pendingRepo, tutorService, emailSender, cfg.AppURL, log)
 	refreshTokenService := service.NewRefreshTokenService(refreshTokenRepo)
 	studentRefreshService := service.NewStudentRefreshTokenService(studentRefreshRepo)
-	paymentService := service.NewPaymentService(paymentRepo, courseRepo)
+	paymentService := service.NewPaymentService(paymentRepo, courseRepo, enrollmentRepo)
 	recurrenceService := service.NewRecurrenceService(repository.NewRecurrenceRepository(pool))
 	lessonService := service.NewLessonService(lessonRepo, courseRepo, paymentRepo, recurrenceService)
 	// Ниже lessonService: архивация курса ходит к нему за закрытием серий.

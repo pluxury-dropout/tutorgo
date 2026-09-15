@@ -13,6 +13,7 @@ type EnrollmentRepository interface {
 	Remove(ctx context.Context, courseID string, studentID string) error
 	GetByCourse(ctx context.Context, courseID string) ([]models.CourseEnrollment, error)
 	LeaveAllByStudent(ctx context.Context, studentID string) error
+	IsEnrolled(ctx context.Context, courseID, studentID string) (bool, error)
 }
 
 type enrollmentRepository struct {
@@ -93,6 +94,17 @@ func (r *enrollmentRepository) LeaveAllByStudent(ctx context.Context, studentID 
 		`UPDATE course_enrollments SET left_at = NOW()
 		 WHERE student_id = $1 AND left_at IS NULL`, studentID)
 	return err
+}
+
+// IsEnrolled — была ли у ученика запись в группу, в том числе закрытая уходом.
+// Без left_at IS NULL намеренно: ушедшему с долгом платёж обязан приниматься,
+// иначе долг невзыскиваемый (спека, п. 6.3).
+func (r *enrollmentRepository) IsEnrolled(ctx context.Context, courseID, studentID string) (bool, error) {
+	var ok bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM course_enrollments WHERE course_id = $1 AND student_id = $2)`,
+		courseID, studentID).Scan(&ok)
+	return ok, err
 }
 
 func (r *enrollmentRepository) GetByCourse(ctx context.Context, courseID string) ([]models.CourseEnrollment, error) {

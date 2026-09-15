@@ -31,6 +31,10 @@ func (m *mockEnrollmentRepo) GetByCourse(ctx context.Context, courseID string) (
 func (m *mockEnrollmentRepo) LeaveAllByStudent(ctx context.Context, studentID string) error {
 	return m.Called(ctx, studentID).Error(0)
 }
+func (m *mockEnrollmentRepo) IsEnrolled(ctx context.Context, courseID, studentID string) (bool, error) {
+	args := m.Called(ctx, courseID, studentID)
+	return args.Bool(0), args.Error(1)
+}
 
 var groupCourse = models.Course{ID: courseID, TutorID: tutorID, StudentID: nil, IsActive: true}
 

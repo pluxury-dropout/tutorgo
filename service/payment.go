@@ -20,17 +20,43 @@ type PaymentService interface {
 }
 
 type paymentService struct {
-	repo       repository.PaymentRepository
-	courseRepo repository.CourseRepository
+	repo           repository.PaymentRepository
+	courseRepo     repository.CourseRepository
+	enrollmentRepo repository.EnrollmentRepository
 }
 
-func NewPaymentService(repo repository.PaymentRepository, courseRepo repository.CourseRepository) PaymentService {
-	return &paymentService{repo: repo, courseRepo: courseRepo}
+func NewPaymentService(repo repository.PaymentRepository, courseRepo repository.CourseRepository, enrollmentRepo repository.EnrollmentRepository) PaymentService {
+	return &paymentService{repo: repo, courseRepo: courseRepo, enrollmentRepo: enrollmentRepo}
+}
+
+// studentOnCourse проверяет, что платёж адресован ученику этого курса (спека,
+// п. 6.3). Индивидуальный курс — ученик обязан совпасть с course.student_id,
+// групповой — иметь запись, пусть и закрытую уходом. Иначе платёж уедет в
+// баланс, который нигде не показывается.
+func (s *paymentService) studentOnCourse(ctx context.Context, course models.Course, studentID string) error {
+	if course.StudentID != nil {
+		if *course.StudentID != studentID {
+			return fmt.Errorf("student is not on course: %w", ErrBadRequest)
+		}
+		return nil
+	}
+	enrolled, err := s.enrollmentRepo.IsEnrolled(ctx, course.ID, studentID)
+	if err != nil {
+		return err
+	}
+	if !enrolled {
+		return fmt.Errorf("student is not on course: %w", ErrBadRequest)
+	}
+	return nil
 }
 
 func (s *paymentService) Create(ctx context.Context, req models.CreatePaymentRequest, tutorID string) (models.Payment, error) {
-	if _, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID); err != nil {
+	course, err := s.courseRepo.GetByID(ctx, req.CourseID, tutorID)
+	if err != nil {
 		return models.Payment{}, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	if err := s.studentOnCourse(ctx, course, req.StudentID); err != nil {
+		return models.Payment{}, err
 	}
 	payment, err := s.repo.Create(ctx, req)
 	if err == nil {
@@ -70,6 +96,17 @@ func (s *paymentService) GetMonthlyExpected(ctx context.Context, tutorID string)
 }
 
 func (s *paymentService) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {
+	existing, err := s.repo.GetByID(ctx, id, tutorID)
+	if err != nil {
+		return models.Payment{}, fmt.Errorf("payment: %w", ErrNotFound)
+	}
+	course, err := s.courseRepo.GetByID(ctx, existing.CourseID, tutorID)
+	if err != nil {
+		return models.Payment{}, fmt.Errorf("course: %w", ErrNotFound)
+	}
+	if err := s.studentOnCourse(ctx, course, req.StudentID); err != nil {
+		return models.Payment{}, err
+	}
 	payment, err := s.repo.Update(ctx, id, tutorID, req)
 	if err != nil {
 		return models.Payment{}, fmt.Errorf("payment: %w", ErrNotFound)
