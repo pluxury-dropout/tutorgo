@@ -264,22 +264,22 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	// enrollment-джойн идентичен EnrolledInLesson: индивидуальный курс (c.student_id)
 	// ИЛИ групповой через course_enrollments. Фильтр активности курса намеренно
 	// опущен — ученик видит все свои уроки, включая архивные (история).
-	// rank считается по ВСЕМ неотменённым урокам курса (без date-фильтра),
-	// иначе позиция в цикле зависела бы от выбранной вкладки.
+	// rank считается по ВСЕМ неотменённым урокам курса в периодах участия ученика
+	// (без date-фильтра, иначе позиция зависела бы от вкладки) — тем же
+	// предикатом, что сгорание в балансе (спека, п. 6.7): уроки группы до записи
+	// и в заморозке видны, но в цикл не входят.
 	// Уроки группы после ухода (left_at) не показываются — та же граница, что
 	// в burned фазы 2; прошлые остаются историей (спека, п. 5a.4).
-	base := `WITH stu_courses AS MATERIALIZED (
-	           SELECT c.id FROM courses c
-	           WHERE c.student_id = $1
-	              OR EXISTS (SELECT 1 FROM course_enrollments ce
-	                         WHERE ce.course_id = c.id AND ce.student_id = $1)
+	base := `WITH sc AS MATERIALIZED (
+	           SELECT * FROM (` + studentCoursePairs + `) pr WHERE pr.student_id = $1
 	         ),
 	         ranked AS (
 	           SELECT l.id,
 	                  ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
 	           FROM lessons l
-	           WHERE l.course_id IN (SELECT id FROM stu_courses)
-	             AND l.status != 'cancelled'
+	           JOIN sc ON sc.course_id = l.course_id
+	           WHERE l.status != 'cancelled'
+	             AND ` + lessonInParticipation + `
 	         )
 	         SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status,
 	                l.notes, c.subject, s.first_name, (c.student_id IS NULL) AS is_group,
@@ -289,7 +289,7 @@ func (r *studentRepository) ListLessons(ctx context.Context, studentID string, p
 	         LEFT JOIN students s ON s.id = c.student_id
 	         LEFT JOIN ranked r ON r.id = l.id
 	         LEFT JOIN course_enrollments ce ON ce.course_id = l.course_id AND ce.student_id = $1
-	         WHERE l.course_id IN (SELECT id FROM stu_courses)
+	         WHERE l.course_id IN (SELECT course_id FROM sc)
 	           AND l.scheduled_at < COALESCE(ce.left_at, 'infinity'::timestamptz)`
 	var q string
 	if past {

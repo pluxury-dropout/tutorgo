@@ -71,6 +71,11 @@ func (m *mockPaymentRepo) GetByCoursesBatch(ctx context.Context, courseIDs []str
 	return args.Get(0).(map[string][]models.Payment), args.Error(1)
 }
 
+func (m *mockPaymentRepo) GetByStudentBatch(ctx context.Context, studentID string) (map[string][]models.Payment, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(map[string][]models.Payment), args.Error(1)
+}
+
 func (m *mockPaymentRepo) GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error) {
 	args := m.Called(ctx, tutorID, from, to)
 	return args.Get(0).(map[string][]models.Payment), args.Error(1)

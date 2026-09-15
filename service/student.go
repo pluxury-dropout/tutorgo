@@ -188,19 +188,20 @@ func (s *studentService) ListLessons(ctx context.Context, studentID string, past
 	if err != nil {
 		return nil, err
 	}
-	// Циклы считаются от платежей — как в tutor-календаре (GetCalendar).
-	seen := map[string]bool{}
-	courseIDs := []string{}
+	// Циклы считаются от платежей самого ученика: у группы платежи адресные, и
+	// чужие пакеты сдвинули бы его позицию (спека, п. 6.7). Ранги уже в периодах
+	// участия — их считает репозиторий.
+	hasRank := false
 	for _, l := range lessons {
-		if l.Rank != nil && !seen[l.CourseID] {
-			seen[l.CourseID] = true
-			courseIDs = append(courseIDs, l.CourseID)
+		if l.Rank != nil {
+			hasRank = true
+			break
 		}
 	}
-	if len(courseIDs) == 0 {
+	if !hasRank {
 		return lessons, nil
 	}
-	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, courseIDs)
+	paymentsMap, err := s.paymentRepo.GetByStudentBatch(ctx, studentID)
 	if err != nil {
 		return nil, err
 	}

@@ -28,7 +28,7 @@ type LessonRepository interface {
 	EndRoom(ctx context.Context, lessonID string, tutorID string) error
 	EndRoomByID(ctx context.Context, lessonID string) error
 	GetRoomStatus(ctx context.Context, lessonID string) (string, error)
-	GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error)
+	GetRanksForStudent(ctx context.Context, courseID, studentID string) (map[string]int, error)
 	GetRuleIDsByCourse(ctx context.Context, courseID string) ([]string, error)
 	DeleteFutureByCourse(ctx context.Context, courseID, tutorID string) error
 }
@@ -54,6 +54,14 @@ func scanLesson(row interface{ Scan(...any) error }) (models.Lesson, error) {
 		&l.Status, &l.Notes, &l.RuleID, &l.OccurrenceDate)
 	return l, err
 }
+
+// individualPair подставляет индивидуальному курсу пару «курс + ученик» для
+// lessonInParticipation (repository/payment.go): границ записи у него нет,
+// паузы ученика действуют. Ожидает алиас c (courses) и фильтр
+// c.student_id IS NOT NULL в самом запросе.
+const individualPair = `CROSS JOIN LATERAL (SELECT c.student_id,
+	                          NULL::timestamptz AS enrolled_at,
+	                          NULL::timestamptz AS left_at) sc`
 
 func (r *lessonRepository) Create(ctx context.Context, req models.CreateLessonRequest) (models.Lesson, error) {
 	return scanLesson(r.pool.QueryRow(ctx,
@@ -173,7 +181,10 @@ func (r *lessonRepository) DeleteByCourse(ctx context.Context, courseID string, 
 
 func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from string, to string) ([]models.CalendarLesson, error) {
 	rows, err := r.pool.Query(ctx,
-		// ranked CTE computes global lesson rank inside the DB — eliminates a separate GetRanksForCourses round-trip.
+		// ranked — позиция урока в цикле, считается в БД одним запросом. Только у
+		// индивидуальных курсов (спека, п. 3.8): у группового урока нет одного
+		// ученика, rank остаётся NULL, и сервис бейдж не рисует. Замороженные уроки
+		// не ранжируются — тот же предикат, что у сгорания в балансе (п. 6.7).
 		// cal_courses is materialized so the subquery runs once and is reused by ranked.
 		`WITH cal_courses AS MATERIALIZED (
 		   SELECT DISTINCT l.course_id
@@ -187,8 +198,12 @@ func (r *lessonRepository) GetCalendar(ctx context.Context, tutorID string, from
 		   SELECT l.id,
 		          ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
 		   FROM lessons l
+		   JOIN courses c ON c.id = l.course_id
+		   `+individualPair+`
 		   WHERE l.course_id IN (SELECT course_id FROM cal_courses)
+		     AND c.student_id IS NOT NULL
 		     AND l.status != 'cancelled'
+		     AND `+lessonInParticipation+`
 		 )
 		 SELECT l.id, l.course_id, l.scheduled_at, l.duration_minutes, l.status, l.notes,
 		        c.subject,
@@ -330,6 +345,8 @@ func (r *lessonRepository) GetRoomStatus(ctx context.Context, lessonID string) (
 	return "waiting", nil
 }
 
+// Текущие циклы дашборда — только индивидуальные курсы (спека, п. 3.8): цикл
+// группы теперь у каждого участника свой, строка на курс его не выразит.
 func (r *lessonRepository) GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT l.id, l.course_id, l.scheduled_at, l.status,
@@ -342,9 +359,12 @@ func (r *lessonRepository) GetAllLessonsForCycles(ctx context.Context, tutorID s
 		        ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at)::int AS rank
 		 FROM lessons l
 		 JOIN courses c ON c.id = l.course_id
+		 `+individualPair+`
 		 LEFT JOIN students s ON s.id = c.student_id
 		 WHERE c.tutor_id = $1
+		   AND c.student_id IS NOT NULL
 		   AND l.status != 'cancelled'
+		   AND `+lessonInParticipation+`
 		 ORDER BY l.course_id, l.scheduled_at`,
 		tutorID)
 	if err != nil {
@@ -404,33 +424,33 @@ func (r *lessonRepository) DeleteFutureByCourse(ctx context.Context, courseID, t
 	return err
 }
 
-func (r *lessonRepository) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {
-	if len(courseIDs) == 0 {
-		return map[string]map[string]int{}, nil
-	}
+// GetRanksForStudent — порядковые номера уроков курса в периодах участия ученика
+// (спека, п. 6.7): те же границы, что у сгорания в балансе, иначе бейдж «3 из 8»
+// и «оплачено 3 из 8» разойдутся. Отменённые не ранжируются.
+func (r *lessonRepository) GetRanksForStudent(ctx context.Context, courseID, studentID string) (map[string]int, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, course_id,
-		        ROW_NUMBER() OVER (PARTITION BY course_id ORDER BY scheduled_at)::int AS rank
-		 FROM lessons
-		 WHERE course_id = ANY($1)
-		   AND status != 'cancelled'`,
-		courseIDs)
+		`SELECT l.id,
+		        ROW_NUMBER() OVER (ORDER BY l.scheduled_at)::int AS rank
+		   FROM lessons l
+		   JOIN (`+studentCoursePairs+`) sc ON sc.course_id = l.course_id
+		  WHERE l.course_id = $1
+		    AND sc.student_id = $2
+		    AND l.status != 'cancelled'
+		    AND `+lessonInParticipation,
+		courseID, studentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := map[string]map[string]int{}
+	ranks := map[string]int{}
 	for rows.Next() {
-		var lessonID, courseID string
+		var lessonID string
 		var rank int
-		if err := rows.Scan(&lessonID, &courseID, &rank); err != nil {
+		if err := rows.Scan(&lessonID, &rank); err != nil {
 			return nil, err
 		}
-		if result[courseID] == nil {
-			result[courseID] = map[string]int{}
-		}
-		result[courseID][lessonID] = rank
+		ranks[lessonID] = rank
 	}
-	return result, rows.Err()
+	return ranks, rows.Err()
 }

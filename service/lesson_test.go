@@ -89,9 +89,9 @@ func (m *mockLessonRepo) GetRoomStatus(ctx context.Context, lessonID string) (st
 	return args.String(0), args.Error(1)
 }
 
-func (m *mockLessonRepo) GetRanksForCourses(ctx context.Context, courseIDs []string) (map[string]map[string]int, error) {
-	args := m.Called(ctx, courseIDs)
-	return args.Get(0).(map[string]map[string]int), args.Error(1)
+func (m *mockLessonRepo) GetRanksForStudent(ctx context.Context, courseID, studentID string) (map[string]int, error) {
+	args := m.Called(ctx, courseID, studentID)
+	return args.Get(0).(map[string]int), args.Error(1)
 }
 
 func (m *mockLessonRepo) GetAllLessonsForCycles(ctx context.Context, tutorID string) ([]models.CalendarLesson, error) {
@@ -463,8 +463,6 @@ func TestLessonGetByPeriod_Success(t *testing.T) {
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
 	lessonRepo.On("GetByPeriod", mock.Anything, courseID, tutorID, from, to).Return([]models.Lesson{expectedLesson}, nil)
-	lessonRepo.On("GetRanksForCourses", mock.Anything, []string{courseID}).Return(map[string]map[string]int{}, nil)
-	paymentRepo.On("GetByCoursesBatch", mock.Anything, []string{courseID}).Return(map[string][]models.Payment{}, nil)
 
 	lessons, err := svc.GetByPeriod(context.Background(), courseID, tutorID, from, to)
 
@@ -472,6 +470,38 @@ func TestLessonGetByPeriod_Success(t *testing.T) {
 	assert.Len(t, lessons, 1)
 	assert.Equal(t, expectedLesson, lessons[0])
 	courseRepo.AssertExpectations(t)
+	lessonRepo.AssertExpectations(t)
+	lessonRepo.AssertNotCalled(t, "GetRanksForStudent", mock.Anything, mock.Anything, mock.Anything)
+	paymentRepo.AssertExpectations(t)
+}
+
+// Индивидуальный курс: позиция в цикле — по рангам ученика и платежам курса.
+func TestLessonGetByPeriod_IndividualCourseGetsCyclePosition(t *testing.T) {
+	lessonRepo := new(mockLessonRepo)
+	courseRepo := new(mockCourseRepo)
+	paymentRepo := new(mockPaymentRepo)
+	svc := newLessonSvcWithPayment(lessonRepo, courseRepo, paymentRepo)
+
+	from := "2026-05-19T00:00:00Z"
+	to := "2026-05-26T00:00:00Z"
+	student := "student-uuid-1"
+	course := expectedCourse
+	course.StudentID = &student
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(course, nil)
+	lessonRepo.On("GetByPeriod", mock.Anything, courseID, tutorID, from, to).Return([]models.Lesson{expectedLesson}, nil)
+	lessonRepo.On("GetRanksForStudent", mock.Anything, courseID, student).Return(map[string]int{expectedLesson.ID: 2}, nil)
+	paymentRepo.On("GetByCoursesBatch", mock.Anything, []string{courseID}).Return(map[string][]models.Payment{
+		courseID: {{LessonsCount: 8}},
+	}, nil)
+
+	lessons, err := svc.GetByPeriod(context.Background(), courseID, tutorID, from, to)
+
+	assert.NoError(t, err)
+	if assert.Len(t, lessons, 1) && assert.NotNil(t, lessons[0].CyclePosition) {
+		assert.Equal(t, 2, *lessons[0].CyclePosition)
+		assert.Equal(t, 8, *lessons[0].CycleSize)
+	}
 	lessonRepo.AssertExpectations(t)
 	paymentRepo.AssertExpectations(t)
 }

@@ -57,23 +57,28 @@ func cyclePositionFromRank(rank int, payments []models.Payment) (position, size 
 	return 0, 0
 }
 
-func (s *lessonService) enrichLessons(ctx context.Context, courseID string, lessons []models.Lesson) error {
-	if len(lessons) == 0 {
+// enrichLessons проставляет позицию в цикле — только индивидуальному курсу
+// (спека, п. 3.8): у группового урока нет одного ученика, а цикл считается по
+// платежам конкретного человека. Для группы он не считается вовсе, вместо того
+// чтобы считаться неправильно. Платежи индивидуального курса все адресованы его
+// ученику (спека, п. 6.1–6.3), поэтому выборка по курсу здесь точна.
+func (s *lessonService) enrichLessons(ctx context.Context, course models.Course, lessons []models.Lesson) error {
+	if len(lessons) == 0 || course.StudentID == nil {
 		return nil
 	}
-	ranks, err := s.repo.GetRanksForCourses(ctx, []string{courseID})
+	ranks, err := s.repo.GetRanksForStudent(ctx, course.ID, *course.StudentID)
 	if err != nil {
 		return err
 	}
-	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, []string{courseID})
+	paymentsMap, err := s.paymentRepo.GetByCoursesBatch(ctx, []string{course.ID})
 	if err != nil {
 		return err
 	}
-	coursePayments := paymentsMap[courseID]
+	coursePayments := paymentsMap[course.ID]
 	if len(coursePayments) == 0 {
 		return nil
 	}
-	infos := computeCyclePositions(ranks[courseID], coursePayments)
+	infos := computeCyclePositions(ranks, coursePayments)
 	for i, l := range lessons {
 		if info, ok := infos[l.ID]; ok {
 			pos, size := info.Position, info.Size
@@ -181,7 +186,7 @@ func (s *lessonService) GetByCourse(ctx context.Context, courseID string, tutorI
 }
 
 func (s *lessonService) GetByPeriod(ctx context.Context, courseID string, tutorID string, from string, to string) ([]models.Lesson, error) {
-	_, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+	course, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
 	if err != nil {
 		return nil, fmt.Errorf("course: %w", ErrNotFound)
 	}
@@ -189,7 +194,7 @@ func (s *lessonService) GetByPeriod(ctx context.Context, courseID string, tutorI
 	if err != nil {
 		return nil, err
 	}
-	if err := s.enrichLessons(ctx, courseID, lessons); err != nil {
+	if err := s.enrichLessons(ctx, course, lessons); err != nil {
 		return nil, err
 	}
 	return lessons, nil

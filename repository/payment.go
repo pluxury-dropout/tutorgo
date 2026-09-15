@@ -14,6 +14,7 @@ type PaymentRepository interface {
 	GetByID(ctx context.Context, id string, tutorID string) (models.Payment, error)
 	GetByCourse(ctx context.Context, courseID string, p models.Pagination) ([]models.Payment, int, error)
 	GetByCoursesBatch(ctx context.Context, courseIDs []string) (map[string][]models.Payment, error)
+	GetByStudentBatch(ctx context.Context, studentID string) (map[string][]models.Payment, error)
 	GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
@@ -106,6 +107,31 @@ func (r *paymentRepository) GetByCoursesBatch(ctx context.Context, courseIDs []s
 	rows, err := r.conn.Query(ctx,
 		`SELECT `+paymentColumns+` FROM payments p WHERE p.course_id = ANY($1) ORDER BY p.course_id, p.paid_at ASC`,
 		courseIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string][]models.Payment{}
+	for rows.Next() {
+		var p models.Payment
+		if err := rows.Scan(paymentDest(&p)...); err != nil {
+			return nil, err
+		}
+		result[p.CourseID] = append(result[p.CourseID], p)
+	}
+	return result, rows.Err()
+}
+
+// GetByStudentBatch — платежи ученика, разложенные по курсам, по возрастанию
+// даты: позиция в цикле кабинета считается по его платежам, а не по всем
+// платежам группы (спека, п. 6.7).
+func (r *paymentRepository) GetByStudentBatch(ctx context.Context, studentID string) (map[string][]models.Payment, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT `+paymentColumns+`
+		 FROM payments p
+		 WHERE p.student_id = $1
+		 ORDER BY p.course_id, p.paid_at ASC`, studentID)
 	if err != nil {
 		return nil, err
 	}

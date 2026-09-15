@@ -349,7 +349,7 @@ func TestListLessons_PaidFlag(t *testing.T) {
 		{ID: "l3", CourseID: "c1", Rank: &rank3},
 	}
 	repo.On("ListLessons", mock.Anything, "stu-1", false).Return(lessons, nil)
-	payRepo.On("GetByCoursesBatch", mock.Anything, []string{"c1"}).Return(map[string][]models.Payment{
+	payRepo.On("GetByStudentBatch", mock.Anything, "stu-1").Return(map[string][]models.Payment{
 		"c1": {{LessonsCount: 2}},
 	}, nil)
 
@@ -378,7 +378,7 @@ func TestStudentListLessons_CyclePositions(t *testing.T) {
 		{ID: "l3", CourseID: "c2"}, // rank нет (все уроки отменены) — цикл не считаем
 	}
 	repo.On("ListLessons", mock.Anything, "stu-1", false).Return(lessons, nil)
-	payRepo.On("GetByCoursesBatch", mock.Anything, []string{"c1"}).Return(map[string][]models.Payment{
+	payRepo.On("GetByStudentBatch", mock.Anything, "stu-1").Return(map[string][]models.Payment{
 		"c1": {{LessonsCount: 8}, {LessonsCount: 8}},
 	}, nil)
 
