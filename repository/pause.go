@@ -27,8 +27,12 @@ func NewPauseRepository(pool *pgxpool.Pool) PauseRepository {
 // счётчик нет», а обрыв посередине оставил бы отменённые уроки без продления.
 //
 // Отмена нужна, иначе автозавершение закроет уроки паузы как проведённые.
-// Хвост: ends_on += дней в паузе, max_count += отменённых вхождений правила;
-// NULL + n остаётся NULL, поэтому бессрочное правило не меняется само.
+// Хвост: ends_on += дней в паузе, max_count += отменённых вхождений правила.
+// Бессрочное правило (оба NULL) целиком исключено из UPDATE условием
+// (ends_on IS NOT NULL OR max_count IS NOT NULL): его уроки в интервале паузы
+// всё равно отменяются (join через cancelled/per_rule), но materialized_until
+// не откатывается и в shifted правило не попадает — у бессрочного правила нет
+// сдвинутого конца, который нужно было бы доматериализовать.
 // materialized_until откатывается к началу паузы: Materialize идёт от него, и
 // без отката хвост за старым концом не появился бы никогда. Дублей не будет —
 // (rule_id, occurrence_date) уникален, отменённые держатся тумбстоунами.
@@ -71,6 +75,7 @@ func (r *pauseRepository) Create(ctx context.Context, studentID string, req mode
 		            materialized_until = LEAST(r.materialized_until, $2::date)
 		       FROM per_rule pr
 		      WHERE r.id = pr.rule_id
+		        AND (r.ends_on IS NOT NULL OR r.max_count IS NOT NULL)
 		     RETURNING r.id::text
 		 )
 		 SELECT p.id, p.student_id, p.starts_on, p.ends_on, p.reason, p.created_at,

@@ -148,6 +148,36 @@ func TestPauseCreate_RetroactiveKeepsStatuses(t *testing.T) {
 	assert.Equal(t, 1, countLessons(t, pool, courseID, "completed"))
 }
 
+// Правило без ends_on и без max_count — бессрочное: пауза отменяет его уроки в
+// интервале, но само правило не трогает (спека, п. 6.9, «оба NULL — ничего»).
+func TestPauseCreate_OpenEndedRuleUntouched(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	studentID, courseID, ruleID, first := seedIndividualSeries(t, pool)
+	_, err := pool.Exec(ctx, `UPDATE recurrence_rules SET ends_on = NULL, max_count = NULL WHERE id = $1`, ruleID)
+	require.NoError(t, err)
+
+	var before time.Time
+	require.NoError(t, pool.QueryRow(ctx, `SELECT materialized_until FROM recurrence_rules WHERE id = $1`, ruleID).Scan(&before))
+
+	_, shifted, err := repository.NewPauseRepository(pool).Create(ctx, studentID, models.CreatePauseRequest{
+		StartsOn: dateOnly(first.AddDate(0, 0, 7)), EndsOn: dateOnly(first.AddDate(0, 0, 20)),
+	})
+	require.NoError(t, err)
+	assert.Empty(t, shifted)
+	assert.Equal(t, 2, countLessons(t, pool, courseID, "cancelled"))
+
+	var after time.Time
+	var endsOn *time.Time
+	var maxCount *int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT materialized_until, ends_on, max_count FROM recurrence_rules WHERE id = $1`, ruleID).
+		Scan(&after, &endsOn, &maxCount))
+	assert.Equal(t, before, after)
+	assert.Nil(t, endsOn)
+	assert.Nil(t, maxCount)
+}
+
 func TestPauseListAndDelete_ScopedByStudent(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
