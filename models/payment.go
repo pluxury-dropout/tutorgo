@@ -66,3 +66,20 @@ type StudentDebt struct {
 	NextLessonAt *time.Time     `json:"next_lesson_at"` // когда напомнить
 	Courses      []DebtByCourse `json:"courses"`
 }
+
+// BulkPaymentItem — строка оплаты на несколько предметов: те же поля и та же
+// проверка, что у одиночного платежа, дата — общая на все строки.
+type BulkPaymentItem struct {
+	CourseID     string  `json:"course_id"     validate:"required,uuid"`
+	StudentID    string  `json:"student_id"    validate:"required,uuid"`
+	Amount       float64 `json:"amount"        validate:"required,gt=0"`
+	LessonsCount int     `json:"lessons_count" validate:"required,gt=0"`
+}
+
+// CreateBulkPaymentRequest — одна оплата, разложенная по предметам (спека,
+// п. 6.8). Сумма «к распределению» сюда не входит намеренно: доход месяца
+// складывается из строк, второй источник правды о деньгах не нужен.
+type CreateBulkPaymentRequest struct {
+	PaidAt time.Time         `json:"paid_at" validate:"required"`
+	Items  []BulkPaymentItem `json:"items"   validate:"required,min=1,max=20,dive"`
+}

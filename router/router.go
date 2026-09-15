@@ -232,6 +232,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 
 		auth.GET("/payments", paymentHandler.GetAll)
 		auth.POST("/payments", paymentHandler.Create)
+		auth.POST("/payments/bulk", paymentHandler.CreateBulk)
 		auth.PUT("/payments/:id", paymentHandler.Update)
 		auth.DELETE("/payments/:id", paymentHandler.Delete)
 		auth.GET("/payments/recent", paymentHandler.GetRecent)

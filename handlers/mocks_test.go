@@ -415,6 +415,11 @@ func (m *mockPaymentService) GetDebts(ctx context.Context, tutorID string) ([]mo
 	return args.Get(0).([]models.StudentDebt), args.Error(1)
 }
 
+func (m *mockPaymentService) CreateBulk(ctx context.Context, req models.CreateBulkPaymentRequest, tutorID string) ([]models.Payment, error) {
+	args := m.Called(ctx, req, tutorID)
+	return args.Get(0).([]models.Payment), args.Error(1)
+}
+
 // --- Mock: RefreshTokenService ---
 
 type mockRefreshTokenService struct{ mock.Mock }

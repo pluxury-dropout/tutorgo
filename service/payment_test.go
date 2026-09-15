@@ -86,6 +86,11 @@ func (m *mockPaymentRepo) GetDebts(ctx context.Context, tutorID string) ([]model
 	return args.Get(0).([]models.CourseDebt), args.Error(1)
 }
 
+func (m *mockPaymentRepo) CreateBulk(ctx context.Context, req models.CreateBulkPaymentRequest) ([]models.Payment, error) {
+	args := m.Called(ctx, req)
+	return args.Get(0).([]models.Payment), args.Error(1)
+}
+
 var (
 	tutorID  = "tutor-uuid-1"
 	courseID = "course-uuid-1"
@@ -422,4 +427,55 @@ func TestPaymentGetDebts_EmptyIsNotNil(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, debts)
 	assert.Empty(t, debts)
+}
+
+// CreateBulk
+
+func bulkReq(items ...models.BulkPaymentItem) models.CreateBulkPaymentRequest {
+	return models.CreateBulkPaymentRequest{PaidAt: paymentReq.PaidAt, Items: items}
+}
+
+// Ученик не на курсе во второй строке — 400 до записи: ничего не пишется
+// (спека, п. 6.8).
+func TestPaymentCreateBulk_SecondItemRejectedNothingWritten(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
+
+	other := "student-uuid-2"
+	foreign := models.Course{ID: "course-uuid-2", TutorID: tutorID, StudentID: &other, IsActive: true}
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(individualCourse, nil)
+	courseRepo.On("GetByID", mock.Anything, "course-uuid-2", tutorID).Return(foreign, nil)
+
+	_, err := svc.CreateBulk(context.Background(), bulkReq(
+		models.BulkPaymentItem{CourseID: courseID, StudentID: payStudentID, Amount: 40000, LessonsCount: 8},
+		models.BulkPaymentItem{CourseID: "course-uuid-2", StudentID: payStudentID, Amount: 6000, LessonsCount: 1},
+	), tutorID)
+
+	assert.ErrorIs(t, err, service.ErrBadRequest)
+	payRepo.AssertNotCalled(t, "CreateBulk", mock.Anything, mock.Anything)
+}
+
+func TestPaymentCreateBulk_ChecksEveryItemThenWritesOnce(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	enrollRepo := new(mockEnrollmentRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, enrollRepo)
+
+	group := models.Course{ID: "group-uuid", TutorID: tutorID, IsActive: true}
+	req := bulkReq(
+		models.BulkPaymentItem{CourseID: courseID, StudentID: payStudentID, Amount: 40000, LessonsCount: 8},
+		models.BulkPaymentItem{CourseID: "group-uuid", StudentID: payStudentID, Amount: 20000, LessonsCount: 4},
+	)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(individualCourse, nil)
+	courseRepo.On("GetByID", mock.Anything, "group-uuid", tutorID).Return(group, nil)
+	enrollRepo.On("IsEnrolled", mock.Anything, "group-uuid", payStudentID).Return(true, nil)
+	payRepo.On("CreateBulk", mock.Anything, req).Return([]models.Payment{{ID: "p1"}, {ID: "p2"}}, nil)
+
+	payments, err := svc.CreateBulk(context.Background(), req, tutorID)
+
+	assert.NoError(t, err)
+	assert.Len(t, payments, 2)
+	payRepo.AssertNumberOfCalls(t, "CreateBulk", 1)
+	enrollRepo.AssertExpectations(t)
 }

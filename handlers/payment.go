@@ -176,6 +176,27 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, balance)
 }
 
+// CreateBulk — оплата на несколько предметов одним сабмитом (спека, п. 6.8).
+func (h *PaymentHandler) CreateBulk(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req models.CreateBulkPaymentRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	payments, err := h.service.CreateBulk(c.Request.Context(), req, tutorID)
+	if err != nil {
+		h.log.Error("Failed to create bulk payment", slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	h.log.Info("Bulk payment created", slog.Int("items", len(payments)))
+	c.JSON(http.StatusCreated, payments)
+}
+
 // GetDebts — «кто мне должен» (спека, п. 6.5).
 func (h *PaymentHandler) GetDebts(c *gin.Context) {
 	tutorID := c.GetString("tutorID")

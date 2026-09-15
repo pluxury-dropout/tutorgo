@@ -24,6 +24,7 @@ type PaymentRepository interface {
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
 	Delete(ctx context.Context, id string, tutorID string) error
 	GetDebts(ctx context.Context, tutorID string) ([]models.CourseDebt, error)
+	CreateBulk(ctx context.Context, req models.CreateBulkPaymentRequest) ([]models.Payment, error)
 }
 
 type paymentRepository struct {
@@ -43,6 +44,44 @@ const paymentColumns = `p.id, p.course_id, p.student_id, p.amount, p.lessons_cou
 // поля через append.
 func paymentDest(p *models.Payment) []any {
 	return []any{&p.ID, &p.CourseID, &p.StudentID, &p.Amount, &p.LessonsCount, &p.PaidAt}
+}
+
+// CreateBulk записывает строки одной оплаты одним INSERT (спека, п. 6.8):
+// оператор атомарен, и ошибка на второй строке не оставит первую в базе. Два
+// последовательных INSERT могли бы записать половину денег — тьютор увидел бы
+// один платёж вместо двух, не поняв почему.
+func (r *paymentRepository) CreateBulk(ctx context.Context, req models.CreateBulkPaymentRequest) ([]models.Payment, error) {
+	courseIDs := make([]string, len(req.Items))
+	studentIDs := make([]string, len(req.Items))
+	amounts := make([]float64, len(req.Items))
+	lessons := make([]int, len(req.Items))
+	for i, item := range req.Items {
+		courseIDs[i], studentIDs[i] = item.CourseID, item.StudentID
+		amounts[i], lessons[i] = item.Amount, item.LessonsCount
+	}
+
+	rows, err := r.conn.Query(ctx,
+		`INSERT INTO payments AS p (course_id, student_id, amount, lessons_count, paid_at)
+		 SELECT u.course_id, u.student_id, u.amount, u.lessons_count, $5
+		   FROM unnest($1::uuid[], $2::uuid[], $3::numeric[], $4::int[])
+		        AS u(course_id, student_id, amount, lessons_count)
+		 RETURNING `+paymentColumns,
+		courseIDs, studentIDs, amounts, lessons, req.PaidAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	payments := []models.Payment{}
+	for rows.Next() {
+		var p models.Payment
+		if err := rows.Scan(paymentDest(&p)...); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+	// Ошибка оператора (внешний ключ, CHECK) приходит сюда, а не из Query.
+	return payments, rows.Err()
 }
 
 func (r *paymentRepository) Create(ctx context.Context, req models.CreatePaymentRequest) (models.Payment, error) {

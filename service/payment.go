@@ -19,6 +19,7 @@ type PaymentService interface {
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
 	Delete(ctx context.Context, id string, tutorID string) error
 	GetDebts(ctx context.Context, tutorID string) ([]models.StudentDebt, error)
+	CreateBulk(ctx context.Context, req models.CreateBulkPaymentRequest, tutorID string) ([]models.Payment, error)
 }
 
 type paymentService struct {
@@ -179,4 +180,31 @@ func (s *paymentService) GetDebts(ctx context.Context, tutorID string) ([]models
 		return debts[a].StudentName < debts[b].StudentName
 	})
 	return debts, nil
+}
+
+// CreateBulk — одна оплата на несколько предметов (спека, п. 6.8). Каждая
+// строка проверяется как одиночный платёж и до записи: сама запись — один
+// атомарный оператор, откатывать нечего.
+func (s *paymentService) CreateBulk(ctx context.Context, req models.CreateBulkPaymentRequest, tutorID string) ([]models.Payment, error) {
+	courses := map[string]models.Course{}
+	for i, item := range req.Items {
+		course, ok := courses[item.CourseID]
+		if !ok {
+			found, err := s.courseRepo.GetByID(ctx, item.CourseID, tutorID)
+			if err != nil {
+				return nil, fmt.Errorf("items[%d] course: %w", i, ErrNotFound)
+			}
+			course = found
+			courses[item.CourseID] = found
+		}
+		if err := s.studentOnCourse(ctx, course, item.StudentID); err != nil {
+			return nil, fmt.Errorf("items[%d]: %w", i, err)
+		}
+	}
+	payments, err := s.repo.CreateBulk(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	globalCalendarCache.Invalidate(tutorID)
+	return payments, nil
 }

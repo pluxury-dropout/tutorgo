@@ -22,6 +22,7 @@ func newPaymentRouter(svc *mockPaymentService, tutorID string) *gin.Engine {
 	r.Use(withTutorID(tutorID))
 	r.GET("/payments", h.GetAll)
 	r.POST("/payments", h.Create)
+	r.POST("/payments/bulk", h.CreateBulk)
 	r.GET("/payments/balance", h.GetBalance)
 	r.GET("/payments/monthly-expected", h.GetMonthlyExpected)
 	r.GET("/payments/debts", h.GetDebts)
@@ -133,6 +134,37 @@ func TestPaymentCreate_ServiceError(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)
+}
+
+// CreateBulk
+
+func TestPaymentCreateBulk_Created(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, testTutorID)
+
+	req := models.CreateBulkPaymentRequest{
+		PaidAt: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		Items: []models.BulkPaymentItem{
+			{CourseID: testCourseID, StudentID: testStudentID, Amount: 40000, LessonsCount: 8},
+		},
+	}
+	svc.On("CreateBulk", mock.Anything, req, testTutorID).Return([]models.Payment{testPayment}, nil)
+
+	w := makeRequest(t, r, http.MethodPost, "/payments/bulk", req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	svc.AssertExpectations(t)
+}
+
+func TestPaymentCreateBulk_EmptyItemsRejected(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, testTutorID)
+
+	w := makeRequest(t, r, http.MethodPost, "/payments/bulk",
+		models.CreateBulkPaymentRequest{PaidAt: time.Now(), Items: []models.BulkPaymentItem{}})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	svc.AssertNotCalled(t, "CreateBulk")
 }
 
 // GetBalance
