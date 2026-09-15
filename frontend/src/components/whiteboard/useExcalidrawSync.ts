@@ -196,13 +196,21 @@ export function useExcalidrawSync(
 
   // Догружаем недостающие файлы: S3 URL → blob → dataURL → addFiles.
   // Ошибка одного файла не валит остальные — элемент покажет плейсхолдер.
+  //
+  // onFile зовём отсюда, по факту «файл на холсте», а не из ветки WS 'file':
+  // события at-most-once, и страница PDF, отрендеренная, пока сокет лежал,
+  // приезжает снапшотом реконнекта. Раньше её видели, но прогресс импорта не
+  // узнавал — тост висел на «13 / 14» вечно.
   const hydrateFiles = useCallback((files: SnapshotFiles) => {
     Object.assign(filesRef.current, files)
     const api = apiRef.current
     if (!api) return
     const have = api.getFiles()
     for (const [id, meta] of Object.entries(files)) {
-      if (have[id]) continue
+      if (have[id]) {
+        onFileRef.current?.(id)
+        continue
+      }
       void (async () => {
         try {
           const src = meta.url.startsWith('/') ? `${BASE_URL}${meta.url}` : meta.url
@@ -217,6 +225,7 @@ export function useExcalidrawSync(
               created: Date.now(),
             },
           ])
+          onFileRef.current?.(id)
         } catch {
           // недоступный файл — не критично, остальная доска работает
         }
@@ -413,7 +422,6 @@ export function useExcalidrawSync(
         }
         if (p?.fileId && p.url && p.mimeType) {
           hydrateFiles({ [p.fileId]: { url: p.url, mimeType: p.mimeType } })
-          onFileRef.current?.(p.fileId)
         }
         return
       }

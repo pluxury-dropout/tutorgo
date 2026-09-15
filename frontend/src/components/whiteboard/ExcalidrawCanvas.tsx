@@ -91,6 +91,14 @@ function readCamera(pageId: string) {
   }
 }
 
+// Ожидаемые страницы текущего импорта: появление этих файлов на холсте двигает
+// тост. Живёт в модуле, а не в useRef: холст размонтируется посреди импорта
+// (в звонке — переключение «звонок ↔ доска»), тост в глобальном Toaster
+// остаётся, и ref терял бы прогресс. Новый экземпляр досчитает страницы по
+// снапшоту своего подключения.
+// ponytail: один импорт на вкладку, следующий вытесняет прогресс предыдущего.
+let pdfProgress: { pending: Set<string>; total: number; toastId: string } | null = null
+
 // Ролик на доске держим 16:9, как его ни тянули за угол.
 const YT_RATIO = 9 / 16
 // Меньше — считаем округлением, а не растяжкой: чинить каждый onChange незачем.
@@ -144,26 +152,23 @@ export function ExcalidrawCanvas({
     [player, yt]
   )
 
-  // Ожидаемые страницы текущего импорта: file-события с этими id двигают тост.
-  const pdfProgressRef = useRef<{ pending: Set<string>; total: number; toastId: string } | null>(null)
-
   const onPdfFile = useCallback((fileId: string) => {
-    const pr = pdfProgressRef.current
+    const pr = pdfProgress
     if (!pr || !pr.pending.delete(fileId)) return
     const done = pr.total - pr.pending.size
     if (pr.pending.size === 0) {
       toast.success(`PDF вставлен: ${pr.total} стр.`, { id: pr.toastId })
-      pdfProgressRef.current = null
+      pdfProgress = null
     } else {
       toast.loading(`PDF: ${done} / ${pr.total}…`, { id: pr.toastId })
     }
   }, [])
 
   const onPdfFailed = useCallback((fileIds: string[]) => {
-    const pr = pdfProgressRef.current
+    const pr = pdfProgress
     if (pr && fileIds.some((id) => pr.pending.has(id))) {
       toast.error('Не удалось обработать PDF', { id: pr.toastId })
-      pdfProgressRef.current = null
+      pdfProgress = null
     }
   }, [])
 
@@ -481,7 +486,7 @@ export function ExcalidrawCanvas({
         for (const p of pages) {
           registerFile(p.file_id, `${BASE_URL}${p.url}`, 'image/jpeg')
         }
-        pdfProgressRef.current = {
+        pdfProgress = {
           pending: new Set(pages.map((p) => p.file_id)),
           total: pages.length,
           toastId,
