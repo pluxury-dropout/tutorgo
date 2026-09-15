@@ -44,6 +44,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	pendingRepo := repository.NewPendingRegistrationRepository(pool)
 	materialRepo := repository.NewMaterialRepository(pool)
 	pdfImportRepo := repository.NewPdfImportRepository(pool)
+	pauseRepo := repository.NewPauseRepository(pool)
 
 	// Services
 	tutorService := service.NewTutorService(tutorRepo, subscriptionRepo, pool)
@@ -60,6 +61,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	// Ниже courseService: архивация ученика архивирует его курсы именно сервисом —
 	// у courseRepo тот же Delete, но без закрытия правил и будущих уроков.
 	studentService := service.NewStudentService(studentRepo, paymentRepo, courseService, enrollmentRepo, studentRefreshRepo)
+	pauseService := service.NewPauseService(pauseRepo, studentRepo, recurrenceService)
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)
 	taskService := service.NewTaskService(taskRepo)
@@ -87,6 +89,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	tutorHandler := handlers.NewTutorHandler(tutorService, refreshTokenService, log)
 	authHandler := handlers.NewAuthHandler(tutorService, registrationService, refreshTokenService, log, cfg.JWTSecret, cfg.Env == "production")
 	studentHandler := handlers.NewStudentHandler(studentService, log)
+	pauseHandler := handlers.NewPauseHandler(pauseService, log)
 	onboardingHandler := handlers.NewOnboardingHandler(onboardingService, log)
 	icsHandler := handlers.NewICSHandler(icsService, log)
 	courseHandler := handlers.NewCourseHandler(courseService, log)
@@ -218,6 +221,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.POST("/students/:id/restore", studentHandler.Restore)
 		auth.GET("/students/:id/courses", courseHandler.GetByStudent)
 		auth.POST("/students/:id/invite", studentHandler.Invite)
+		auth.GET("/students/:id/pauses", pauseHandler.List)
+		auth.POST("/students/:id/pauses", pauseHandler.Create)
+		auth.DELETE("/students/:id/pauses/:pauseId", pauseHandler.Delete)
 
 		auth.GET("/courses", courseHandler.GetAll)
 		auth.POST("/courses", courseHandler.Create)
