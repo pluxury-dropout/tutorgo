@@ -141,9 +141,9 @@ func TestPaymentGetBalance_Success(t *testing.T) {
 	r := newPaymentRouter(svc, testTutorID)
 
 	expected := models.CourseBalance{LessonsPaid: 10, LessonsCompleted: 3, LessonsRemaining: 7}
-	svc.On("GetBalance", mock.Anything, testCourseID, testTutorID).Return(expected, nil)
+	svc.On("GetBalance", mock.Anything, testCourseID, testStudentID, testTutorID).Return(expected, nil)
 
-	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
+	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID+"&student_id="+testStudentID, nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var got models.CourseBalance
@@ -162,13 +162,23 @@ func TestPaymentGetBalance_MissingCourseID(t *testing.T) {
 	svc.AssertNotCalled(t, "GetBalance")
 }
 
+func TestPaymentGetBalance_MissingStudentID(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, testTutorID)
+
+	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	svc.AssertNotCalled(t, "GetBalance")
+}
+
 func TestPaymentGetBalance_ServiceError(t *testing.T) {
 	svc := new(mockPaymentService)
 	r := newPaymentRouter(svc, testTutorID)
 
-	svc.On("GetBalance", mock.Anything, testCourseID, testTutorID).Return(models.CourseBalance{}, fmt.Errorf("course: %w", service.ErrNotFound))
+	svc.On("GetBalance", mock.Anything, testCourseID, testStudentID, testTutorID).Return(models.CourseBalance{}, fmt.Errorf("course: %w", service.ErrNotFound))
 
-	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID, nil)
+	w := makeRequest(t, r, http.MethodGet, "/payments/balance?course_id="+testCourseID+"&student_id="+testStudentID, nil)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)

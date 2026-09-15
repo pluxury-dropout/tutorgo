@@ -12,7 +12,7 @@ type PaymentService interface {
 	GetByCourse(ctx context.Context, courseID string, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
-	GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error)
+	GetBalance(ctx context.Context, courseID, studentID, tutorID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
@@ -80,11 +80,17 @@ func (s *paymentService) GetAllByTutorPaged(ctx context.Context, tutorID string,
 	return s.repo.GetAllByTutorPaged(ctx, tutorID, p)
 }
 
-func (s *paymentService) GetBalance(ctx context.Context, courseID string, tutorID string) (models.CourseBalance, error) {
-	if _, err := s.courseRepo.GetByID(ctx, courseID, tutorID); err != nil {
+// GetBalance — баланс ученика по курсу (спека, п. 6.4). Ученик обязан быть на
+// курсе: у чужого баланс вышел бы нулевым и читался бы как «всё оплачено».
+func (s *paymentService) GetBalance(ctx context.Context, courseID, studentID, tutorID string) (models.CourseBalance, error) {
+	course, err := s.courseRepo.GetByID(ctx, courseID, tutorID)
+	if err != nil {
 		return models.CourseBalance{}, fmt.Errorf("course: %w", ErrNotFound)
 	}
-	return s.repo.GetBalance(ctx, courseID)
+	if err := s.studentOnCourse(ctx, course, studentID); err != nil {
+		return models.CourseBalance{}, err
+	}
+	return s.repo.GetBalance(ctx, courseID, studentID)
 }
 
 func (s *paymentService) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {

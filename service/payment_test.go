@@ -41,8 +41,8 @@ func (m *mockPaymentRepo) GetAllByTutorPaged(ctx context.Context, tutorID string
 	return args.Get(0).([]models.Payment), args.Int(1), args.Error(2)
 }
 
-func (m *mockPaymentRepo) GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error) {
-	args := m.Called(ctx, courseID)
+func (m *mockPaymentRepo) GetBalance(ctx context.Context, courseID, studentID string) (models.CourseBalance, error) {
+	args := m.Called(ctx, courseID, studentID)
 	return args.Get(0).(models.CourseBalance), args.Error(1)
 }
 
@@ -295,10 +295,10 @@ func TestPaymentGetBalance_Success(t *testing.T) {
 		LessonsCompleted: 3,
 		LessonsRemaining: 7,
 	}
-	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(expectedCourse, nil)
-	payRepo.On("GetBalance", mock.Anything, courseID).Return(expected, nil)
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(individualCourse, nil)
+	payRepo.On("GetBalance", mock.Anything, courseID, payStudentID).Return(expected, nil)
 
-	balance, err := svc.GetBalance(context.Background(), courseID, tutorID)
+	balance, err := svc.GetBalance(context.Background(), courseID, payStudentID, tutorID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, balance)
@@ -313,12 +313,27 @@ func TestPaymentGetBalance_CourseNotFound(t *testing.T) {
 
 	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(models.Course{}, errors.New("not found"))
 
-	balance, err := svc.GetBalance(context.Background(), courseID, tutorID)
+	balance, err := svc.GetBalance(context.Background(), courseID, payStudentID, tutorID)
 
 	assert.ErrorIs(t, err, service.ErrNotFound)
 	assert.Empty(t, balance)
 	payRepo.AssertNotCalled(t, "GetBalance")
 	courseRepo.AssertExpectations(t)
+}
+
+// Баланс чужого для курса ученика — 400, а не нули: нули выглядели бы как
+// «всё оплачено» (спека, п. 6.3).
+func TestPaymentGetBalance_StudentNotOnCourse(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	courseRepo := new(mockCourseRepo)
+	svc := newPaymentSvc(payRepo, courseRepo, new(mockEnrollmentRepo))
+
+	courseRepo.On("GetByID", mock.Anything, courseID, tutorID).Return(individualCourse, nil)
+
+	_, err := svc.GetBalance(context.Background(), courseID, "student-uuid-2", tutorID)
+
+	assert.ErrorIs(t, err, service.ErrBadRequest)
+	payRepo.AssertNotCalled(t, "GetBalance", mock.Anything, mock.Anything, mock.Anything)
 }
 
 // GetMonthlyExpected

@@ -17,7 +17,7 @@ type PaymentRepository interface {
 	GetPaymentsForCalendar(ctx context.Context, tutorID string, from string, to string) (map[string][]models.Payment, error)
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
-	GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error)
+	GetBalance(ctx context.Context, courseID, studentID string) (models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
@@ -159,6 +159,40 @@ const studentNameExpr = `CASE WHEN p.student_id IS NULL THEN NULL
                               ELSE TRIM(s.first_name || ' ' || COALESCE(s.last_name, ''))
                          END`
 
+// studentCoursePairs — пары «курс + ученик» с периодом участия (спека, п. 3.9).
+// Индивидуальный курс — одна пара без границ: курс заводится вместе с учеником,
+// все его уроки — его. Группа — строка course_enrollments на участника, включая
+// ушедших: долг не исчезает оттого, что человек перестал ходить. Фильтров по
+// активности курса и ученика нет намеренно — их добавляет запрос, которому они
+// нужны (прогноз); долгам они вредны (спека, п. 6.5).
+const studentCoursePairs = `
+	SELECT c.id AS course_id, c.student_id,
+	       NULL::timestamptz AS enrolled_at, NULL::timestamptz AS left_at
+	  FROM courses c
+	 WHERE c.student_id IS NOT NULL
+	UNION ALL
+	SELECT ce.course_id, ce.student_id, ce.enrolled_at, ce.left_at
+	  FROM course_enrollments ce`
+
+// lessonInParticipation — урок l считается уроком ученика пары sc: не раньше
+// записи, раньше ухода и не в его заморозке. Одно выражение на баланс, долги,
+// прогноз и позицию в цикле (спека, п. 6.4): бейдж «3 из 8» и строка «оплачено
+// 3 из 8» обязаны считать одинаково. Статус урока сюда не входит: сгорание
+// (completed/missed) и ранги (всё, кроме cancelled) добавляют его сами.
+// Посещаемости нет намеренно — деньги её не касаются (спека, п. 3.6).
+//
+// Ожидает алиасы l (lessons) и sc (student_id, enrolled_at, left_at).
+//
+// ponytail: границы паузы — DATE, а scheduled_at приводится к дате в зоне
+// сессии, то есть в UTC: урок между полуночью и 05:00 по Алматы попадёт в
+// соседний день. Часового пояса у тьютора в схеме нет; апгрейд — приводить
+// через его tz, когда он появится (спека, п. 6.1).
+const lessonInParticipation = `l.scheduled_at >= COALESCE(sc.enrolled_at, '-infinity'::timestamptz)
+	   AND l.scheduled_at <  COALESCE(sc.left_at, 'infinity'::timestamptz)
+	   AND NOT EXISTS (SELECT 1 FROM student_pauses sp
+	                    WHERE sp.student_id = sc.student_id
+	                      AND l.scheduled_at::date BETWEEN sp.starts_on AND sp.ends_on)`
+
 func (r *paymentRepository) GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error) {
 	rows, err := r.conn.Query(ctx,
 		`SELECT `+paymentColumns+`, c.subject, `+studentNameExpr+`
@@ -233,23 +267,32 @@ func (r *paymentRepository) GetMonthlyIncome(ctx context.Context, tutorID string
 	return total, err
 }
 
-func (r *paymentRepository) GetBalance(ctx context.Context, courseID string) (models.CourseBalance, error) {
-	var paid, completed int
+// GetBalance — баланс пары «курс + ученик» (спека, п. 6.4): оплачено этим
+// учеником против сгоревшего в его периодах участия. Легаси-платежи группы без
+// адресата сюда не входят (п. 3.4). Пары нет — сгоревших нет.
+func (r *paymentRepository) GetBalance(ctx context.Context, courseID, studentID string) (models.CourseBalance, error) {
+	var paid, burned int
 	err := r.conn.QueryRow(ctx,
-		`SELECT
-			COALESCE((SELECT SUM(lessons_count) FROM payments WHERE course_id = $1), 0),
-			COUNT(id) FILTER (WHERE status IN ('completed', 'missed'))
-		FROM lessons
-		WHERE course_id = $1`,
-		courseID,
-	).Scan(&paid, &completed)
+		`WITH sc AS (
+		     SELECT * FROM (`+studentCoursePairs+`) pr
+		      WHERE pr.course_id = $1 AND pr.student_id = $2
+		 )
+		 SELECT
+		     COALESCE((SELECT SUM(lessons_count) FROM payments
+		                WHERE course_id = $1 AND student_id = $2), 0),
+		     (SELECT count(*) FROM lessons l, sc
+		       WHERE l.course_id = sc.course_id
+		         AND l.status IN ('completed', 'missed')
+		         AND `+lessonInParticipation+`)`,
+		courseID, studentID,
+	).Scan(&paid, &burned)
 	if err != nil {
 		return models.CourseBalance{}, err
 	}
 	return models.CourseBalance{
 		LessonsPaid:      paid,
-		LessonsCompleted: completed,
-		LessonsRemaining: paid - completed,
+		LessonsCompleted: burned,
+		LessonsRemaining: paid - burned,
 	}, nil
 }
 
@@ -286,11 +329,14 @@ func (r *paymentRepository) Delete(ctx context.Context, id string, tutorID strin
 // GetMonthlyExpected — сумма платежей, ожидаемых к поступлению в текущем месяце.
 //
 // Ученик платит за цикл на его первом уроке, поэтому ожидаемое поступление
-// привязано к дате первого урока каждого ещё не оплаченного цикла. Циклы
-// нарезаются так же, как в computeCyclePositions: уроки курса ранжируются по
-// scheduled_at, платежи покрывают ранги нарастающим итогом по lessons_count.
+// привязано к дате первого урока каждого ещё не оплаченного цикла. Считается
+// по паре «курс + ученик» (спека, п. 6.6): пакет группы — цена за одного
+// участника, и ждут его от каждого. Уроки пары ранжируются по scheduled_at в
+// периодах участия ученика — тем же lessonInParticipation, что и сгорание в
+// балансе, — а его платежи покрывают ранги нарастающим итогом по lessons_count.
 // Урок с rank = paid_through+1 открывает первый неоплаченный цикл, дальше
-// старты идут с шагом lessons_per_cycle.
+// старты идут с шагом lessons_per_cycle. Ушедшие и замороженные в прогноз не
+// попадают сами: их уроков в периодах участия нет.
 //
 // Просроченные ожидания (урок цикла уже прошёл, а платежа нет) остаются в сумме:
 // деньги ждали в этом месяце и не пришли — долг не должен исчезать из метрики.
@@ -298,32 +344,36 @@ func (r *paymentRepository) Delete(ctx context.Context, id string, tutorID strin
 // ponytail: будущие циклы нарезаются по плановому lessons_per_cycle, тогда как
 // прошлые — по фактическим lessons_count платежей. Если ученик регулярно платит
 // нестандартными пачками, даты прогноза поплывут. Апгрейд — медиана lessons_count
-// последних платежей курса; делать, только если реально разъедется.
+// последних платежей пары; делать, только если реально разъедется.
 func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error) {
 	var total float64
 	err := r.conn.QueryRow(ctx,
-		`WITH course_paid AS (
-		     SELECT c.id, c.price_per_cycle, c.lessons_per_cycle,
-		            COALESCE(SUM(p.lessons_count), 0) AS paid_through
-		     FROM courses c
-		     LEFT JOIN payments p ON p.course_id = c.id
-		     WHERE c.tutor_id = $1 AND c.is_active
-		     GROUP BY c.id
+		`WITH sc AS (
+		     SELECT pr.course_id, pr.student_id, pr.enrolled_at, pr.left_at,
+		            c.price_per_cycle, c.lessons_per_cycle,
+		            COALESCE((SELECT SUM(p.lessons_count) FROM payments p
+		                       WHERE p.course_id = pr.course_id
+		                         AND p.student_id = pr.student_id), 0) AS paid_through
+		       FROM (`+studentCoursePairs+`) pr
+		       JOIN courses c ON c.id = pr.course_id
+		      WHERE c.tutor_id = $1 AND c.is_active
 		 ),
 		 ranked AS (
-		     SELECT l.course_id, l.scheduled_at,
-		            ROW_NUMBER() OVER (PARTITION BY l.course_id ORDER BY l.scheduled_at) AS rank
-		     FROM lessons l
-		     JOIN course_paid cp ON cp.id = l.course_id
-		     WHERE l.status != 'cancelled'
+		     SELECT sc.course_id, sc.student_id, l.scheduled_at,
+		            ROW_NUMBER() OVER (PARTITION BY sc.course_id, sc.student_id
+		                               ORDER BY l.scheduled_at) AS rank
+		       FROM sc
+		       JOIN lessons l ON l.course_id = sc.course_id
+		      WHERE l.status != 'cancelled'
+		        AND `+lessonInParticipation+`
 		 )
-		 SELECT COALESCE(SUM(cp.price_per_cycle), 0)
-		 FROM ranked r
-		 JOIN course_paid cp ON cp.id = r.course_id
-		 WHERE r.rank > cp.paid_through
-		   AND (r.rank - cp.paid_through - 1) % cp.lessons_per_cycle = 0
-		   AND r.scheduled_at >= date_trunc('month', NOW())
-		   AND r.scheduled_at <  date_trunc('month', NOW()) + interval '1 month'`,
+		 SELECT COALESCE(SUM(sc.price_per_cycle), 0)
+		   FROM ranked r
+		   JOIN sc ON sc.course_id = r.course_id AND sc.student_id = r.student_id
+		  WHERE r.rank > sc.paid_through
+		    AND (r.rank - sc.paid_through - 1) % sc.lessons_per_cycle = 0
+		    AND r.scheduled_at >= date_trunc('month', NOW())
+		    AND r.scheduled_at <  date_trunc('month', NOW()) + interval '1 month'`,
 		tutorID,
 	).Scan(&total)
 	return total, err

@@ -160,11 +160,14 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 		return
 	}
 	courseID := c.Query("course_id")
-	if courseID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id is required"})
+	studentID := c.Query("student_id")
+	// Баланс — свойство пары «курс + ученик»: у группы без ученика он ничего не
+	// значит (спека, п. 6.4).
+	if courseID == "" || studentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "course_id and student_id are required"})
 		return
 	}
-	balance, err := h.service.GetBalance(c.Request.Context(), courseID, tutorID)
+	balance, err := h.service.GetBalance(c.Request.Context(), courseID, studentID, tutorID)
 	if err != nil {
 		h.log.Error("Failed to get balance", slog.String("error", err.Error()))
 		handleServiceError(c, err)
