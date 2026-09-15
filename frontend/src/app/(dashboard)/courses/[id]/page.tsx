@@ -65,7 +65,7 @@ export default function CourseDetailPage() {
   const router  = useRouter()
 
   const { data: course, isLoading } = useCourse(id)
-  const { data: balance }           = useCourseBalance(id)
+  const { data: balance }           = useCourseBalance(id, course?.student_id)
   const {
     data: enrollments = [], isPending: enrollmentsPending,
     isError: enrollmentsError, refetch: refetchEnrollments,
@@ -211,10 +211,15 @@ export default function CourseDetailPage() {
   }
 
   async function handlePaymentSubmit(values: PaymentFormValues) {
+    // Индивидуальный курс — адресат его ученик; группа — участник, выбранный в
+    // форме (без него форма не отправит).
+    const studentId = course?.student_id ?? values.student_id
+    if (!studentId) return
     if (editingPayment) {
       await updatePayment.mutateAsync({
         id:   editingPayment.id,
         data: {
+          student_id:    studentId,
           amount:        values.amount,
           lessons_count: values.lessons_count,
           paid_at:       values.paid_at,
@@ -224,6 +229,7 @@ export default function CourseDetailPage() {
     } else {
       await createPayment.mutateAsync({
         course_id:     id,
+        student_id:    studentId,
         amount:        values.amount,
         lessons_count: values.lessons_count,
         paid_at:       values.paid_at,
@@ -303,7 +309,7 @@ export default function CourseDetailPage() {
 
       <div className="grid gap-4 md:grid-cols-2 mt-4">
         {/* Info */}
-        <div className="border rounded-xl bg-card p-4">
+        <div className={`border rounded-xl bg-card p-4 ${isGroup ? 'md:col-span-2' : ''}`}>
           <h2 className="text-sm font-semibold mb-2">Информация</h2>
           <Row label="Предмет" value={course.subject} />
           <Row label="Тип" value={<CourseTypeBadge isGroup={isGroup} />} />
@@ -315,28 +321,30 @@ export default function CourseDetailPage() {
           )}
         </div>
 
-        {/* Balance */}
-        <div className="border rounded-xl bg-card p-4">
-          <h2 className="text-sm font-semibold mb-3">Баланс уроков</h2>
-          {balance ? (
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-2xl font-bold">{balance.lessons_paid}</p>
-                <p className="text-xs text-muted-foreground mt-1">Оплачено</p>
+        {/* Баланс курса целиком у группы ничего не значит (спека 2026-09-06, п. 1.4): он у каждого участника свой — вкладка «Долги» на /payments. */}
+        {!isGroup && (
+          <div className="border rounded-xl bg-card p-4">
+            <h2 className="text-sm font-semibold mb-3">Баланс уроков</h2>
+            {balance ? (
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-2xl font-bold">{balance.lessons_paid}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Оплачено</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{balance.lessons_completed}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Проведено</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-primary">{balance.lessons_remaining}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Осталось</p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{balance.lessons_completed}</p>
-                <p className="text-xs text-muted-foreground mt-1">Проведено</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-primary">{balance.lessons_remaining}</p>
-                <p className="text-xs text-muted-foreground mt-1">Осталось</p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Загрузка...</p>
-          )}
-        </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Загрузка...</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Payments */}
@@ -374,6 +382,14 @@ export default function CourseDetailPage() {
                   {new Date(p.paid_at).toLocaleDateString('ru-RU')}
                 </span>
                 <span className="font-medium">{p.amount.toLocaleString()} ₸</span>
+                {isGroup && (
+                  <span
+                    className="truncate"
+                    style={{ color: p.student_id ? 'var(--muted-foreground)' : 'var(--warning)' }}
+                  >
+                    {p.student_name ?? 'без адресата'}
+                  </span>
+                )}
                 <span className="text-muted-foreground">{p.lessons_count} ур.</span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                   <Button
@@ -574,12 +590,21 @@ export default function CourseDetailPage() {
         onSubmit={handlePaymentSubmit}
         pricePerLesson={course ? course.price_per_cycle / course.lessons_per_cycle : 0}
         lessonsPerCycle={course?.lessons_per_cycle ?? 0}
+        // ponytail: адресата выбирают из текущего состава — ушедшего из группы
+        // легаси-платежу не назначить без повторной записи. Прод: ушедших нет.
+        students={isGroup
+          ? enrollments.map((e) => ({
+              id:   e.student_id,
+              name: e.student_last_name ? `${e.student_first_name} ${e.student_last_name}` : e.student_first_name,
+            }))
+          : undefined}
         initialValues={
           editingPayment
             ? {
                 amount:        editingPayment.amount,
                 lessons_count: editingPayment.lessons_count,
                 paid_at:       new Date(editingPayment.paid_at).toISOString().slice(0, 10),
+                student_id:    editingPayment.student_id ?? undefined,
               }
             : undefined
         }

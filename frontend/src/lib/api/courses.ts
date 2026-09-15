@@ -32,8 +32,9 @@ export const coursesApi = {
   update: (id: string, data: Omit<CourseInput, 'student_id'>) =>
     api.put<Course>(`/courses/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/courses/${id}`).then(() => id),
-  getBalance: (id: string) =>
-    api.get<CourseBalance>(`/payments/balance?course_id=${id}`).then((r) => r.data),
+  getBalance: (id: string, studentId: string) =>
+    api.get<CourseBalance>('/payments/balance', { params: { course_id: id, student_id: studentId } })
+      .then((r) => r.data),
   getEnrollments: (id: string) =>
     api.get<Enrollment[]>(`/courses/${id}/enrollments`).then((r) => r.data ?? []),
   addEnrollment: (courseId: string, studentId: string) =>

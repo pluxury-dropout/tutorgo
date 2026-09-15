@@ -109,17 +109,43 @@ export interface StudentCourse {
 export interface Payment {
   id: string
   course_id: string
+  /** null — легаси-платёж группы без адресата (спека 2026-09-06, п. 3.4). */
+  student_id: string | null
   amount: number
   lessons_count: number
   paid_at: string
   /** Только в списках по репетитору (/payments, /payments/recent). */
   subject?: string
-  /** Там же; отсутствует у групповых курсов. */
+  /** Имя адресата; null у платежа без адресата. */
   student_name?: string | null
 }
 
-export interface PaymentBalance {
-  total: number
+/** Долг по одному предмету. */
+export interface DebtByCourse {
+  course_id: string
+  subject: string
+  lessons_owed: number
+  amount_owed: number
+}
+
+/** Должник: долг по всем его курсам одной строкой (спека 2026-09-06, п. 6.5). */
+export interface StudentDebt {
+  student_id: string
+  student_name: string
+  lessons_owed: number
+  amount_owed: number
+  next_lesson_at: string | null
+  courses: DebtByCourse[]
+}
+
+/** Заморозка ученика с даты по дату включительно (спека 2026-09-06, п. 6.9). */
+export interface StudentPause {
+  id: string
+  student_id: string
+  starts_on: string
+  ends_on: string
+  reason: string | null
+  created_at: string
 }
 
 export interface Enrollment {

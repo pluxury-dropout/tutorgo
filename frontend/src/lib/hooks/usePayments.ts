@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query'
 import { paymentsApi, PaymentListParams, PaymentUpdateInput } from '@/lib/api/payments'
 import { courseKeys } from '@/lib/hooks/useCourses'
 
@@ -8,27 +8,31 @@ export const paymentKeys = {
   recent:          ['payments', 'recent'] as const,
   monthlyIncome:   ['payments', 'monthly-income'] as const,
   monthlyExpected: ['payments', 'monthly-expected'] as const,
+  debts:           ['payments', 'debts'] as const,
+}
+
+// Любой платёж меняет всё денежное разом: историю, доход, прогноз и долги.
+// Все эти ключи начинаются с ['payments'] — сбрасываем префиксом, плюс балансы
+// затронутых курсов (у них свой корень ['courses']).
+function invalidateMoney(qc: QueryClient, courseIds: string[]) {
+  qc.invalidateQueries({ queryKey: ['payments'] })
+  for (const id of courseIds) qc.invalidateQueries({ queryKey: courseKeys.balance(id) })
 }
 
 export function useMonthlyIncome() {
-  return useQuery({
-    queryKey: paymentKeys.monthlyIncome,
-    queryFn:  paymentsApi.monthlyIncome,
-  })
+  return useQuery({ queryKey: paymentKeys.monthlyIncome, queryFn: paymentsApi.monthlyIncome })
 }
 
 export function useMonthlyExpected() {
-  return useQuery({
-    queryKey: paymentKeys.monthlyExpected,
-    queryFn:  paymentsApi.monthlyExpected,
-  })
+  return useQuery({ queryKey: paymentKeys.monthlyExpected, queryFn: paymentsApi.monthlyExpected })
 }
 
 export function useRecentPayments() {
-  return useQuery({
-    queryKey: paymentKeys.recent,
-    queryFn:  paymentsApi.listRecent,
-  })
+  return useQuery({ queryKey: paymentKeys.recent, queryFn: paymentsApi.listRecent })
+}
+
+export function useDebts() {
+  return useQuery({ queryKey: paymentKeys.debts, queryFn: paymentsApi.debts })
 }
 
 export function usePayments(courseId: string) {
@@ -43,13 +47,15 @@ export function useCreatePayment(courseId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: paymentsApi.create,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: paymentKeys.byCourse(courseId) })
-      qc.invalidateQueries({ queryKey: courseKeys.balance(courseId) })
-      qc.invalidateQueries({ queryKey: ['payments', 'list'] })
-      qc.invalidateQueries({ queryKey: paymentKeys.recent })
-      qc.invalidateQueries({ queryKey: paymentKeys.monthlyIncome })
-    },
+    onSuccess:  () => invalidateMoney(qc, [courseId]),
+  })
+}
+
+export function useCreateBulkPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: paymentsApi.createBulk,
+    onSuccess:  (_data, input) => invalidateMoney(qc, input.items.map((i) => i.course_id)),
   })
 }
 
@@ -58,15 +64,7 @@ export function useUpdatePayment(courseId?: string) {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: PaymentUpdateInput }) =>
       paymentsApi.update(id, data),
-    onSuccess: () => {
-      if (courseId) {
-        qc.invalidateQueries({ queryKey: paymentKeys.byCourse(courseId) })
-        qc.invalidateQueries({ queryKey: courseKeys.balance(courseId) })
-      }
-      qc.invalidateQueries({ queryKey: ['payments', 'list'] })
-      qc.invalidateQueries({ queryKey: paymentKeys.recent })
-      qc.invalidateQueries({ queryKey: paymentKeys.monthlyIncome })
-    },
+    onSuccess: () => invalidateMoney(qc, courseId ? [courseId] : []),
   })
 }
 
@@ -74,15 +72,7 @@ export function useDeletePayment(courseId?: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: paymentsApi.delete,
-    onSuccess: () => {
-      if (courseId) {
-        qc.invalidateQueries({ queryKey: paymentKeys.byCourse(courseId) })
-        qc.invalidateQueries({ queryKey: courseKeys.balance(courseId) })
-      }
-      qc.invalidateQueries({ queryKey: ['payments', 'list'] })
-      qc.invalidateQueries({ queryKey: paymentKeys.recent })
-      qc.invalidateQueries({ queryKey: paymentKeys.monthlyIncome })
-    },
+    onSuccess:  () => invalidateMoney(qc, courseId ? [courseId] : []),
   })
 }
 

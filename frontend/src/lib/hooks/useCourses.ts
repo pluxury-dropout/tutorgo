@@ -25,8 +25,15 @@ export function useCourse(id: string) {
   return useQuery({ queryKey: courseKeys.detail(id), queryFn: () => coursesApi.get(id) })
 }
 
-export function useCourseBalance(id: string) {
-  return useQuery({ queryKey: courseKeys.balance(id), queryFn: () => coursesApi.getBalance(id) })
+// Баланс — свойство пары «курс + ученик» (спека 2026-09-06, п. 6.4): у группы
+// без выбранного ученика его нет, и запрос не уходит. Ключ начинается с
+// courseKeys.balance(id) — инвалидация по курсу сбрасывает балансы всех учеников.
+export function useCourseBalance(id: string, studentId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...courseKeys.balance(id), studentId],
+    queryFn:  () => coursesApi.getBalance(id, studentId as string),
+    enabled:  !!id && !!studentId,
+  })
 }
 
 export function useCourseEnrollments(id: string) {

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface PaymentFormProps {
   open:             boolean
@@ -21,6 +22,9 @@ interface PaymentFormProps {
   lessonsPerCycle?: number
   initialValues?:   PaymentFormValues
   paymentId?:       string
+  /** Участники группы: форма спрашивает, кто заплатил. Индивидуальному курсу не
+   *  передаётся — адресат и так известен (спека 2026-09-06, п. 6.2). */
+  students?:        { id: string; name: string }[]
 }
 
 export function PaymentForm({
@@ -31,6 +35,7 @@ export function PaymentForm({
   lessonsPerCycle = 0,
   initialValues,
   paymentId,
+  students,
 }: PaymentFormProps) {
   const isEdit = !!paymentId
 
@@ -40,6 +45,7 @@ export function PaymentForm({
     reset,
     watch,
     setValue,
+    setError,
     formState: { errors, isSubmitting, dirtyFields },
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
@@ -48,6 +54,7 @@ export function PaymentForm({
 
   const amount       = watch('amount')
   const lessonsCount = watch('lessons_count')
+  const studentId    = watch('student_id')
 
   useEffect(() => {
     if (open) {
@@ -63,6 +70,7 @@ export function PaymentForm({
           paid_at:       new Date().toISOString().slice(0, 10),
           lessons_count: lessons,
           amount:        lessons && pricePerLesson > 0 ? Math.round(lessons * pricePerLesson) : undefined,
+          student_id:    undefined,
         })
       }
     }
@@ -88,6 +96,10 @@ export function PaymentForm({
     Math.round(impliedPrice) !== Math.round(pricePerLesson)
 
   async function submit(values: PaymentFormValues) {
+    if (students && !values.student_id) {
+      setError('student_id', { message: 'Выберите ученика' })
+      return
+    }
     try {
       await onSubmit(values)
       onClose()
@@ -105,6 +117,28 @@ export function PaymentForm({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
+          {students && (
+            <div className="space-y-1.5">
+              <Label>Ученик</Label>
+              <Select
+                value={studentId ?? ''}
+                onValueChange={(v) => setValue('student_id', v || undefined, { shouldValidate: true })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Кто заплатил?" />
+                </SelectTrigger>
+                <SelectContent>
+                  {students.map((s) => (
+                    <SelectItem key={s.id} value={s.id} label={s.name}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.student_id && (
+                <p className="text-xs text-destructive">{errors.student_id.message}</p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="lessons_count">
               Уроков оплачено{' '}
