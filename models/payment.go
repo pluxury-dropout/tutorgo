@@ -36,3 +36,33 @@ type UpdatePaymentRequest struct {
 	LessonsCount int       `json:"lessons_count" validate:"required,gt=0"`
 	PaidAt       time.Time `json:"paid_at"       validate:"required"`
 }
+
+// CourseDebt — долг ученика по одному курсу, строка выборки долгов. Наружу не
+// отдаётся: сервис складывает строки в StudentDebt.
+type CourseDebt struct {
+	StudentID    string
+	StudentName  string
+	CourseID     string
+	Subject      string
+	LessonsOwed  int
+	LessonPrice  float64 // пакет / N, округлено до тенге
+	NextLessonAt *time.Time
+}
+
+// DebtByCourse — разбивка долга по предмету.
+type DebtByCourse struct {
+	CourseID    string  `json:"course_id"`
+	Subject     string  `json:"subject"`
+	LessonsOwed int     `json:"lessons_owed"`
+	AmountOwed  float64 `json:"amount_owed"`
+}
+
+// StudentDebt — должник: долг по всем его курсам одной строкой (спека, п. 6.5).
+type StudentDebt struct {
+	StudentID    string         `json:"student_id"`
+	StudentName  string         `json:"student_name"`
+	LessonsOwed  int            `json:"lessons_owed"`
+	AmountOwed   float64        `json:"amount_owed"`
+	NextLessonAt *time.Time     `json:"next_lesson_at"` // когда напомнить
+	Courses      []DebtByCourse `json:"courses"`
+}

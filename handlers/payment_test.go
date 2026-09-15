@@ -24,6 +24,7 @@ func newPaymentRouter(svc *mockPaymentService, tutorID string) *gin.Engine {
 	r.POST("/payments", h.Create)
 	r.GET("/payments/balance", h.GetBalance)
 	r.GET("/payments/monthly-expected", h.GetMonthlyExpected)
+	r.GET("/payments/debts", h.GetDebts)
 	return r
 }
 
@@ -220,5 +221,24 @@ func TestPaymentGetMonthlyExpected_ServiceError(t *testing.T) {
 	w := makeRequest(t, r, http.MethodGet, "/payments/monthly-expected", nil)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	svc.AssertExpectations(t)
+}
+
+// GetDebts
+
+func TestPaymentGetDebts_Success(t *testing.T) {
+	svc := new(mockPaymentService)
+	r := newPaymentRouter(svc, testTutorID)
+
+	expected := []models.StudentDebt{{StudentID: testStudentID, StudentName: "Иван", LessonsOwed: 2, AmountOwed: 10000,
+		Courses: []models.DebtByCourse{{CourseID: testCourseID, Subject: "Математика", LessonsOwed: 2, AmountOwed: 10000}}}}
+	svc.On("GetDebts", mock.Anything, testTutorID).Return(expected, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/payments/debts", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []models.StudentDebt
+	decodeJSON(t, w, &got)
+	assert.Equal(t, expected, got)
 	svc.AssertExpectations(t)
 }

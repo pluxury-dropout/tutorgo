@@ -175,3 +175,19 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, balance)
 }
+
+// GetDebts — «кто мне должен» (спека, п. 6.5).
+func (h *PaymentHandler) GetDebts(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	debts, err := h.service.GetDebts(c.Request.Context(), tutorID)
+	if err != nil {
+		h.log.Error("Failed to get debts", slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, debts)
+}

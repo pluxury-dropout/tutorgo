@@ -76,6 +76,11 @@ func (m *mockPaymentRepo) GetPaymentsForCalendar(ctx context.Context, tutorID st
 	return args.Get(0).(map[string][]models.Payment), args.Error(1)
 }
 
+func (m *mockPaymentRepo) GetDebts(ctx context.Context, tutorID string) ([]models.CourseDebt, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]models.CourseDebt), args.Error(1)
+}
+
 var (
 	tutorID  = "tutor-uuid-1"
 	courseID = "course-uuid-1"
@@ -364,4 +369,52 @@ func TestPaymentGetMonthlyExpected_RepoError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 0.0, result)
 	payRepo.AssertExpectations(t)
+}
+
+// GetDebts
+
+// Строки курсов складываются в строку на ученика: сумма — уроки × цена урока
+// своего курса, напоминание — к ближайшему уроку, порядок — по сумме долга.
+func TestPaymentGetDebts_GroupsByStudentAndSortsByAmount(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	svc := newPaymentSvc(payRepo, new(mockCourseRepo), new(mockEnrollmentRepo))
+
+	soon := time.Date(2026, time.September, 20, 10, 0, 0, 0, time.UTC)
+	later := soon.Add(48 * time.Hour)
+	payRepo.On("GetDebts", mock.Anything, tutorID).Return([]models.CourseDebt{
+		{StudentID: "s1", StudentName: "Айгерим", CourseID: "math", Subject: "Математика", LessonsOwed: 2, LessonPrice: 5000, NextLessonAt: &later},
+		{StudentID: "s1", StudentName: "Айгерим", CourseID: "phys", Subject: "Физика", LessonsOwed: 1, LessonPrice: 6000, NextLessonAt: &soon},
+		{StudentID: "s2", StudentName: "Бекзат", CourseID: "eng", Subject: "Английский", LessonsOwed: 5, LessonPrice: 7083},
+	}, nil)
+
+	debts, err := svc.GetDebts(context.Background(), tutorID)
+
+	assert.NoError(t, err)
+	if assert.Len(t, debts, 2) {
+		assert.Equal(t, "s2", debts[0].StudentID) // 35 415 ₸ больше 16 000 ₸
+		assert.Equal(t, 35415.0, debts[0].AmountOwed)
+		assert.Nil(t, debts[0].NextLessonAt)
+
+		assert.Equal(t, "s1", debts[1].StudentID)
+		assert.Equal(t, 3, debts[1].LessonsOwed)
+		assert.Equal(t, 16000.0, debts[1].AmountOwed)
+		assert.Equal(t, soon, *debts[1].NextLessonAt)
+		assert.Equal(t, []models.DebtByCourse{
+			{CourseID: "math", Subject: "Математика", LessonsOwed: 2, AmountOwed: 10000},
+			{CourseID: "phys", Subject: "Физика", LessonsOwed: 1, AmountOwed: 6000},
+		}, debts[1].Courses)
+	}
+}
+
+// Никто не должен — пустой список, а не null: фронт рисует пустое состояние.
+func TestPaymentGetDebts_EmptyIsNotNil(t *testing.T) {
+	payRepo := new(mockPaymentRepo)
+	svc := newPaymentSvc(payRepo, new(mockCourseRepo), new(mockEnrollmentRepo))
+	payRepo.On("GetDebts", mock.Anything, tutorID).Return([]models.CourseDebt{}, nil)
+
+	debts, err := svc.GetDebts(context.Background(), tutorID)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, debts)
+	assert.Empty(t, debts)
 }

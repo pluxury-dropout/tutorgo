@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"tutorgo/models"
 	"tutorgo/repository"
 )
@@ -17,6 +18,7 @@ type PaymentService interface {
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	GetDebts(ctx context.Context, tutorID string) ([]models.StudentDebt, error)
 }
 
 type paymentService struct {
@@ -127,4 +129,54 @@ func (s *paymentService) Delete(ctx context.Context, id string, tutorID string) 
 	}
 	globalCalendarCache.Invalidate(tutorID)
 	return nil
+}
+
+// GetDebts складывает долги курсов в строку на ученика (спека, п. 6.5): сумма —
+// уроки курса × цена урока своего курса, напомнить — к ближайшему уроку.
+// Порядок — по сумме долга, при равенстве по урокам и имени, чтобы список не
+// прыгал между запросами.
+func (s *paymentService) GetDebts(ctx context.Context, tutorID string) ([]models.StudentDebt, error) {
+	rows, err := s.repo.GetDebts(ctx, tutorID)
+	if err != nil {
+		return nil, err
+	}
+
+	debts := []models.StudentDebt{}
+	index := map[string]int{}
+	for _, row := range rows {
+		i, ok := index[row.StudentID]
+		if !ok {
+			i = len(debts)
+			index[row.StudentID] = i
+			debts = append(debts, models.StudentDebt{
+				StudentID:   row.StudentID,
+				StudentName: row.StudentName,
+				Courses:     []models.DebtByCourse{},
+			})
+		}
+		d := &debts[i]
+		amount := float64(row.LessonsOwed) * row.LessonPrice
+		d.LessonsOwed += row.LessonsOwed
+		d.AmountOwed += amount
+		d.Courses = append(d.Courses, models.DebtByCourse{
+			CourseID:    row.CourseID,
+			Subject:     row.Subject,
+			LessonsOwed: row.LessonsOwed,
+			AmountOwed:  amount,
+		})
+		if row.NextLessonAt != nil && (d.NextLessonAt == nil || row.NextLessonAt.Before(*d.NextLessonAt)) {
+			d.NextLessonAt = row.NextLessonAt
+		}
+	}
+
+	sort.SliceStable(debts, func(a, b int) bool {
+		if debts[a].AmountOwed != debts[b].AmountOwed {
+			return debts[a].AmountOwed > debts[b].AmountOwed
+		}
+		if debts[a].LessonsOwed != debts[b].LessonsOwed {
+			return debts[a].LessonsOwed > debts[b].LessonsOwed
+		}
+		return debts[a].StudentName < debts[b].StudentName
+	})
+	return debts, nil
 }

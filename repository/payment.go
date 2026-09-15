@@ -22,6 +22,7 @@ type PaymentRepository interface {
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
 	Delete(ctx context.Context, id string, tutorID string) error
+	GetDebts(ctx context.Context, tutorID string) ([]models.CourseDebt, error)
 }
 
 type paymentRepository struct {
@@ -377,4 +378,64 @@ func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID stri
 		tutorID,
 	).Scan(&total)
 	return total, err
+}
+
+// GetDebts — пары «курс + ученик» репетитора, где сгорело больше, чем оплачено
+// (спека, п. 6.5). Курсы — все, включая архивные; ученики — все, включая
+// ушедших из группы и архивных: архивация закрывает расписание, но не прощает
+// долг. Расти долг ушедшего не может — сгорание обрезано по left_at.
+// Погасивший уходит из выборки сам: остаток перестаёт быть положительным.
+//
+// Цена урока — пакет / N до тенге. У пакетных тьюторов сумма поэтому
+// приблизительна (2 урока из 85 000/12 — 14 167 ₸, которых никто не назначал),
+// долг в уроках точен всегда.
+func (r *paymentRepository) GetDebts(ctx context.Context, tutorID string) ([]models.CourseDebt, error) {
+	rows, err := r.conn.Query(ctx,
+		`WITH sc AS (
+		     SELECT pr.course_id, pr.student_id, pr.enrolled_at, pr.left_at,
+		            c.subject, c.price_per_cycle, c.lessons_per_cycle
+		       FROM (`+studentCoursePairs+`) pr
+		       JOIN courses c ON c.id = pr.course_id
+		      WHERE c.tutor_id = $1
+		 ),
+		 owed AS (
+		     SELECT sc.student_id, sc.course_id, sc.subject,
+		            sc.price_per_cycle, sc.lessons_per_cycle,
+		            (SELECT count(*) FROM lessons l
+		              WHERE l.course_id = sc.course_id
+		                AND l.status IN ('completed', 'missed')
+		                AND `+lessonInParticipation+`)
+		          - COALESCE((SELECT SUM(p.lessons_count) FROM payments p
+		                       WHERE p.course_id = sc.course_id
+		                         AND p.student_id = sc.student_id), 0) AS lessons_owed,
+		            (SELECT min(l.scheduled_at) FROM lessons l
+		              WHERE l.course_id = sc.course_id
+		                AND l.status = 'scheduled'
+		                AND l.scheduled_at > NOW()
+		                AND `+lessonInParticipation+`) AS next_lesson_at
+		       FROM sc
+		 )
+		 SELECT o.student_id, TRIM(s.first_name || ' ' || COALESCE(s.last_name, '')),
+		        o.course_id, o.subject, o.lessons_owed::int,
+		        ROUND(o.price_per_cycle / o.lessons_per_cycle), o.next_lesson_at
+		   FROM owed o
+		   JOIN students s ON s.id = o.student_id
+		  WHERE o.lessons_owed > 0
+		  ORDER BY o.student_id, o.subject`,
+		tutorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	debts := []models.CourseDebt{}
+	for rows.Next() {
+		var d models.CourseDebt
+		if err := rows.Scan(&d.StudentID, &d.StudentName, &d.CourseID, &d.Subject,
+			&d.LessonsOwed, &d.LessonPrice, &d.NextLessonAt); err != nil {
+			return nil, err
+		}
+		debts = append(debts, d)
+	}
+	return debts, rows.Err()
 }
