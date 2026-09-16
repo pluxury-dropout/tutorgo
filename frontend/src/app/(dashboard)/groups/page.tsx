@@ -107,7 +107,7 @@ function GroupsPageInner() {
   function openEdit(c: Course) { setEditing(c); setFormOpen(true) }
 
   async function handleSubmit(values: CourseFormValues) {
-    const { type, student_id, student_ids, started_at, ended_at, ...rest } = values
+    const { student_ids, started_at, ended_at, ...rest } = values
     const payload = {
       ...rest,
       started_at: `${started_at}T00:00:00Z`,
@@ -119,10 +119,7 @@ function GroupsPageInner() {
       return
     }
 
-    const course = await createCourse.mutateAsync({
-      ...payload,
-      student_id: type === 'individual' && student_id ? student_id : undefined,
-    })
+    const course = await createCourse.mutateAsync(payload)
     if (student_ids && student_ids.length > 0) {
       try {
         await addEnrollments.mutateAsync({ courseId: course.id, studentIds: student_ids })
@@ -359,7 +356,6 @@ function GroupsPageInner() {
         onClose={() => setFormOpen(false)}
         onSubmit={handleSubmit}
         initial={editing}
-        mode="group"
       />
     </div>
   )

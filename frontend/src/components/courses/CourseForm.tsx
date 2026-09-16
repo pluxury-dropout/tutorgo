@@ -21,40 +21,31 @@ interface CourseFormProps {
   onClose: () => void
   onSubmit: (data: CourseFormValues) => Promise<void>
   initial?: Course
-  /** Задаётся точкой входа («Добавить курс» / «Создать группу»), а не вопросом
-   *  пользователю: выбор между student_id и course_enrollments — деталь схемы. */
-  mode?: 'individual' | 'group'
 }
 
-export function CourseForm({ open, onClose, onSubmit, initial, mode = 'individual' }: CourseFormProps) {
-  const [individual, setIndividual] = useState<Student | null>(null)
-  const [picked, setPicked]         = useState<Student[]>([])
+export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps) {
+  const [picked, setPicked] = useState<Student[]>([])
 
   const {
     register,
     handleSubmit,
     reset,
     watch,
-    setValue,
     control,
     formState: { errors, isSubmitting },
   } = useForm<CourseFormValues>({
     resolver: zodResolver(courseSchema),
-    defaultValues: { type: mode, subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' },
+    defaultValues: { subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' },
   })
 
-  const courseType      = watch('type')
   const pricePerCycle   = watch('price_per_cycle')
   const lessonsPerCycle = watch('lessons_per_cycle')
   const pricePerLesson  = lessonsPerCycle > 0 ? pricePerCycle / lessonsPerCycle : 0
-  const selectedStudent = watch('student_id')
 
   useEffect(() => {
     setPicked([])
-    setIndividual(null)
     if (initial) {
       reset({
-        type:              initial.student_id ? 'individual' : 'group',
         student_id:        initial.student_id ?? undefined,
         subject:           initial.subject,
         price_per_cycle:   initial.price_per_cycle,
@@ -63,9 +54,9 @@ export function CourseForm({ open, onClose, onSubmit, initial, mode = 'individua
         ended_at:          initial.ended_at?.slice(0, 10) ?? '',
       })
     } else {
-      reset({ type: mode, subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' })
+      reset({ subject: '', lessons_per_cycle: 1, started_at: '', ended_at: '' })
     }
-  }, [initial, open, mode, reset])
+  }, [initial, open, reset])
 
   function addStudent(student: Student | null) {
     if (!student || picked.some((s) => s.id === student.id)) return
@@ -86,32 +77,11 @@ export function CourseForm({ open, onClose, onSubmit, initial, mode = 'individua
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {initial ? 'Редактировать курс' : courseType === 'group' ? 'Новая группа' : 'Новый курс'}
-          </DialogTitle>
+          <DialogTitle>{initial ? 'Редактировать курс' : 'Новая группа'}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
-          {courseType === 'individual' && !initial && (
-            <div className="space-y-1.5">
-              <Label>Ученик</Label>
-              <Controller
-                name="student_id"
-                control={control}
-                render={({ field }) => (
-                  <StudentCombobox
-                    value={individual}
-                    onChange={(student) => { setIndividual(student); field.onChange(student?.id) }}
-                  />
-                )}
-              />
-              {errors.student_id && (
-                <p className="text-xs text-destructive">{errors.student_id.message}</p>
-              )}
-            </div>
-          )}
-
-          {courseType === 'group' && !initial && (
+          {!initial && (
             <div className="space-y-1.5">
               <Label>Ученики</Label>
               <StudentCombobox value={null} onChange={addStudent} placeholder="Добавить ученика" />
