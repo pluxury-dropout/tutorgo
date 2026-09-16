@@ -53,6 +53,12 @@ export default function StudentDetailPage() {
   // Один оплачиваемый курс — прежняя простая форма; разбивка — с двух и
   // больше, включая архивные/ушедшие с долгом (спека, п. 6.8, 7.0).
   const single        = payableCourses.length === 1 ? payableCourses[0] : undefined
+  // При правке платежа курс форме известен из editingPayment.course_id, а не
+  // из single — иначе при 2+ оплачиваемых курсах ни PaymentForm (single не
+  // задан), ни BulkPaymentDialog (editingPayment уже не null) не рендерятся,
+  // и «Оплата» виснет до перезагрузки страницы.
+  const editingCourse = editingPayment ? payableCourses.find((c) => c.id === editingPayment.course_id) : undefined
+  const formCourse     = editingPayment ? editingCourse : single
   const createPayment = useCreatePayment(single?.id ?? '')
   const updatePayment  = useUpdatePayment(editingPayment?.course_id, id)
   const deletePayment  = useDeletePayment(editingPayment?.course_id, id)
@@ -109,8 +115,12 @@ export default function StudentDetailPage() {
 
   async function handlePaymentDelete(p: Payment) {
     if (!confirm('Удалить оплату?')) return
-    await deletePayment.mutateAsync(p.id)
-    toast.success('Оплата удалена')
+    try {
+      await deletePayment.mutateAsync(p.id)
+      toast.success('Оплата удалена')
+    } catch {
+      toast.error('Не удалось удалить оплату')
+    }
   }
 
   async function handleLessonSubmit(values: LessonFormValues, recurrence?: RecurrenceOptions) {
@@ -343,13 +353,13 @@ export default function StudentDetailPage() {
       </Tabs>
 
       <StudentForm open={formOpen} onClose={() => setFormOpen(false)} onSubmit={handleUpdate} initial={student} />
-      {single && (
+      {formCourse && (
         <PaymentForm
           open={paymentOpen}
           onClose={() => { setPaymentOpen(false); setEditingPayment(null) }}
           onSubmit={editingPayment ? handlePaymentEdit : handleSinglePayment}
-          pricePerLesson={single.price_per_cycle / single.lessons_per_cycle}
-          lessonsPerCycle={single.lessons_per_cycle}
+          pricePerLesson={formCourse.price_per_cycle / formCourse.lessons_per_cycle}
+          lessonsPerCycle={formCourse.lessons_per_cycle}
           initialValues={editingPayment ? {
             amount: editingPayment.amount, lessons_count: editingPayment.lessons_count,
             paid_at: new Date(editingPayment.paid_at).toISOString().slice(0, 10),
