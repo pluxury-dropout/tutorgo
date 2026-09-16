@@ -229,7 +229,7 @@ export default function DashboardPage() {
                 size="sm"
                 icon={RefreshCw}
                 title="Активных циклов нет"
-                description="Цикл — пакет уроков по курсу, после которого пора брать оплату. Появится, как только пройдёт первый урок"
+                description="Цикл — пакет уроков по курсу, после которого пора брать оплату. Считается только для индивидуальных занятий — у группы он свой для каждого участника. Появится, как только пройдёт первый урок"
               />
             : currentCycles.map((cycle, i) => {
                 const complete = cycle.progress === cycle.cycle_size

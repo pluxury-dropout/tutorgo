@@ -322,7 +322,14 @@ export default function CourseDetailPage() {
         </div>
 
         {/* Баланс курса целиком у группы ничего не значит (спека 2026-09-06, п. 1.4): он у каждого участника свой — вкладка «Долги» на /payments. */}
-        {!isGroup && (
+        {isGroup ? (
+          <div className="border rounded-xl bg-card p-4">
+            <h2 className="text-sm font-semibold mb-3">Баланс уроков</h2>
+            <p className="text-sm text-muted-foreground">
+              У группы баланс — свой у каждого участника. Смотри на вкладке «Долги» в разделе Платежи.
+            </p>
+          </div>
+        ) : (
           <div className="border rounded-xl bg-card p-4">
             <h2 className="text-sm font-semibold mb-3">Баланс уроков</h2>
             {balance ? (

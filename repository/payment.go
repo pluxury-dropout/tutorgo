@@ -452,7 +452,7 @@ func (r *paymentRepository) GetMonthlyExpected(ctx context.Context, tutorID stri
 // Погасивший уходит из выборки сам: остаток перестаёт быть положительным.
 //
 // Цена урока — пакет / N до тенге. У пакетных тьюторов сумма поэтому
-// приблизительна (2 урока из 85 000/12 — 14 167 ₸, которых никто не назначал),
+// приблизительна (2 урока из 85 000/12 — 14 166 ₸, которых никто не назначал),
 // долг в уроках точен всегда.
 func (r *paymentRepository) GetDebts(ctx context.Context, tutorID string) ([]models.CourseDebt, error) {
 	rows, err := r.conn.Query(ctx,
