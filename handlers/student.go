@@ -80,6 +80,22 @@ func (h *StudentHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, student)
 }
 
+// Overview — карточка ученика одним запросом вместо шести (спека, п. 7.1).
+func (h *StudentHandler) Overview(c *gin.Context) {
+	tutorID := c.GetString("tutorID")
+	if tutorID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	overview, err := h.service.Overview(c.Request.Context(), c.Param("id"), tutorID)
+	if err != nil {
+		h.log.Error("Failed to get student overview", slog.String("error", err.Error()))
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, overview)
+}
+
 func (h *StudentHandler) Update(c *gin.Context) {
 	tutorID := c.GetString("tutorID")
 	if tutorID == "" {

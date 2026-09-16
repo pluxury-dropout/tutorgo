@@ -24,6 +24,7 @@ func newStudentRouter(svc *mockStudentService, tutorID string) *gin.Engine {
 	r.GET("/students", h.GetAll)
 	r.POST("/students", h.Create)
 	r.GET("/students/:id", h.GetByID)
+	r.GET("/students/:id/overview", h.Overview)
 	r.PUT("/students/:id", h.Update)
 	r.DELETE("/students/:id", h.Delete)
 	r.POST("/students/:id/archive", h.Archive)
@@ -169,6 +170,37 @@ func TestStudentGetByID_NotFound(t *testing.T) {
 	svc.On("GetByID", mock.Anything, testStudentID, testTutorID).Return(models.Student{}, fmt.Errorf("student: %w", service.ErrNotFound))
 
 	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID, nil)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	svc.AssertExpectations(t)
+}
+
+// Overview
+
+func TestStudentOverview_Success(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	overview := models.StudentOverview{Student: testStudent, TotalOwed: 5000}
+	svc.On("Overview", mock.Anything, testStudentID, testTutorID).Return(overview, nil)
+
+	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID+"/overview", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got models.StudentOverview
+	decodeJSON(t, w, &got)
+	assert.Equal(t, 5000.0, got.TotalOwed)
+	svc.AssertExpectations(t)
+}
+
+func TestStudentOverview_NotFound(t *testing.T) {
+	svc := new(mockStudentService)
+	r := newStudentRouter(svc, testTutorID)
+
+	svc.On("Overview", mock.Anything, testStudentID, testTutorID).
+		Return(models.StudentOverview{}, fmt.Errorf("student: %w", service.ErrNotFound))
+
+	w := makeRequest(t, r, http.MethodGet, "/students/"+testStudentID+"/overview", nil)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	svc.AssertExpectations(t)

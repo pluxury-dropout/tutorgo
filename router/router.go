@@ -217,6 +217,7 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 		auth.POST("/ics/link", icsHandler.EnsureLink)
 		auth.DELETE("/ics/link", icsHandler.RevokeLink)
 		auth.GET("/students/:id", studentHandler.GetByID)
+		auth.GET("/students/:id/overview", studentHandler.Overview)
 		auth.PUT("/students/:id", studentHandler.Update)
 		auth.DELETE("/students/:id", studentHandler.Delete)
 		auth.POST("/students/:id/archive", studentHandler.Archive)
