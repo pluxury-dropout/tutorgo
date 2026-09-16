@@ -249,9 +249,11 @@ export default function StudentDetailPage() {
           <div className="border rounded-xl bg-card p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold">Ближайший урок</h2>
-              <Button size="sm" variant="outline" onClick={() => setLessonOpen(true)}>
-                <Plus className="h-4 w-4 mr-1.5" /> Поставить урок
-              </Button>
+              {courses.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setLessonOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1.5" /> Поставить урок
+                </Button>
+              )}
             </div>
             {overview.next_lesson ? (
               <div className="flex items-center justify-between text-sm">
@@ -260,7 +262,7 @@ export default function StudentDetailPage() {
                     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
                   })} · {overview.next_lesson.subject}
                 </span>
-                <Button size="sm" onClick={() => router.push(`/lessons/${overview.next_lesson!.id}/call`)}>
+                <Button size="sm" onClick={() => window.open(`/lessons/${overview.next_lesson!.id}/call`, '_blank')}>
                   <Video className="h-4 w-4 mr-1.5" /> Войти в комнату
                 </Button>
               </div>
@@ -300,10 +302,12 @@ export default function StudentDetailPage() {
                     <span className="text-muted-foreground">{new Date(p.paid_at).toLocaleDateString('ru-RU')} · {p.subject}</span>
                     <span className="font-medium">{p.amount.toLocaleString()} ₸ · {p.lessons_count} ур.</span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button size="icon" variant="ghost" className="h-7 w-7"
-                        onClick={() => { setEditingPayment(p); setPaymentOpen(true) }}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {payableCourses.some((c) => c.id === p.course_id) && (
+                        <Button size="icon" variant="ghost" className="h-7 w-7"
+                          onClick={() => { setEditingPayment(p); setPaymentOpen(true) }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
                         onClick={() => handlePaymentDelete(p)}>
                         <Trash2 className="h-3.5 w-3.5" />
@@ -345,7 +349,7 @@ export default function StudentDetailPage() {
           <StudentLessonsTab courses={courses} />
         </TabsContent>
         <TabsContent value="payments" className="mt-4">
-          <StudentPaymentsTab courses={courses} />
+          <StudentPaymentsTab courses={courses} studentId={id} />
         </TabsContent>
         <TabsContent value="homework" className="mt-4">
           <StudentHomeworkTab courses={courses} />
@@ -383,8 +387,14 @@ export default function StudentDetailPage() {
   )
 }
 
+/** Даты паузы приходят полночью UTC — показываем в UTC, иначе на западе от
+ *  Гринвича день уехал бы на вчера. */
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'UTC' })
 
+/** Цена курса правится прямо в строке: ради одного числа гонять пользователя
+ *  на страницу курса и обратно незачем. Правится сумма пакета, а не цена урока:
+ *  пакет вроде «85 000 за 12» на уроки нацело не делится, и запись «цена урока
+ *  × N» превращала его в 84 996 от одного клика и потери фокуса. */
 function CoursePrice({ course }: { course: StudentCourseSummary }) {
   const update = useUpdateCourse(course.course_id)
   const [editing, setEditing] = useState(false)
