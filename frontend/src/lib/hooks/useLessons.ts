@@ -62,11 +62,11 @@ export function useAttendance(lessonId: string) {
   })
 }
 
-export function useCreateLesson(courseId: string) {
+export function useCreateLesson(courseId: string, studentId?: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: LessonInput) => lessonsApi.create(data),
-    onSuccess:  () => invalidateLessonViews(qc, courseId),
+    onSuccess:  () => invalidateLessonViews(qc, courseId, studentId),
   })
 }
 
