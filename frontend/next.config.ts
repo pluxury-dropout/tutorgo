@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: '/courses', destination: '/groups', permanent: false },
+    ]
+  },
   turbopack: {
     // MathJax v4 резолвит свои шрифт/химию-модули через subpath imports
     // (#default-font/*, #mhchem/*) из package.json — Node это понимает, а

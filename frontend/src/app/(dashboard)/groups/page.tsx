@@ -199,25 +199,25 @@ function GroupsPageInner() {
       </div>
 
       {tab === 'active' ? (
-        isLoading ? (
-          <div className="space-y-2">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
-            ))}
-          </div>
-        ) : coursesError ? (
-          <ErrorState what="группы" onRetry={() => refetchCourses()} />
-        ) : courses.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={search ? 'Ничего не найдено' : 'Групп пока нет'}
-            description={search
-              ? 'Попробуй другой запрос — поиск идёт по названию предмета'
-              : 'Группа — предмет и цена за одного участника. Индивидуальные занятия заводить не нужно: они появляются сами, как только ставишь ученику урок'}
-            action={!search ? { label: 'Добавить группу', onClick: openCreate } : undefined}
-          />
-        ) : (
-          <>
+        <>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : coursesError ? (
+            <ErrorState what="группы" onRetry={() => refetchCourses()} />
+          ) : courses.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={search ? 'Ничего не найдено' : 'Групп пока нет'}
+              description={search
+                ? 'Попробуй другой запрос — поиск идёт по названию предмета'
+                : 'Группа — предмет и цена за одного участника. Индивидуальные занятия заводить не нужно: они появляются сами, как только ставишь ученику урок'}
+              action={!search ? { label: 'Добавить группу', onClick: openCreate } : undefined}
+            />
+          ) : (
             <SectionCard>
               <div style={{
                 display: 'grid',
@@ -270,33 +270,33 @@ function GroupsPageInner() {
                 </div>
               ))}
             </SectionCard>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-3 px-1">
-                <span className="text-xs text-muted-foreground">Страница {page} из {totalPages}</span>
-                <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
-              </div>
-            )}
-          </>
-        )
+          )}
+          {!isLoading && !coursesError && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-3 px-1">
+              <span className="text-xs text-muted-foreground">Страница {page} из {totalPages}</span>
+              <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+            </div>
+          )}
+        </>
       ) : (
-        archivedLoading ? (
-          <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
-            ))}
-          </div>
-        ) : archivedError ? (
-          <ErrorState what="архив" onRetry={() => refetchArchived()} />
-        ) : archivedCourses.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={search ? 'Ничего не найдено' : 'Архив пуст'}
-            description={search
-              ? 'Попробуй другой запрос — поиск идёт по названию предмета'
-              : 'Сюда переезжают завершённые группы: они исчезают из расписания и списков, но история уроков и оплат сохраняется'}
-          />
-        ) : (
-          <>
+        <>
+          {archivedLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : archivedError ? (
+            <ErrorState what="архив" onRetry={() => refetchArchived()} />
+          ) : archivedCourses.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={search ? 'Ничего не найдено' : 'Архив пуст'}
+              description={search
+                ? 'Попробуй другой запрос — поиск идёт по названию предмета'
+                : 'Сюда переезжают завершённые группы: они исчезают из расписания и списков, но история уроков и оплат сохраняется'}
+            />
+          ) : (
             <SectionCard>
               <div style={{
                 display: 'grid',
@@ -341,14 +341,14 @@ function GroupsPageInner() {
                 </div>
               ))}
             </SectionCard>
-            {archivedPages > 1 && (
-              <div className="flex items-center justify-between mt-3 px-1">
-                <span className="text-xs text-muted-foreground">Страница {archivePage} из {archivedPages}</span>
-                <Pagination page={archivePage} totalPages={archivedPages} onPageChange={setArchivePage} />
-              </div>
-            )}
-          </>
-        )
+          )}
+          {!archivedLoading && !archivedError && archivedPages > 1 && (
+            <div className="flex items-center justify-between mt-3 px-1">
+              <span className="text-xs text-muted-foreground">Страница {archivePage} из {archivedPages}</span>
+              <Pagination page={archivePage} totalPages={archivedPages} onPageChange={setArchivePage} />
+            </div>
+          )}
+        </>
       )}
 
       <CourseForm

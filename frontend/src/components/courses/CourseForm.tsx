@@ -46,7 +46,6 @@ export function CourseForm({ open, onClose, onSubmit, initial }: CourseFormProps
     setPicked([])
     if (initial) {
       reset({
-        student_id:        initial.student_id ?? undefined,
         subject:           initial.subject,
         price_per_cycle:   initial.price_per_cycle,
         lessons_per_cycle: initial.lessons_per_cycle,

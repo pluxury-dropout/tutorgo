@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 export const courseSchema = z.object({
-  student_id:        z.string().optional(),
   student_ids:       z.array(z.string()).optional(),
   subject:           z.string().min(2, 'Минимум 2 символа'),
   price_per_cycle:   z

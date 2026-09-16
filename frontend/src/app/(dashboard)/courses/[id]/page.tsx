@@ -113,7 +113,7 @@ export default function CourseDetailPage() {
   const deletePayment = useDeletePayment(id)
 
   async function handleUpdateCourse(values: CourseFormValues) {
-    const { student_id: _sid, started_at, ended_at, ...rest } = values
+    const { started_at, ended_at, ...rest } = values
     await updateCourse.mutateAsync({
       ...rest,
       started_at: `${started_at}T00:00:00Z`,
