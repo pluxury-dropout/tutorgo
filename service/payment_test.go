@@ -46,6 +46,11 @@ func (m *mockPaymentRepo) GetBalance(ctx context.Context, courseID, studentID st
 	return args.Get(0).(models.CourseBalance), args.Error(1)
 }
 
+func (m *mockPaymentRepo) GetBalancesByStudent(ctx context.Context, studentID, tutorID string) (map[string]models.CourseBalance, error) {
+	args := m.Called(ctx, studentID, tutorID)
+	return args.Get(0).(map[string]models.CourseBalance), args.Error(1)
+}
+
 func (m *mockPaymentRepo) GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error) {
 	args := m.Called(ctx, tutorID)
 	return args.Get(0).(float64), args.Error(1)
