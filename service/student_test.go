@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -510,6 +511,7 @@ func TestStudentOverview_ComposesExistingData(t *testing.T) {
 	assert.Len(t, got.Courses, 1)
 	assert.Equal(t, 5, got.Courses[0].Balance.LessonsRemaining)
 	assert.Equal(t, 12000.0, got.TotalOwed)
+	assert.NotNil(t, got.Payments)       // не nil-срез — иначе JSON null ломает фронт
 	assert.Len(t, got.PayableCourses, 1) // c1 уже активен, дублировать не должен
 	repo.AssertExpectations(t)
 	payRepo.AssertExpectations(t)
@@ -545,4 +547,68 @@ func TestStudentOverview_PayableCoursesIncludeLeftCourseWithDebt(t *testing.T) {
 	assert.Empty(t, got.Courses) // на «Обзоре» его нет
 	require.Len(t, got.PayableCourses, 1)
 	assert.Equal(t, "c-left", got.PayableCourses[0].ID) // но заплатить есть чем
+}
+
+// Платежи разных курсов сортируются по убыванию даты и обрезаются до 5 —
+// без теста на это легко сломать оба правила молча (спека, п. 7.1).
+func TestStudentOverview_PaymentsSortedDescendingAndCappedAtFive(t *testing.T) {
+	repo := new(mockStudentRepo)
+	payRepo := new(mockPaymentRepo)
+	courses := new(mockCourseRepo)
+	debts := new(mockDebtsSource)
+	svc := service.NewStudentService(repo, payRepo, courses, nil, nil, debts)
+
+	studentID := "stu-1"
+	course := models.Course{ID: "c1", StudentID: &studentID, Subject: "Математика"}
+	repo.On("GetByID", mock.Anything, studentID, "tutor-1").Return(models.Student{ID: studentID}, nil)
+	courses.On("GetByStudent", mock.Anything, studentID, "tutor-1").Return([]models.Course{course}, nil)
+	payRepo.On("GetBalancesByStudent", mock.Anything, studentID, "tutor-1").Return(map[string]models.CourseBalance{}, nil)
+	debts.On("GetDebts", mock.Anything, "tutor-1").Return([]models.StudentDebt{}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, false).Return([]models.CalendarLesson{}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, true).Return([]models.CalendarLesson{}, nil)
+
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	payments := make([]models.Payment, 6)
+	for i := 0; i < 6; i++ {
+		payments[i] = models.Payment{ID: fmt.Sprintf("p%d", i), CourseID: "c1", PaidAt: base.AddDate(0, 0, i)}
+	}
+	payRepo.On("GetByStudentBatch", mock.Anything, studentID).Return(map[string][]models.Payment{"c1": payments}, nil)
+
+	got, err := svc.Overview(context.Background(), studentID, "tutor-1")
+
+	assert.NoError(t, err)
+	require.Len(t, got.Payments, 5)
+	assert.Equal(t, "p5", got.Payments[0].ID) // самый поздний первым
+	assert.Equal(t, "p1", got.Payments[4].ID) // p0 (самый ранний) обрезан
+}
+
+// Долг ищется по student_id среди всех должников тьютора, а не берётся первым
+// или последним элементом списка — иначе один ученик увидел бы чужой долг.
+func TestStudentOverview_PicksMatchingStudentFromMultipleDebts(t *testing.T) {
+	repo := new(mockStudentRepo)
+	payRepo := new(mockPaymentRepo)
+	courses := new(mockCourseRepo)
+	debts := new(mockDebtsSource)
+	svc := service.NewStudentService(repo, payRepo, courses, nil, nil, debts)
+
+	studentID := "stu-2"
+	repo.On("GetByID", mock.Anything, studentID, "tutor-1").Return(models.Student{ID: studentID}, nil)
+	courses.On("GetByStudent", mock.Anything, studentID, "tutor-1").Return([]models.Course{}, nil)
+	payRepo.On("GetBalancesByStudent", mock.Anything, studentID, "tutor-1").Return(map[string]models.CourseBalance{}, nil)
+	debts.On("GetDebts", mock.Anything, "tutor-1").Return([]models.StudentDebt{
+		{StudentID: "stu-1", AmountOwed: 99999},
+		{StudentID: studentID, AmountOwed: 7000, Courses: []models.DebtByCourse{{CourseID: "c9", AmountOwed: 7000}}},
+		{StudentID: "stu-3", AmountOwed: 1},
+	}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, false).Return([]models.CalendarLesson{}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, true).Return([]models.CalendarLesson{}, nil)
+	payRepo.On("GetByStudentBatch", mock.Anything, studentID).Return(map[string][]models.Payment{}, nil)
+	courses.On("GetByID", mock.Anything, "c9", "tutor-1").Return(models.Course{ID: "c9", Subject: "Физика"}, nil)
+
+	got, err := svc.Overview(context.Background(), studentID, "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Equal(t, 7000.0, got.TotalOwed) // не 99999 первого элемента и не 1 последнего
+	require.Len(t, got.PayableCourses, 1)
+	assert.Equal(t, "c9", got.PayableCourses[0].ID)
 }

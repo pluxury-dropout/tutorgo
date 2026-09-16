@@ -353,7 +353,7 @@ func (s *studentService) Overview(ctx context.Context, id, tutorID string) (mode
 	for _, c := range payable {
 		subjectOf[c.ID] = c.Subject
 	}
-	var payments []models.Payment
+	payments := []models.Payment{}
 	for courseID, ps := range paymentsByCourse {
 		for _, p := range ps {
 			p.Subject = subjectOf[courseID]
