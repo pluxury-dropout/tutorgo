@@ -19,6 +19,9 @@ type PaymentRepository interface {
 	GetAllByTutor(ctx context.Context, tutorID string, limit int) ([]models.Payment, error)
 	GetAllByTutorPaged(ctx context.Context, tutorID string, p models.Pagination) ([]models.Payment, int, error)
 	GetBalance(ctx context.Context, courseID, studentID string) (models.CourseBalance, error)
+	// GetBalancesByStudent — баланс сразу по всем курсам ученика (спека, п. 7.1):
+	// открытие карточки не должно бить в БД по разу на курс.
+	GetBalancesByStudent(ctx context.Context, studentID, tutorID string) (map[string]models.CourseBalance, error)
 	GetMonthlyIncome(ctx context.Context, tutorID string) (float64, error)
 	GetMonthlyExpected(ctx context.Context, tutorID string) (float64, error)
 	Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error)
@@ -360,6 +363,48 @@ func (r *paymentRepository) GetBalance(ctx context.Context, courseID, studentID 
 		LessonsCompleted: burned,
 		LessonsRemaining: paid - burned,
 	}, nil
+}
+
+// GetBalancesByStudent — то же самое, что GetBalance, но одним запросом по
+// всем парам «курс + ученик» этого тьютора (спека, п. 7.1). c.tutor_id — та же
+// защита, что в GetByStudent: studentCoursePairs сам по себе tutor_id не
+// фильтрует.
+func (r *paymentRepository) GetBalancesByStudent(ctx context.Context, studentID, tutorID string) (map[string]models.CourseBalance, error) {
+	rows, err := r.conn.Query(ctx,
+		`WITH sc AS (
+		     SELECT pr.* FROM (`+studentCoursePairs+`) pr
+		     JOIN courses c ON c.id = pr.course_id
+		     WHERE pr.student_id = $1 AND c.tutor_id = $2
+		 )
+		 SELECT sc.course_id,
+		     COALESCE((SELECT SUM(lessons_count) FROM payments
+		                WHERE course_id = sc.course_id AND student_id = $1), 0),
+		     (SELECT count(*) FROM lessons l
+		       WHERE l.course_id = sc.course_id
+		         AND l.status IN ('completed', 'missed')
+		         AND `+lessonInParticipation+`)
+		 FROM sc`,
+		studentID, tutorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	balances := map[string]models.CourseBalance{}
+	for rows.Next() {
+		var courseID string
+		var paid, burned int
+		if err := rows.Scan(&courseID, &paid, &burned); err != nil {
+			return nil, err
+		}
+		balances[courseID] = models.CourseBalance{
+			LessonsPaid:      paid,
+			LessonsCompleted: burned,
+			LessonsRemaining: paid - burned,
+		}
+	}
+	return balances, rows.Err()
 }
 
 func (r *paymentRepository) Update(ctx context.Context, id string, tutorID string, req models.UpdatePaymentRequest) (models.Payment, error) {

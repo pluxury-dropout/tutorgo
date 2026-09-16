@@ -157,3 +157,39 @@ func TestMonthlyExpected_GroupCountsEveryMember(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 25000.0, total)
 }
+
+// Один batch-запрос вместо N по числу курсов (спека, п. 7.1): математика и
+// физика ученика — разные балансы одним вызовом.
+func TestGetBalancesByStudent_ReturnsAllCoursesInOneQuery(t *testing.T) {
+	pool := testPool(t)
+	tutorID, s := seedTutorStudent(t, pool)
+	math := addIndividualCourse(t, pool, tutorID, s)
+	var physics string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`INSERT INTO courses (student_id, tutor_id, subject, price_per_cycle, lessons_per_cycle, started_at)
+		 VALUES ($1, $2, 'Физика', 6000, 1, NOW() - interval '1 month') RETURNING id`,
+		s, tutorID).Scan(&physics))
+	addLessonAt(t, pool, math, "NOW() - interval '1 day'", "completed")
+	payFor(t, pool, math, s, 8)
+	addLessonAt(t, pool, physics, "NOW() - interval '1 day'", "completed")
+
+	balances, err := repository.NewPaymentRepository(pool).GetBalancesByStudent(context.Background(), s, tutorID)
+
+	require.NoError(t, err)
+	assert.Equal(t, models.CourseBalance{LessonsPaid: 8, LessonsCompleted: 1, LessonsRemaining: 7}, balances[math])
+	assert.Equal(t, models.CourseBalance{LessonsPaid: 0, LessonsCompleted: 1, LessonsRemaining: -1}, balances[physics])
+}
+
+// Чужой тьютор не видит пару «курс + ученик» — карта пуста, а не паника или
+// чужие деньги.
+func TestGetBalancesByStudent_ScopedToTutor(t *testing.T) {
+	pool := testPool(t)
+	tutorID, s := seedTutorStudent(t, pool)
+	addIndividualCourse(t, pool, tutorID, s)
+	otherTutorID, _ := seedTutorStudent(t, pool)
+
+	balances, err := repository.NewPaymentRepository(pool).GetBalancesByStudent(context.Background(), s, otherTutorID)
+
+	require.NoError(t, err)
+	assert.Empty(t, balances)
+}
