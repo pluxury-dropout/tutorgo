@@ -37,7 +37,7 @@ export function HomeworkEditPopover({ anchor, courseId, onClose, side = 'top', a
   )
 }
 
-function HomeworkForm({ courseId, onClose }: { courseId: string; onClose: () => void }) {
+export function HomeworkForm({ courseId, onClose }: { courseId: string; onClose: () => void }) {
   const queryClient = useQueryClient()
   // null — «пользователь ещё не правил», показываем серверный текст. Так
   // ответ запроса подхватывается без эффекта-синхронизатора: он приходит
