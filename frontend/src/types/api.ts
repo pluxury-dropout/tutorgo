@@ -106,6 +106,27 @@ export interface StudentCourse {
   subject: string
 }
 
+export interface StudentCourseSummary {
+  course_id:         string
+  subject:           string
+  is_group:          boolean
+  price_per_cycle:   number
+  lessons_per_cycle: number
+  started_at:        string
+  ended_at:          string | null
+  balance:           CourseBalance
+}
+
+export interface StudentOverview {
+  student:         Student
+  courses:         StudentCourseSummary[]
+  payable_courses: Course[]
+  next_lesson:     CalendarLesson | null
+  recent_lessons:  CalendarLesson[]
+  payments:        Payment[]
+  total_owed:      number
+}
+
 export interface Payment {
   id: string
   course_id: string

@@ -1,5 +1,5 @@
 import { api } from './client'
-import { Student, PagedResponse, OnboardingStudentInput, OnboardingResult, StudentPause } from '@/types/api'
+import { Student, PagedResponse, OnboardingStudentInput, OnboardingResult, StudentPause, StudentOverview } from '@/types/api'
 
 export interface StudentInput {
   first_name: string
@@ -30,6 +30,7 @@ export const studentsApi = {
   listPaged: (p: StudentListParams) =>
     api.get<PagedResponse<Student>>('/students', { params: p }).then((r) => r.data),
   get: (id: string) => api.get<Student>(`/students/${id}`).then((r) => r.data),
+  overview: (id: string) => api.get<StudentOverview>(`/students/${id}/overview`).then((r) => r.data),
   create: (data: StudentInput) =>
     api.post<Student>('/students', data).then((r) => r.data),
   update: (id: string, data: StudentInput) =>

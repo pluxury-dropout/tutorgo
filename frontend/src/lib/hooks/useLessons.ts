@@ -3,6 +3,7 @@ import { lessonsApi, LessonInput, LessonUpdateInput } from '@/lib/api/lessons'
 import {
   patchCalendarEntry, insertFeedEntry, removeCalendarEntries, rollbackCalendar, tempId,
 } from '@/lib/hooks/useCalendar'
+import { studentKeys } from '@/lib/hooks/useStudents'
 import type { Lesson, RecurrenceScope } from '@/types/api'
 
 export const lessonKeys = {
@@ -15,9 +16,10 @@ export const lessonKeys = {
 // (он же «Уроки сегодня» на дашборде). Сбрасывать только lessons мало —
 // у ['calendar'] свой ключ и staleTime 2 минуты, поэтому созданная серия
 // не появлялась в расписании, пока кэш не протухнет сам.
-function invalidateLessonViews(qc: QueryClient, courseId: string) {
+function invalidateLessonViews(qc: QueryClient, courseId: string, studentId?: string) {
   qc.invalidateQueries({ queryKey: lessonKeys.byCourse(courseId) })
   qc.invalidateQueries({ queryKey: ['calendar'] })
+  if (studentId) qc.invalidateQueries({ queryKey: studentKeys.overview(studentId) })
 }
 
 export function useLessons(courseId: string) {

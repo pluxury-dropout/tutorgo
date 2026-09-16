@@ -5,9 +5,10 @@ import { courseKeys } from '@/lib/hooks/useCourses'
 import { ApiError, OnboardingStudentInput, Student } from '@/types/api'
 
 export const studentKeys = {
-  all:    ['students'] as const,
-  detail: (id: string) => ['students', id] as const,
-  pauses: (id: string) => ['students', id, 'pauses'] as const,
+  all:      ['students'] as const,
+  detail:   (id: string) => ['students', id] as const,
+  pauses:   (id: string) => ['students', id, 'pauses'] as const,
+  overview: (id: string) => ['students', id, 'overview'] as const,
 }
 
 export function useStudents() {
@@ -21,6 +22,14 @@ export function useStudent(id: string) {
   return useQuery({
     queryKey: studentKeys.detail(id),
     queryFn:  () => studentsApi.get(id),
+  })
+}
+
+export function useStudentOverview(id: string) {
+  return useQuery({
+    queryKey: studentKeys.overview(id),
+    queryFn:  () => studentsApi.overview(id),
+    enabled:  !!id,
   })
 }
 
@@ -146,6 +155,7 @@ export function useStudentCount() {
 // уроки курсов, балансы, долги и прогноз.
 function invalidateAfterPause(qc: QueryClient, studentId: string) {
   qc.invalidateQueries({ queryKey: studentKeys.pauses(studentId) })
+  qc.invalidateQueries({ queryKey: studentKeys.overview(studentId) })
   qc.invalidateQueries({ queryKey: ['payments'] })
   qc.invalidateQueries({ queryKey: ['courses'] })
   qc.invalidateQueries({ queryKey: ['lessons'] })
