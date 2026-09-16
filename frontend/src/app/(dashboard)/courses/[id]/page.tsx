@@ -46,6 +46,7 @@ import { CourseTypeBadge } from '@/components/common/CourseTypeBadge'
 import { PeriodPicker } from '@/components/lessons/PeriodPicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/lessonStatus'
+import { CourseBalanceStat } from '@/components/students/CourseBalanceStat'
 
 // Возвращает { from, to } для текущей недели (Пн–Пн+7)
 function currentWeekRange(): { from: Date; to: Date } {
@@ -332,24 +333,7 @@ export default function CourseDetailPage() {
         ) : (
           <div className="border rounded-xl bg-card p-4">
             <h2 className="text-sm font-semibold mb-3">Баланс уроков</h2>
-            {balance ? (
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className="text-2xl font-bold">{balance.lessons_paid}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Оплачено</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{balance.lessons_completed}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Проведено</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-primary">{balance.lessons_remaining}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Осталось</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Загрузка...</p>
-            )}
+            {balance ? <CourseBalanceStat balance={balance} /> : <p className="text-sm text-muted-foreground">Загрузка...</p>}
           </div>
         )}
       </div>
