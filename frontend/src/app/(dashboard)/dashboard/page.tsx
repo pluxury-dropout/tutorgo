@@ -149,11 +149,10 @@ export default function DashboardPage() {
         <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>{dateLabel}</span>
       </div>
 
-      {/* Онбординг — сам исчезает, когда все четыре шага сделаны */}
+      {/* Онбординг — сам исчезает, когда все три шага сделаны */}
       {!loading && (
         <GettingStarted
           hasStudents={studentCount > 0}
-          hasCourses={courseCount > 0}
           hasLessons={monthLessons.length > 0}
           hasPayments={recentPayments.length > 0}
           onAddStudent={() => setOnboardOpen(true)}

@@ -5,7 +5,6 @@ import { Button, buttonVariants } from '@/components/ui/button'
 
 interface GettingStartedProps {
   hasStudents: boolean
-  hasCourses: boolean
   hasLessons: boolean
   hasPayments: boolean
   /** Первый шаг открывает модалку онбординга прямо тут, а не уводит на /students —
@@ -16,12 +15,11 @@ interface GettingStartedProps {
 /**
  * Чеклист первых шагов для нового преподавателя. Состояние шагов — производное
  * от данных, которые главная и так грузит: отдельного флага «онбординг пройден»
- * нет и не нужно. Когда все четыре шага выполнены, блок пропадает навсегда.
+ * нет и не нужно. Когда все три шага выполнены, блок пропадает навсегда.
  */
-export function GettingStarted({ hasStudents, hasCourses, hasLessons, hasPayments, onAddStudent }: GettingStartedProps) {
+export function GettingStarted({ hasStudents, hasLessons, hasPayments, onAddStudent }: GettingStartedProps) {
   const steps = [
     { done: hasStudents, label: 'Добавить ученика',           hint: 'Карточка с контактами — к ней привяжутся курсы и оплаты', href: '/students', cta: 'Добавить', onClick: onAddStudent },
-    { done: hasCourses,  label: 'Создать курс',               hint: 'Предмет и цена за урок: из курса растут расписание и деньги', href: '/courses',              cta: 'Создать'  },
     { done: hasLessons,  label: 'Поставить урок в расписание', hint: 'Кликни по свободному слоту в календаре',                   href: '/calendar',             cta: 'В календарь' },
     { done: hasPayments, label: 'Отметить оплату',            hint: 'Приложение само посчитает, на сколько уроков хватит баланса', href: '/payments',             cta: 'К оплатам' },
   ]
