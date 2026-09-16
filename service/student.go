@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 	"tutorgo/models"
 	"tutorgo/repository"
@@ -11,11 +12,15 @@ import (
 // Архивация складывает уже существующие действия — зависимости узкими
 // интерфейсами, как в onboarding.go.
 
-// studentCourses — курсы ученика и их архивация. В проде это courseService, а
-// не courseRepo: у репозитория тот же Delete, но без закрытия правил и удаления
-// будущих уроков — архивный курс продолжал бы материализовать расписание.
+// studentCourses — курсы ученика, их архивация и точечный доступ по ID. В
+// проде это courseService, а не courseRepo: у репозитория тот же Delete, но
+// без закрытия правил и удаления будущих уроков — архивный курс продолжал бы
+// материализовать расписание. GetByID нужен Overview (спека, п. 7.0): курс,
+// с которого ученик ушёл или который архивирован, GetByStudent не отдаёт, а
+// оплатить долг по нему всё равно нужно.
 type studentCourses interface {
 	GetByStudent(ctx context.Context, studentID string, tutorID string) ([]models.Course, error)
+	GetByID(ctx context.Context, id string, tutorID string) (models.Course, error)
 	Delete(ctx context.Context, id string, tutorID string) error
 }
 
@@ -25,6 +30,12 @@ type enrollmentLeaver interface {
 
 type studentSessions interface {
 	DeleteByStudentID(ctx context.Context, studentID string) error
+}
+
+// debtsSource — долг ученика без пересчёта денежного SQL (спека, п. 7.1): то,
+// что уже возвращает paymentService.GetDebts, отфильтрованное по student_id.
+type debtsSource interface {
+	GetDebts(ctx context.Context, tutorID string) ([]models.StudentDebt, error)
 }
 
 type StudentService interface {
@@ -47,6 +58,7 @@ type StudentService interface {
 	UpdatePassword(ctx context.Context, studentID, hash string) error
 	ListHomework(ctx context.Context, studentID string) ([]models.StudentHomework, error)
 	ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error)
+	Overview(ctx context.Context, id string, tutorID string) (models.StudentOverview, error)
 }
 
 type studentService struct {
@@ -55,11 +67,12 @@ type studentService struct {
 	courses     studentCourses
 	enrollments enrollmentLeaver
 	sessions    studentSessions
+	debts       debtsSource
 }
 
 func NewStudentService(repo repository.StudentRepository, paymentRepo repository.PaymentRepository,
-	courses studentCourses, enrollments enrollmentLeaver, sessions studentSessions) StudentService {
-	return &studentService{repo: repo, paymentRepo: paymentRepo, courses: courses, enrollments: enrollments, sessions: sessions}
+	courses studentCourses, enrollments enrollmentLeaver, sessions studentSessions, debts debtsSource) StudentService {
+	return &studentService{repo: repo, paymentRepo: paymentRepo, courses: courses, enrollments: enrollments, sessions: sessions, debts: debts}
 }
 
 func (s *studentService) Create(ctx context.Context, req models.CreateStudentRequest, tutorID string) (models.Student, error) {
@@ -239,4 +252,126 @@ func (s *studentService) ListHomework(ctx context.Context, studentID string) ([]
 
 func (s *studentService) ListCourses(ctx context.Context, studentID string) ([]models.StudentCourse, error) {
 	return s.repo.ListCourses(ctx, studentID)
+}
+
+// Overview — карточка ученика одним запросом вместо шести (спека, п. 7.1).
+// PayableCourses дополняет активные курсы архивными/ушедшими с положительным
+// долгом: без этого оплатить такой долг не из чего (спека, п. 7.0).
+//
+// ponytail: s.ListLessons вызывается дважды (будущие и прошедшие) и каждый
+// раз может сходить за paymentRepo.GetByStudentBatch для расчёта цикла —
+// итого до трёх обращений к payments вместо одного. Всё это один API-вызов
+// вместо шести с фронта, и запросы дешёвые (индекс по student_id); объединять
+// с рассылкой Payments ниже, если профилирование покажет, что это заметно.
+func (s *studentService) Overview(ctx context.Context, id, tutorID string) (models.StudentOverview, error) {
+	student, err := s.repo.GetByID(ctx, id, tutorID)
+	if err != nil {
+		return models.StudentOverview{}, fmt.Errorf("student: %w", ErrNotFound)
+	}
+
+	courses, err := s.courses.GetByStudent(ctx, id, tutorID)
+	if err != nil {
+		return models.StudentOverview{}, err
+	}
+
+	balances, err := s.paymentRepo.GetBalancesByStudent(ctx, id, tutorID)
+	if err != nil {
+		return models.StudentOverview{}, err
+	}
+
+	summaries := make([]models.StudentCourseSummary, len(courses))
+	for i, c := range courses {
+		summaries[i] = models.StudentCourseSummary{
+			CourseID:        c.ID,
+			Subject:         c.Subject,
+			IsGroup:         c.StudentID == nil,
+			PricePerCycle:   c.PricePerCycle,
+			LessonsPerCycle: c.LessonsPerCycle,
+			StartedAt:       c.StartedAt,
+			EndedAt:         c.EndedAt,
+			Balance:         balances[c.ID],
+		}
+	}
+
+	debts, err := s.debts.GetDebts(ctx, tutorID)
+	if err != nil {
+		return models.StudentOverview{}, err
+	}
+	var totalOwed float64
+	var owedCourses []models.DebtByCourse
+	for _, d := range debts {
+		if d.StudentID == id {
+			totalOwed = d.AmountOwed
+			owedCourses = d.Courses
+			break
+		}
+	}
+
+	// Оплата обязана предложить и курс, с которого ученик ушёл или который
+	// архивирован, если по нему остался долг (спека, п. 7.0) — иначе такой
+	// долг невозможно погасить.
+	payable := append([]models.Course{}, courses...)
+	seen := make(map[string]bool, len(courses))
+	for _, c := range courses {
+		seen[c.ID] = true
+	}
+	for _, dc := range owedCourses {
+		if seen[dc.CourseID] {
+			continue
+		}
+		extra, err := s.courses.GetByID(ctx, dc.CourseID, tutorID)
+		if err != nil {
+			continue // не блокировать весь экран из-за одной осиротевшей строки долга
+		}
+		payable = append(payable, extra)
+		seen[dc.CourseID] = true
+	}
+
+	upcoming, err := s.ListLessons(ctx, id, false)
+	if err != nil {
+		return models.StudentOverview{}, err
+	}
+	var nextLesson *models.CalendarLesson
+	if len(upcoming) > 0 {
+		nextLesson = &upcoming[0]
+	}
+
+	past, err := s.ListLessons(ctx, id, true)
+	if err != nil {
+		return models.StudentOverview{}, err
+	}
+	recent := past
+	if len(recent) > 5 {
+		recent = recent[:5]
+	}
+
+	paymentsByCourse, err := s.paymentRepo.GetByStudentBatch(ctx, id)
+	if err != nil {
+		return models.StudentOverview{}, err
+	}
+	subjectOf := make(map[string]string, len(payable))
+	for _, c := range payable {
+		subjectOf[c.ID] = c.Subject
+	}
+	var payments []models.Payment
+	for courseID, ps := range paymentsByCourse {
+		for _, p := range ps {
+			p.Subject = subjectOf[courseID]
+			payments = append(payments, p)
+		}
+	}
+	sort.Slice(payments, func(i, j int) bool { return payments[i].PaidAt.After(payments[j].PaidAt) })
+	if len(payments) > 5 {
+		payments = payments[:5]
+	}
+
+	return models.StudentOverview{
+		Student:        student,
+		Courses:        summaries,
+		PayableCourses: payable,
+		NextLesson:     nextLesson,
+		RecentLessons:  recent,
+		Payments:       payments,
+		TotalOwed:      totalOwed,
+	}, nil
 }

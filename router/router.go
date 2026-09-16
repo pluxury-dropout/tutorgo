@@ -60,7 +60,9 @@ func Setup(pool *pgxpool.Pool, log *slog.Logger, cfg *config.Config) (*gin.Engin
 	courseService := service.NewCourseService(courseRepo, studentRepo, lessonService)
 	// Ниже courseService: архивация ученика архивирует его курсы именно сервисом —
 	// у courseRepo тот же Delete, но без закрытия правил и будущих уроков.
-	studentService := service.NewStudentService(studentRepo, paymentRepo, courseService, enrollmentRepo, studentRefreshRepo)
+	// paymentService как debtsSource: Overview переиспользует его GetDebts
+	// (группировка по ученику), а не пишет тот же SQL заново.
+	studentService := service.NewStudentService(studentRepo, paymentRepo, courseService, enrollmentRepo, studentRefreshRepo, paymentService)
 	pauseService := service.NewPauseService(pauseRepo, studentRepo, recurrenceService)
 	enrollmentService := service.NewEnrollmentService(enrollmentRepo, courseRepo, studentRepo)
 	attendanceService := service.NewAttendanceService(attendanceRepo, lessonRepo, courseRepo)

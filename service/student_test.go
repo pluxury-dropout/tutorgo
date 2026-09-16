@@ -117,7 +117,7 @@ func (m *mockStudentRepo) ListCourses(ctx context.Context, studentID string) ([]
 // Тесты
 func TestGetAllStudents_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	expected := []models.Student{
@@ -137,7 +137,7 @@ func TestGetAllStudents_Success(t *testing.T) {
 
 func TestGetAllStudents_Error(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	p := models.Pagination{Page: 1, Limit: 20}
 	repo.On("GetAll", mock.Anything, "tutor-1", p, false).Return([]models.Student{}, 0, errors.New("db error"))
@@ -152,7 +152,7 @@ func TestGetAllStudents_Error(t *testing.T) {
 
 func TestCreateStudent_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	req := models.CreateStudentRequest{
 		FirstName: "Aiya",
@@ -171,7 +171,7 @@ func TestCreateStudent_Success(t *testing.T) {
 
 func TestCreateStudent_Error(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	req := models.CreateStudentRequest{
 		FirstName: "Aiya",
@@ -187,7 +187,7 @@ func TestCreateStudent_Error(t *testing.T) {
 
 func TestDeleteStudent_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(true, nil)
@@ -202,7 +202,7 @@ func TestDeleteStudent_Success(t *testing.T) {
 
 func TestStudentGetByID_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -219,7 +219,7 @@ var updateStudentReq = models.UpdateStudentRequest{FirstName: "Aiya", LastName: 
 
 func TestStudentUpdate_Success(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	updated := models.Student{ID: "student-1", FirstName: "Aiya", LastName: "Bekova", TutorID: "tutor-1"}
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
@@ -234,7 +234,7 @@ func TestStudentUpdate_Success(t *testing.T) {
 
 func TestStudentUpdate_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -248,7 +248,7 @@ func TestStudentUpdate_NotFound(t *testing.T) {
 
 func TestStudentUpdate_RepoError(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Update", mock.Anything, "student-1", "tutor-1", updateStudentReq).Return(models.Student{}, errors.New("db error"))
@@ -265,7 +265,7 @@ func TestStudentUpdate_RepoError(t *testing.T) {
 
 func TestStudentDelete_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -280,7 +280,7 @@ func TestStudentDelete_NotFound(t *testing.T) {
 // а не 404: фронт предложит архив (спека, п. 5a.2).
 func TestStudentDelete_WithHistoryIsConflict(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(false, nil)
@@ -293,7 +293,7 @@ func TestStudentDelete_WithHistoryIsConflict(t *testing.T) {
 
 func TestStudentDelete_RepoError(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("Delete", mock.Anything, "student-1", "tutor-1").Return(false, errors.New("db error"))
@@ -309,7 +309,7 @@ func TestStudentDelete_RepoError(t *testing.T) {
 
 func TestListCourses_IndividualAndGroup(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	expected := []models.StudentCourse{
 		{ID: "c1", Subject: "Algebra", TutorID: "tutor-1"},   // индивидуальный курс
@@ -326,7 +326,7 @@ func TestListCourses_IndividualAndGroup(t *testing.T) {
 
 func TestListCourses_Error(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("ListCourses", mock.Anything, "student-1").Return([]models.StudentCourse{}, errors.New("db error"))
 
@@ -340,7 +340,7 @@ func TestListCourses_Error(t *testing.T) {
 func TestListLessons_PaidFlag(t *testing.T) {
 	repo := new(mockStudentRepo)
 	payRepo := new(mockPaymentRepo)
-	svc := service.NewStudentService(repo, payRepo, nil, nil, nil)
+	svc := service.NewStudentService(repo, payRepo, nil, nil, nil, nil)
 
 	rank1, rank2, rank3 := 1, 2, 3
 	lessons := []models.CalendarLesson{
@@ -369,7 +369,7 @@ func TestListLessons_PaidFlag(t *testing.T) {
 func TestStudentListLessons_CyclePositions(t *testing.T) {
 	repo := new(mockStudentRepo)
 	payRepo := new(mockPaymentRepo)
-	svc := service.NewStudentService(repo, payRepo, nil, nil, nil)
+	svc := service.NewStudentService(repo, payRepo, nil, nil, nil, nil)
 
 	rank3, rank9 := 3, 9
 	lessons := []models.CalendarLesson{
@@ -402,7 +402,7 @@ func TestStudentArchive_StepsInOrder(t *testing.T) {
 	courses := new(mockCourseRepo) // тот же GetByStudent/Delete, что у courseService
 	enrollments := new(mockEnrollmentRepo)
 	sessions := new(mockStudentSessions)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), courses, enrollments, sessions)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), courses, enrollments, sessions, nil)
 
 	studentID := "student-1"
 	individual := models.Course{ID: "course-ind", StudentID: &studentID}
@@ -433,7 +433,7 @@ func TestStudentArchive_FailureKeepsStudentActive(t *testing.T) {
 	courses := new(mockCourseRepo)
 	enrollments := new(mockEnrollmentRepo)
 	sessions := new(mockStudentSessions)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), courses, enrollments, sessions)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), courses, enrollments, sessions, nil)
 
 	studentID := "student-1"
 	individual := models.Course{ID: "course-ind", StudentID: &studentID}
@@ -452,7 +452,7 @@ func TestStudentArchive_FailureKeepsStudentActive(t *testing.T) {
 func TestStudentArchive_NotFound(t *testing.T) {
 	repo := new(mockStudentRepo)
 	courses := new(mockCourseRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), courses, new(mockEnrollmentRepo), new(mockStudentSessions))
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), courses, new(mockEnrollmentRepo), new(mockStudentSessions), nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{}, errors.New("not found"))
 
@@ -464,11 +464,85 @@ func TestStudentArchive_NotFound(t *testing.T) {
 
 func TestStudentRestore_SetsActive(t *testing.T) {
 	repo := new(mockStudentRepo)
-	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil)
+	svc := service.NewStudentService(repo, new(mockPaymentRepo), nil, nil, nil, nil)
 
 	repo.On("GetByID", mock.Anything, "student-1", "tutor-1").Return(models.Student{ID: "student-1"}, nil)
 	repo.On("SetActive", mock.Anything, "student-1", "tutor-1", true).Return(nil)
 
 	require.NoError(t, svc.Restore(context.Background(), "student-1", "tutor-1"))
 	repo.AssertExpectations(t)
+}
+
+type mockDebtsSource struct{ mock.Mock }
+
+func (m *mockDebtsSource) GetDebts(ctx context.Context, tutorID string) ([]models.StudentDebt, error) {
+	args := m.Called(ctx, tutorID)
+	return args.Get(0).([]models.StudentDebt), args.Error(1)
+}
+
+// Обзор компонует существующие методы одним ответом: активные курсы с
+// балансом, долг этого ученика из общего списка, ближайший и последние уроки,
+// последние платежи (спека, п. 7.1).
+func TestStudentOverview_ComposesExistingData(t *testing.T) {
+	repo := new(mockStudentRepo)
+	payRepo := new(mockPaymentRepo)
+	courses := new(mockCourseRepo)
+	debts := new(mockDebtsSource)
+	svc := service.NewStudentService(repo, payRepo, courses, nil, nil, debts)
+
+	studentID := "stu-1"
+	course := models.Course{ID: "c1", StudentID: &studentID, Subject: "Математика", PricePerCycle: 40000, LessonsPerCycle: 8}
+	repo.On("GetByID", mock.Anything, studentID, "tutor-1").Return(models.Student{ID: studentID, FirstName: "Айгерим"}, nil)
+	courses.On("GetByStudent", mock.Anything, studentID, "tutor-1").Return([]models.Course{course}, nil)
+	payRepo.On("GetBalancesByStudent", mock.Anything, studentID, "tutor-1").
+		Return(map[string]models.CourseBalance{"c1": {LessonsPaid: 8, LessonsCompleted: 3, LessonsRemaining: 5}}, nil)
+	debts.On("GetDebts", mock.Anything, "tutor-1").Return([]models.StudentDebt{
+		{StudentID: studentID, AmountOwed: 12000, Courses: []models.DebtByCourse{{CourseID: "c1", AmountOwed: 12000}}},
+	}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, false).Return([]models.CalendarLesson{}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, true).Return([]models.CalendarLesson{}, nil)
+	payRepo.On("GetByStudentBatch", mock.Anything, studentID).Return(map[string][]models.Payment{}, nil)
+
+	got, err := svc.Overview(context.Background(), studentID, "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Айгерим", got.Student.FirstName)
+	assert.Len(t, got.Courses, 1)
+	assert.Equal(t, 5, got.Courses[0].Balance.LessonsRemaining)
+	assert.Equal(t, 12000.0, got.TotalOwed)
+	assert.Len(t, got.PayableCourses, 1) // c1 уже активен, дублировать не должен
+	repo.AssertExpectations(t)
+	payRepo.AssertExpectations(t)
+	courses.AssertExpectations(t)
+	debts.AssertExpectations(t)
+}
+
+// Ушедший из группы с долгом: курс не в активных, но обязан попасть в
+// PayableCourses — иначе долг невозможно погасить (спека, п. 7.0).
+func TestStudentOverview_PayableCoursesIncludeLeftCourseWithDebt(t *testing.T) {
+	repo := new(mockStudentRepo)
+	payRepo := new(mockPaymentRepo)
+	courses := new(mockCourseRepo)
+	debts := new(mockDebtsSource)
+	svc := service.NewStudentService(repo, payRepo, courses, nil, nil, debts)
+
+	studentID := "stu-1"
+	leftCourse := models.Course{ID: "c-left", Subject: "Группа"}
+	repo.On("GetByID", mock.Anything, studentID, "tutor-1").Return(models.Student{ID: studentID}, nil)
+	courses.On("GetByStudent", mock.Anything, studentID, "tutor-1").Return([]models.Course{}, nil) // активных нет
+	payRepo.On("GetBalancesByStudent", mock.Anything, studentID, "tutor-1").Return(map[string]models.CourseBalance{}, nil)
+	debts.On("GetDebts", mock.Anything, "tutor-1").Return([]models.StudentDebt{
+		{StudentID: studentID, AmountOwed: 5000, Courses: []models.DebtByCourse{{CourseID: "c-left", AmountOwed: 5000}}},
+	}, nil)
+	courses.On("GetByID", mock.Anything, "c-left", "tutor-1").Return(leftCourse, nil)
+	repo.On("ListLessons", mock.Anything, studentID, false).Return([]models.CalendarLesson{}, nil)
+	repo.On("ListLessons", mock.Anything, studentID, true).Return([]models.CalendarLesson{}, nil)
+	payRepo.On("GetByStudentBatch", mock.Anything, studentID).Return(map[string][]models.Payment{}, nil)
+
+	got, err := svc.Overview(context.Background(), studentID, "tutor-1")
+
+	assert.NoError(t, err)
+	assert.Empty(t, got.Courses) // на «Обзоре» его нет
+	require.Len(t, got.PayableCourses, 1)
+	assert.Equal(t, "c-left", got.PayableCourses[0].ID) // но заплатить есть чем
 }
